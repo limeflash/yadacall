@@ -447,7 +447,7 @@ fn model_label(path: &Path) -> String {
 
 #[cfg(windows)]
 fn attach_job(inner: &Inner, child: &Child) -> Result<()> {
-    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use std::os::windows::io::{FromRawHandle, OwnedHandle};
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
@@ -470,7 +470,10 @@ fn attach_job(inner: &Inner, child: &Child) -> Result<()> {
             std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
         )
     };
-    let assigned = unsafe { AssignProcessToJobObject(job, child.as_raw_handle() as _) };
+    let assigned = match child.raw_handle() {
+        Some(process) => unsafe { AssignProcessToJobObject(job, process as _) },
+        None => 0,
+    };
     if set == 0 || assigned == 0 {
         unsafe {
             windows_sys::Win32::Foundation::CloseHandle(job);

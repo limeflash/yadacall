@@ -1,0 +1,4 @@
+[toolchain]
+# Pinned so CI lints match local builds; bump deliberately.
+channel = "1.93.1"
+components = ["clippy", "rustfmt"]
