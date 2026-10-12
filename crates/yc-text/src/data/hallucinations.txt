@@ -1,0 +1,15 @@
+# Common Whisper / ASR outro and subtitle hallucinations. Matching is case- and punctuation-insensitive.
+Продолжение следует
+Субтитры сделал DimaTorzok
+Субтитры сделал
+Редактор субтитров
+Спасибо за просмотр
+Подписывайтесь на канал
+Ставьте лайки
+До новых встреч
+Thank you for watching
+Thanks for watching
+Please subscribe
+Like and subscribe
+Subtitles by
+字幕由
