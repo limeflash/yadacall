@@ -1,6 +1,8 @@
 pub mod audio;
 pub mod bench_asr;
+pub mod detect_call;
 pub mod devices;
+pub mod google;
 pub mod hw;
 pub mod models;
 pub mod record;
