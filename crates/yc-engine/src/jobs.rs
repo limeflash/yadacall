@@ -286,6 +286,22 @@ impl Engine {
         }
     }
 
+    /// Queues a re-embed of every ready meeting, e.g. after an embedding model was installed.
+    /// Returns how many meetings were queued.
+    pub async fn reindex_all(self: &Arc<Self>) -> Result<usize> {
+        let ids: Vec<MeetingId> = self
+            .blocking(|e| e.store.list_meetings(100_000, 0))
+            .await?
+            .into_iter()
+            .filter(|m| m.status == MeetingStatus::Ready)
+            .map(|m| m.id)
+            .collect();
+        for id in &ids {
+            self.schedule_reindex(*id);
+        }
+        Ok(ids.len())
+    }
+
     /// Re-runs a failed stage (and the index behind it).
     pub async fn retry_failed(self: &Arc<Self>, id: MeetingId) -> Result<()> {
         let rec = self.blocking(move |e| e.store.get_meeting(id)).await?;

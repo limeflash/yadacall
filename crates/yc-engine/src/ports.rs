@@ -76,6 +76,8 @@ impl TextEmbedderFactory for NoTextEmbedder {
 pub struct SummaryInput {
     pub meeting_id: MeetingId,
     pub title: String,
+    /// When the meeting started (anchors relative due dates such as "tomorrow").
+    pub started_at: chrono::DateTime<chrono::Utc>,
     /// Language the transcript is in (`ru`, `en`, …); the summary should be written in it too.
     pub language: String,
     pub duration_ms: u64,

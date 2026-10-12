@@ -1,13 +1,18 @@
 //! YadaCall desktop shell: Tauri 2 app that hosts the Svelte UI (`../ui`) and forwards everything to a
-//! [`api::Backend`]. Today that is the in-memory [`demo::DemoBackend`]; the real engine plugs in at one line in `run`.
+//! [`api::Backend`]: the real [`engine_backend::EngineBackend`], or the in-memory [`demo::DemoBackend`] when
+//! `YADACALL_DEMO=1` (UI work, screenshots).
 
+pub mod adapters;
 pub mod api;
 pub mod commands;
 pub mod demo;
+pub mod engine_backend;
 pub mod integrations_api;
 pub mod integrations_commands;
 pub mod integrations_demo;
 pub mod integrations_shell;
+pub mod paths;
+pub mod permissions;
 pub mod shell;
 
 use std::sync::{Arc, Mutex};
@@ -15,7 +20,11 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 use api::Backend;
+use engine_backend::{BackendConfig, EngineBackend};
 use integrations_api::Integrations;
+
+/// The engine, kept so it can be shut down (stops the local LLM server) when the app exits.
+struct EngineHandle(Arc<EngineBackend>);
 
 /// Every command exposed to the webviews (also the ACL allow-list generated in `build.rs`).
 pub const COMMANDS: &[&str] = &[
@@ -176,11 +185,31 @@ pub fn run() {
                     let _ = h.emit("engine", &e);
                 })
             };
-            // The one line that changes when the real engine lands: build it instead of the demo backend.
-            let demo = demo::DemoBackend::new(sink);
-            let backend: Arc<dyn Backend> = demo.clone();
-            app.manage(backend);
-            tauri::async_runtime::spawn(demo.run());
+            if std::env::var_os("YADACALL_DEMO").is_some_and(|v| v != "0" && !v.is_empty()) {
+                let demo = demo::DemoBackend::new(sink);
+                let backend: Arc<dyn Backend> = demo.clone();
+                app.manage(backend);
+                tauri::async_runtime::spawn(demo.run());
+            } else {
+                let data_dir = paths::data_dir(|| {
+                    handle
+                        .path()
+                        .app_data_dir()
+                        .unwrap_or_else(|_| paths::home_dir().join(".yadacall"))
+                });
+                let engine = tauri::async_runtime::block_on(EngineBackend::open(
+                    BackendConfig::new(data_dir, sink),
+                ))
+                .map_err(|e| format!("could not start the YadaCall engine: {e}"))?;
+                // The player loads audio through the asset protocol, limited to the library and the mix cache.
+                for dir in engine.asset_roots() {
+                    let _ = std::fs::create_dir_all(&dir);
+                    let _ = app.asset_protocol_scope().allow_directory(&dir, true);
+                }
+                let backend: Arc<dyn Backend> = engine.clone();
+                app.manage(backend);
+                app.manage(EngineHandle(engine));
+            }
 
             // Integrations live next to the backend, never inside it: the real `yc-connect` replaces this line.
             let integrations =
@@ -220,6 +249,11 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let RunEvent::Reopen { .. } = event {
                 shell::show_main(app);
+            }
+            if let RunEvent::Exit = event
+                && let Some(h) = app.try_state::<EngineHandle>()
+            {
+                tauri::async_runtime::block_on(h.0.shutdown());
             }
             let _ = (app, event);
         });

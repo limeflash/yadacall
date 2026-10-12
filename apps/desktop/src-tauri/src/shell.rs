@@ -5,10 +5,12 @@
 //! * tray icon (macOS menu-bar title carries the timer, Windows tooltip), global shortcuts, autostart,
 //!   "summary ready" notifications.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tauri::Wry;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -22,7 +24,7 @@ use tauri_plugin_notification::NotificationExt as _;
 use tauri_plugin_positioner::{Position, WindowExt};
 use yc_core::error::PermissionKind;
 use yc_core::events::{EngineEvent, RecorderState};
-use yc_core::meeting::MeetingStatus;
+use yc_core::meeting::{MeetingStatus, Stage};
 
 use crate::api::{Backend, RecorderPhase, RecorderStartOptions, Settings};
 
@@ -45,6 +47,19 @@ pub struct ShellState {
     bookmark_key: Option<Shortcut>,
     /// Menu-bar text while idle: "1:1 с Аней 1:41" before a call, "звонок без записи" (see `integrations_shell`).
     idle_title: Option<String>,
+    /// Meetings processed in this session that are not done yet (tray "working" indicator).
+    processing: HashSet<String>,
+    /// Meetings seen in the transcription stage; the first later stage means "transcript ready".
+    transcribing: HashSet<String>,
+    /// Meetings whose "transcript ready" notification was shown.
+    announced: HashSet<String>,
+    /// A job failed and the user has not looked yet (tray error state).
+    has_error: bool,
+    /// Something finished and the user has not looked yet (tray "ready" badge).
+    ready_badge: bool,
+    /// The meeting the tray menu's "open last" entry points at.
+    last_ready: Option<String>,
+    last_item: Option<MenuItem<Wry>>,
 }
 
 pub type Shared = Arc<Mutex<ShellState>>;
@@ -227,7 +242,14 @@ fn hide_mini(app: &AppHandle) {
 pub fn on_main_focus(app: &AppHandle, focused: bool) {
     let st = state(app);
     let (rec, enabled) = {
-        let g = st.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = st.lock().unwrap_or_else(|e| e.into_inner());
+        if focused && (g.ready_badge || g.has_error) {
+            g.ready_badge = false;
+            g.has_error = false;
+            drop(g);
+            refresh_idle_tray(app);
+            g = st.lock().unwrap_or_else(|e| e.into_inner());
+        }
         (g.recording, g.mini_enabled)
     };
     if !rec || !enabled {
@@ -245,6 +267,17 @@ pub fn on_main_focus(app: &AppHandle, focused: bool) {
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let record = MenuItem::with_id(app, "record", "Записать встречу", true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "Открыть YadaCall", true, None::<&str>)?;
+    let last = MenuItem::with_id(
+        app,
+        "last",
+        "Открыть последнюю встречу",
+        false,
+        None::<&str>,
+    )?;
+    state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .last_item = Some(last.clone());
     let settings = MenuItem::with_id(app, "settings", "Настройки", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
     let menu = Menu::with_items(
@@ -252,6 +285,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         &[
             &record,
             &open,
+            &last,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &quit,
@@ -273,6 +307,22 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     b.on_menu_event(|app, ev| match ev.id().as_ref() {
         "record" => toggle_recording(app),
         "open" => show_main(app),
+        "last" => {
+            let id = state(app)
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .last_ready
+                .clone();
+            if let Some(id) = id {
+                show_main(app);
+                let _ = tauri::Emitter::emit_to(
+                    app,
+                    "main",
+                    "navigate",
+                    format!("#/meeting/{id}/summary"),
+                );
+            }
+        }
         "settings" => {
             show_main(app);
             let _ = tauri::Emitter::emit_to(app, "main", "navigate", "#/settings");
@@ -317,6 +367,30 @@ pub fn set_idle_title(app: &AppHandle, title: Option<String>) {
     }
 }
 
+/// What the idle tray shows: working, error or "something is ready" (in that priority).
+fn idle_badge(g: &ShellState) -> Option<&'static str> {
+    if g.has_error {
+        Some("!")
+    } else if !g.processing.is_empty() {
+        Some("⋯")
+    } else if g.ready_badge {
+        Some("✓")
+    } else {
+        None
+    }
+}
+
+/// Re-draws the tray for the not-recording state (after a processing / error / ready change).
+fn refresh_idle_tray(app: &AppHandle) {
+    let recording = state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .recording;
+    if !recording {
+        set_tray_state(app, false, 0, false);
+    }
+}
+
 fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: bool) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
@@ -326,6 +400,7 @@ fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: boo
         .unwrap_or_else(|e| e.into_inner())
         .idle_title
         .clone();
+    let badge = idle_badge(&state(app).lock().unwrap_or_else(|e| e.into_inner()));
     let secs = elapsed_ms / 1000;
     let clock = if secs >= 3600 {
         format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
@@ -337,7 +412,11 @@ fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: boo
         let _ = tray.set_title(if recording {
             Some(format!("{}{clock}", if paused { "⏸ " } else { "● " }))
         } else {
-            idle
+            match (badge, idle.clone()) {
+                (Some(b), Some(t)) => Some(format!("{b} {t}")),
+                (Some(b), None) => Some(b.to_owned()),
+                (None, t) => t,
+            }
         });
     }
     #[cfg(not(target_os = "macos"))]
@@ -347,7 +426,12 @@ fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: boo
         } else if let Some(t) = idle {
             format!("YadaCall · {t}")
         } else {
-            "YadaCall".to_string()
+            match badge {
+                Some("!") => "YadaCall · ошибка обработки".to_string(),
+                Some("⋯") => "YadaCall · обработка…".to_string(),
+                Some(_) => "YadaCall · готово".to_string(),
+                None => "YadaCall".to_string(),
+            }
         }));
         let bytes: &[u8] = if recording {
             include_bytes!("../icons/tray-rec.png")
@@ -358,7 +442,7 @@ fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: boo
             let _ = tray.set_icon(Some(img));
         }
     }
-    let _ = (paused, &clock);
+    let _ = (paused, &clock, badge);
 }
 
 // ---- recording hotkeys --------------------------------------------------------------------------------
@@ -483,33 +567,7 @@ pub fn on_engine_event(app: &AppHandle, e: &EngineEvent) {
                 hide_mini(app);
             }
         }
-        EngineEvent::Status {
-            meeting,
-            status: MeetingStatus::Ready,
-        } => {
-            let app = app.clone();
-            let id = meeting.to_string();
-            tauri::async_runtime::spawn(async move {
-                let (title, tasks) = match app.state::<Arc<dyn Backend>>().get_meeting(&id).await {
-                    Ok(d) => (
-                        d.meeting.title,
-                        d.summary.map(|s| s.tasks.len()).unwrap_or(0),
-                    ),
-                    Err(_) => return,
-                };
-                let body = if tasks > 0 {
-                    format!("{title}\n{tasks} задач(и) в итогах")
-                } else {
-                    title
-                };
-                let _ = app
-                    .notification()
-                    .builder()
-                    .title("Итоги готовы")
-                    .body(body)
-                    .show();
-            });
-        }
+        EngineEvent::Status { meeting, status } => on_status(app, meeting.to_string(), status),
         EngineEvent::Notice { message, .. } => {
             let _ = app
                 .notification()
@@ -522,31 +580,117 @@ pub fn on_engine_event(app: &AppHandle, e: &EngineEvent) {
     }
 }
 
+/// Opens the OS privacy pane of a permission (macOS: `Privacy_Microphone` / `Privacy_AudioCapture`).
 pub fn open_os_privacy_settings(kind: PermissionKind) {
-    #[cfg(target_os = "macos")]
-    {
-        let pane = match kind {
-            PermissionKind::Microphone => "Privacy_Microphone",
-            PermissionKind::SystemAudio => "Privacy_ScreenCapture",
+    crate::permissions::open_system_settings(kind);
+}
+
+/// What a status change should tell the user.
+enum Announce {
+    TranscriptReady,
+    Ready,
+    Failed(String),
+}
+
+/// Tracks processing / ready / error for the tray and shows "Расшифровка готова" / "Итоги готовы".
+fn on_status(app: &AppHandle, id: String, status: &MeetingStatus) {
+    let announce = {
+        let st = state(app);
+        let mut g = st.lock().unwrap_or_else(|e| e.into_inner());
+        match status {
+            MeetingStatus::Processing { stage, .. } => {
+                g.processing.insert(id.clone());
+                if *stage == Stage::Transcribe {
+                    g.transcribing.insert(id.clone());
+                    None
+                } else if g.transcribing.remove(&id) {
+                    g.announced.insert(id.clone());
+                    Some(Announce::TranscriptReady)
+                } else {
+                    None
+                }
+            }
+            MeetingStatus::Ready => {
+                if g.processing.remove(&id) {
+                    g.transcribing.remove(&id);
+                    g.ready_badge = true;
+                    g.last_ready = Some(id.clone());
+                    if let Some(item) = &g.last_item {
+                        let _ = item.set_enabled(true);
+                    }
+                    Some(Announce::Ready)
+                } else {
+                    None
+                }
+            }
+            MeetingStatus::Failed { message, .. } => {
+                g.processing.remove(&id);
+                g.transcribing.remove(&id);
+                g.has_error = true;
+                Some(Announce::Failed(message.clone()))
+            }
+            MeetingStatus::Recording => None,
+        }
+    };
+    refresh_idle_tray(app);
+    let Some(announce) = announce else { return };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let backend = app.state::<Arc<dyn Backend>>();
+        let russian = backend
+            .get_settings()
+            .await
+            .map(|s| matches!(s.ui_language, crate::api::UiLanguage::Ru))
+            .unwrap_or(true);
+        let (title, tasks, has_summary) = match backend.get_meeting(&id).await {
+            Ok(d) => (
+                d.meeting.title,
+                d.summary.as_ref().map_or(0, |s| s.tasks.len()),
+                d.summary.is_some(),
+            ),
+            Err(_) => (String::new(), 0, false),
         };
-        let _ = std::process::Command::new("open")
-            .arg(format!(
-                "x-apple.systempreferences:com.apple.preference.security?{pane}"
-            ))
-            .spawn();
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let page = match kind {
-            PermissionKind::Microphone => "ms-settings:privacy-microphone",
-            PermissionKind::SystemAudio => "ms-settings:sound",
+        let tr = |ru: &'static str, en: &'static str| if russian { ru } else { en };
+        let (head, body) = match announce {
+            Announce::TranscriptReady => (tr("Расшифровка готова", "Transcript ready"), title),
+            Announce::Ready if has_summary => {
+                state(&app)
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .announced
+                    .remove(&id);
+                let body = if tasks > 0 {
+                    if russian {
+                        format!("{title}\n{tasks} задач(и) в итогах")
+                    } else {
+                        format!("{title}\n{tasks} task(s) in the summary")
+                    }
+                } else {
+                    title
+                };
+                (tr("Итоги готовы", "Summary ready"), body)
+            }
+            Announce::Ready => {
+                let announced = {
+                    let st = state(&app);
+                    let mut g = st.lock().unwrap_or_else(|e| e.into_inner());
+                    g.announced.remove(&id)
+                };
+                if announced {
+                    return;
+                }
+                (tr("Расшифровка готова", "Transcript ready"), title)
+            }
+            Announce::Failed(message) => (
+                tr(
+                    "Не удалось обработать встречу",
+                    "Could not process the meeting",
+                ),
+                message,
+            ),
         };
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", "", page])
-            .spawn();
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    let _ = kind;
+        let _ = app.notification().builder().title(head).body(body).show();
+    });
 }
 
 /// Initial shell state from the settings the backend currently holds.

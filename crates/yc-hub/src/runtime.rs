@@ -250,10 +250,14 @@ pub async fn benchmark_model(
         tokio::time::sleep(Duration::from_millis(300)).await;
     }
     let response = client
-        .post(format!("{base_url}/completion"))
+        .post(format!("{base_url}/v1/chat/completions"))
         .json(&serde_json::json!({
-            "prompt": "In one concise sentence, why are meeting notes useful?",
-            "n_predict": max_tokens.max(8),
+            // Instruction-tuned models stop at once on a raw prompt; go through the chat template.
+            "messages": [{
+                "role": "user",
+                "content": "Write one short paragraph of about five sentences on why meeting notes are useful."
+            }],
+            "max_tokens": max_tokens.max(8),
             "temperature": 0.0,
             "cache_prompt": false
         }))
@@ -274,6 +278,14 @@ pub async fn benchmark_model(
             message: "llama-server response did not include timings.predicted_per_second"
                 .to_owned(),
         })?;
+    if !(measured.is_finite() && measured > 0.0) {
+        let _ = server.kill().await;
+        return Err(Error::Model {
+            model: model.id.clone(),
+            message: "llama-server reported no generation speed (the model produced no tokens)"
+                .to_owned(),
+        });
+    }
     let generated_tokens = body
         .pointer("/timings/predicted_n")
         .and_then(serde_json::Value::as_u64)
