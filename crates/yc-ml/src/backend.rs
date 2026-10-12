@@ -9,7 +9,8 @@ use std::{
 use ort::session::Session;
 use yc_core::{Error, Result};
 
-/// Requested execution provider. [`Backend::Auto`] probes accelerators before CPU.
+/// Requested execution provider. [`Backend::Auto`] picks the measured-fastest provider per platform
+/// (CPU on macOS, DirectML-or-CPU on Windows, CUDA-or-CPU on Linux with the `cuda` feature).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
     /// Probe available accelerators, then fall back to CPU.
@@ -255,11 +256,13 @@ fn provider_plan(requested: Backend) -> Vec<(Backend, Option<CoreMlUnits>)> {
 }
 
 fn auto_plan() -> Vec<(Backend, Option<CoreMlUnits>)> {
+    // Measured on M1 Pro (24 s Russian clip, int8 models): CPU runs GigaAM v3 at 26× and
+    // Parakeet v3 at 22× realtime, CoreML at ~5× after a ~9 s first-load compile. The encoders'
+    // dynamic shapes defeat CoreML, so Auto stays on CPU and avoids holding two sessions in memory.
+    // CoreML remains available as an explicit choice.
     #[cfg(target_os = "macos")]
     {
-        let mut result = coreml_plan();
-        result.push((Backend::Cpu, None));
-        result
+        vec![(Backend::Cpu, None)]
     }
     #[cfg(target_os = "windows")]
     {

@@ -1909,12 +1909,9 @@ dependencies = [
 name = "yc-ml"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "num_cpus",
  "ort",
  "rustfft",
- "serde",
- "thiserror",
  "tokenizers",
  "tracing",
  "yc-core",
