@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-recorder-cancel"
+description = "Enables the recorder_cancel command without any pre-configured scope."
+commands.allow = ["recorder_cancel"]
+
+[[permission]]
+identifier = "deny-recorder-cancel"
+description = "Denies the recorder_cancel command without any pre-configured scope."
+commands.deny = ["recorder_cancel"]

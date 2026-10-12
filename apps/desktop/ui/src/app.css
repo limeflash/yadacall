@@ -1,0 +1,21 @@
+@import "./lib/fonts.css";
+@import "./lib/tokens.css";
+@import "./lib/mistgate.css";
+
+html, body, #app { height: 100%; }
+html { background: var(--bg); }
+body { margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
+button, input, select, textarea { font-family: inherit; }
+a { color: inherit; }
+
+/* Popover windows (tray / mini) are transparent so the rounded card floats over the desktop. */
+html.popover, html.popover body { background: transparent; }
+
+/* macOS overlay title bar: the traffic lights sit over the sidebar, keep the window draggable. */
+.drag-strip { position: fixed; top: 0; left: 0; right: 0; height: 28px; z-index: 50; -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
+
+/* The design's shell wraps; on desktop the two columns must stay side by side and share the window height. */
+.yc-app { flex-wrap: nowrap; }
+@media (max-width: 760px) { .yc-app { flex-wrap: wrap; } }
