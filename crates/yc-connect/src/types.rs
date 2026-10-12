@@ -160,7 +160,11 @@ pub enum DetectedApp {
 
 /// Events the connect layer publishes (forwarded to the UI by the shell).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
 pub enum ConnectEvent {
     /// `lead_minutes` before the start: show the reminder with join/record actions.
     ReminderDue {

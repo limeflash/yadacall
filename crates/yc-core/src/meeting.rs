@@ -90,7 +90,11 @@ pub struct Participant {
 
 /// Where a meeting is in its life cycle. Mirrors the job pipeline, coarse enough for the UI.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "state")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "state"
+)]
 pub enum MeetingStatus {
     Recording,
     /// Post-call processing. `progress` is 0.0..=1.0 across all remaining stages.

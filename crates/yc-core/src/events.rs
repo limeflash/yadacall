@@ -7,7 +7,11 @@ use crate::meeting::{MeetingId, MeetingStatus, TrackKind};
 use crate::transcript::Segment;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
 pub enum EngineEvent {
     /// Recording started, paused, resumed or stopped.
     Recorder {
@@ -63,7 +67,11 @@ pub struct Level {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "state")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "state"
+)]
 pub enum DownloadState {
     Queued,
     Running,
@@ -83,4 +91,34 @@ pub enum NoticeLevel {
     Info,
     Warning,
     Error,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The UI reads camelCase fields; struct variants need `rename_all_fields` for that.
+    #[test]
+    fn struct_variant_fields_are_camel_case() {
+        let event = EngineEvent::Download {
+            item: "m".into(),
+            done_bytes: 1,
+            total_bytes: 2,
+            bytes_per_sec: 3,
+            state: DownloadState::Running,
+        };
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["type"], "download");
+        assert_eq!(json["doneBytes"], 1);
+        assert_eq!(json["totalBytes"], 2);
+        assert_eq!(json["bytesPerSec"], 3);
+        assert_eq!(json["state"]["state"], "running");
+
+        let recorder = EngineEvent::Recorder {
+            meeting: crate::meeting::MeetingId::new(),
+            state: RecorderState::Recording,
+            elapsed_ms: 5,
+        };
+        assert_eq!(serde_json::to_value(&recorder).unwrap()["elapsedMs"], 5);
+    }
 }
