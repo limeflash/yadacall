@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-rename-meeting"
+description = "Enables the rename_meeting command without any pre-configured scope."
+commands.allow = ["rename_meeting"]
+
+[[permission]]
+identifier = "deny-rename-meeting"
+description = "Denies the rename_meeting command without any pre-configured scope."
+commands.deny = ["rename_meeting"]

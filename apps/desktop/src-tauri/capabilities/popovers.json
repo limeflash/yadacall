@@ -2,10 +2,26 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "popover-windows",
   "description": "Minimal permissions for the tray popover and the mini-player",
-  "windows": ["tray", "mini"],
+  "windows": [
+    "tray",
+    "mini"
+  ],
   "permissions": [
     "core:event:default",
     "core:window:allow-start-dragging",
-    "core:window:allow-hide"
+    "allow-list-meetings",
+    "allow-recorder-state",
+    "allow-recorder-start",
+    "allow-recorder-pause",
+    "allow-recorder-resume",
+    "allow-recorder-stop",
+    "allow-recorder-bookmark",
+    "allow-list-tasks",
+    "allow-get-settings",
+    "allow-show-main-window",
+    "allow-open-in-main",
+    "allow-popover-fit",
+    "allow-hide-popover",
+    "allow-quit-app"
   ]
 }

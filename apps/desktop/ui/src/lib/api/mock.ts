@@ -230,6 +230,7 @@ export function createMockApi(): Api {
     async popoverFit() {},
     async hidePopover() {},
     async quit() {},
+    async onNavigate() { return () => {}; },
     async onEngine(cb) { listeners.add(cb); return () => listeners.delete(cb); },
   };
   return api;

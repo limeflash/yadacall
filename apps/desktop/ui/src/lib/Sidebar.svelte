@@ -6,7 +6,7 @@
   import { app, theme, elapsedMs, stopRecording, levels } from "./state.svelte";
   import { clock, pct } from "./format";
   import { api } from "./api";
-  import { isMac } from "./platform";
+  import { overlayTitleBar } from "./platform";
 
   const route = $derived(nav.route.name);
   const recording = $derived(app.recorder.phase !== "idle");
@@ -32,7 +32,7 @@
   }
 </script>
 
-<aside class="yc-side" aria-label={t("Боковое меню")} class:mac={isMac}>
+<aside class="yc-side" aria-label={t("Боковое меню")} class:mac={overlayTitleBar}>
   <div class="brand">
     <div class="mark"><Mascot size={30} accent={theme.accent} /></div>
     <span class="word">yada<span>call</span></span>

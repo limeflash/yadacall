@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-for-claude"
+description = "Enables the copy_for_claude command without any pre-configured scope."
+commands.allow = ["copy_for_claude"]
+
+[[permission]]
+identifier = "deny-copy-for-claude"
+description = "Denies the copy_for_claude command without any pre-configured scope."
+commands.deny = ["copy_for_claude"]

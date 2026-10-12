@@ -60,7 +60,7 @@
   const speakers = $derived.by(() => {
     if (!m) return [];
     const total = turns.reduce((s, x) => s + (x.endMs - x.startMs), 0) || 1;
-    const keys = [...new Set(turns.map((x) => x.speaker))];
+    const keys = [...new Set(turns.map((x) => x.speaker))].sort((a, b) => speakerIndex(a) - speakerIndex(b));
     return keys.map((k) => ({
       key: k, name: speakerName(m, k), named: isNamed(m, k), idx: speakerIndex(k),
       pct: Math.round((turns.filter((x) => x.speaker === k).reduce((s, x) => s + (x.endMs - x.startMs), 0) / total) * 100),
@@ -250,7 +250,7 @@
                 <div class="people">
                   <button type="button" class="people-btn" aria-expanded={peopleOpen} onclick={() => (peopleOpen = !peopleOpen)}>
                     <span class="avs">{#each namedSpeakers.filter((s) => s.key !== "me").slice(0, 3) as s (s.key)}<span class="avwrap"><Avatar name={s.name} index={s.idx} size={22} /></span>{/each}</span>
-                    <span class="names-line">{namedSpeakers.filter((s) => s.key !== "me").map((s) => s.name).join(", ") || t("Вы")}{#if unnamed.length} <span style="color: var(--muted)">{t("и гость")}</span>{/if}</span>
+                    <span class="names-line">{namedSpeakers.filter((s) => s.key !== "me").map((s) => s.name).join(", ") || t("Вы")}{#if unnamed.length}{" "}<span style="color: var(--muted)">{t("и гость")}</span>{/if}</span>
                     <span class="chev" style="transform: rotate({peopleOpen ? 90 : 0}deg)"><Icon name="chevronRight" size={14} /></span>
                   </button>
                   {#if peopleOpen}

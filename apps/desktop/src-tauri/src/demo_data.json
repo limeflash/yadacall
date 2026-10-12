@@ -510,7 +510,9 @@
    "verdict": "great",
    "estimate": "≈ 28× быстрее реального времени",
    "download": {
-    "state": "running",
+    "state": {
+     "state": "running"
+    },
     "doneBytes": 615000000,
     "totalBytes": 670000000,
     "bytesPerSec": 5400000

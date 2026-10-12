@@ -15,3 +15,7 @@ html.popover, html.popover body { background: transparent; }
 .drag-strip { position: fixed; top: 0; left: 0; right: 0; height: 28px; z-index: 50; -webkit-app-region: drag; }
 .no-drag { -webkit-app-region: no-drag; }
 
+
+/* The design's shell wraps; on desktop the two columns must stay side by side and share the window height. */
+.yc-app { flex-wrap: nowrap; }
+@media (max-width: 760px) { .yc-app { flex-wrap: wrap; } }

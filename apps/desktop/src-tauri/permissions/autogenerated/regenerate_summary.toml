@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-regenerate-summary"
+description = "Enables the regenerate_summary command without any pre-configured scope."
+commands.allow = ["regenerate_summary"]
+
+[[permission]]
+identifier = "deny-regenerate-summary"
+description = "Denies the regenerate_summary command without any pre-configured scope."
+commands.deny = ["regenerate_summary"]

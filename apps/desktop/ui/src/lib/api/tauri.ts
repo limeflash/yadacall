@@ -66,6 +66,10 @@ export function createTauriApi(): Api {
     popoverFit: (label, height) => invoke("popover_fit", { label, height }),
     hidePopover: (label) => invoke("hide_popover", { label }),
     quit: () => invoke("quit_app"),
+    async onNavigate(cb) {
+      const un = await listen<string>("navigate", (e) => cb(e.payload));
+      return un;
+    },
     async onEngine(cb) {
       local.add(cb);
       const un = await listen<EngineEvent>("engine", (e) => cb(e.payload));

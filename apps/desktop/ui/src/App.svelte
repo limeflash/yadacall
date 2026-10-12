@@ -16,7 +16,7 @@
   import Onboarding from "./lib/screens/Onboarding.svelte";
   import Tray from "./lib/screens/Tray.svelte";
   import Mini from "./lib/screens/Mini.svelte";
-  import { isMac } from "./lib/platform";
+  import { overlayTitleBar } from "./lib/platform";
 
   const win = new URLSearchParams(location.search).get("w") ?? "main";
 
@@ -43,7 +43,7 @@
 {:else if win === "mini"}
   <Mini />
 {:else}
-  {#if isMac}<div class="drag-strip" data-tauri-drag-region></div>{/if}
+  {#if overlayTitleBar}<div class="drag-strip" data-tauri-drag-region></div>{/if}
   {#if app.ready}
     {#if route.name === "onboarding"}
       <Onboarding />

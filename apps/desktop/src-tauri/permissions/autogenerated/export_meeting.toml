@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-export-meeting"
+description = "Enables the export_meeting command without any pre-configured scope."
+commands.allow = ["export_meeting"]
+
+[[permission]]
+identifier = "deny-export-meeting"
+description = "Denies the export_meeting command without any pre-configured scope."
+commands.deny = ["export_meeting"]

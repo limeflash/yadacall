@@ -122,6 +122,7 @@ export async function initApp() {
   if (typeof matchMedia !== "undefined") matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => { app.systemDark = e.matches; });
   setInterval(() => { app.now = Date.now(); }, 200);
   await api.onEngine(onEvent);
+  await api.onNavigate((hash) => { location.hash = hash; });
   try {
     const [s, r] = await Promise.all([api.getSettings(), api.recorderState()]);
     app.settings = s; i18n.lang = s.uiLanguage; setRecorder(r);

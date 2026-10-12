@@ -240,6 +240,8 @@ export interface Api {
   popoverFit(label: "tray" | "mini", height: number): Promise<void>;
   hidePopover(label: "tray" | "mini"): Promise<void>;
   quit(): Promise<void>;
+  /** Hash routes requested by other windows (tray popover). */
+  onNavigate(cb: (hash: string) => void): Promise<() => void>;
   /** Subscribe to engine events. Returns an unsubscribe function. */
   onEngine(cb: (e: EngineEvent) => void): Promise<() => void>;
 }

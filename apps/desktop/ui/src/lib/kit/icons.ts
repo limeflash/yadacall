@@ -38,6 +38,7 @@ export const iconPaths: Record<string, string> = {
   text: "M4 6h16M4 10h16M4 14h10M4 18h7",
   sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z",
   video: "M3 6h12v12H3zM15 10l6-3v10l-6-3",
+  code: "M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14",
   mic: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3",
   monitor: "M3 5h18v11H3zM8 20h8M12 16v4",
   pause: "M8 5v14M16 5v14",
