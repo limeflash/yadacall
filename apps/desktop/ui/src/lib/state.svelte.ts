@@ -1,6 +1,7 @@
-import { api, inTauri } from "./api";
-import type { EngineEvent, Level, RecorderSnapshot, Segment, Settings, SettingsPatch } from "./api";
-import { i18n, t } from "./i18n/index.svelte";
+import { api, inTauri, integrations } from "./api";
+import type { EngineEvent, IntegrationEvent, Level, RecorderSnapshot, Segment, Settings, SettingsPatch } from "./api";
+import { i18n, plural, t } from "./i18n/index.svelte";
+import { go } from "./router.svelte";
 import { toast } from "./toast.svelte";
 
 /** Global reactive app state. Components read from here; engine events and API calls write to it. */
@@ -94,6 +95,38 @@ function onEvent(e: EngineEvent) {
   handlers.forEach((h) => h(e));
 }
 
+const intHandlers: ((e: IntegrationEvent) => void)[] = [];
+/** Subscribe to the `integrations` stream (reminders, detected calls, account changes). Returns unsubscribe. */
+export function onIntegrationEvent(h: (e: IntegrationEvent) => void) { intHandlers.push(h); return () => { const i = intHandlers.indexOf(h); if (i >= 0) intHandlers.splice(i, 1); }; }
+
+/** Popover windows have no toast stack, and the shell already shows the native notification there. */
+const inMainWindow = typeof location === "undefined" || (new URLSearchParams(location.search).get("w") ?? "main") === "main";
+
+function onIntegration(e: IntegrationEvent) {
+  if (inMainWindow) {
+    switch (e.type) {
+      case "reminderDue": {
+        const n = e.minutesBefore;
+        toast(`${t("Через {n} {w}", { n, w: plural(n, ["минуту", "минуты", "минут"], ["minute", "minutes"]) })} · ${e.event.title}`, {
+          actionLabel: t("Войти и записать"),
+          onAction: () => { integrations.joinAndRecord(e.event.id).then(() => go({ name: "record" })).catch((er) => toast.error(String(er))); },
+        });
+        break;
+      }
+      case "callDetected":
+        toast(t("Ты в звонке {p} — записать его?", { p: e.call.platform }), {
+          actionLabel: t("Записать"),
+          onAction: () => { integrations.resolveDetectedCall(e.call.id, true).then(() => go({ name: "record" })).catch((er) => toast.error(String(er))); },
+        });
+        break;
+      case "authExpired":
+        toast.error(t("{email}: вход истёк, встречи из этого календаря не видны", { email: e.email }));
+        break;
+    }
+  }
+  intHandlers.forEach((h) => h(e));
+}
+
 export async function startRecording(opts: { title?: string; expectedSpeakers?: number; micDevice?: string } = {}) {
   try {
     setRecorder(await api.recorderStart(opts));
@@ -122,6 +155,7 @@ export async function initApp() {
   if (typeof matchMedia !== "undefined") matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => { app.systemDark = e.matches; });
   setInterval(() => { app.now = Date.now(); }, 200);
   await api.onEngine(onEvent);
+  await integrations.onIntegrations(onIntegration);
   await api.onNavigate((hash) => { location.hash = hash; });
   try {
     const [s, r] = await Promise.all([api.getSettings(), api.recorderState()]);

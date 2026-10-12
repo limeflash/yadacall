@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-join-and-record"
+description = "Enables the join_and_record command without any pre-configured scope."
+commands.allow = ["join_and_record"]
+
+[[permission]]
+identifier = "deny-join-and-record"
+description = "Denies the join_and_record command without any pre-configured scope."
+commands.deny = ["join_and_record"]

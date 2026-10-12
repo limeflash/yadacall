@@ -39,7 +39,7 @@
   </div>
 
   <nav aria-label={t("Разделы")}>
-    <button type="button" class="yc-nav item" class:on={route === "meetings" || route === "meeting" || route === "ask"} aria-current={route === "meetings" ? "page" : undefined} onclick={() => go({ name: "meetings" })}>
+    <button type="button" class="yc-nav item" class:on={route === "meetings" || route === "meeting" || route === "ask" || route === "calendar"} aria-current={route === "meetings" ? "page" : undefined} onclick={() => go({ name: "meetings" })}>
       <span class="ic"><Icon name="calendar" size={16} /></span><span class="lbl">{t("Встречи")}</span>
     </button>
     <button type="button" class="yc-nav item" class:on={route === "tasks"} aria-current={route === "tasks" ? "page" : undefined} onclick={() => go({ name: "tasks" })}>
@@ -49,7 +49,7 @@
     <button type="button" class="yc-nav item" class:on={route === "upload"} aria-current={route === "upload" ? "page" : undefined} onclick={() => go({ name: "upload" })}>
       <span class="ic"><Icon name="upload" size={16} /></span><span class="lbl">{t("Загрузить запись")}</span>
     </button>
-    <button type="button" class="yc-nav item" class:on={route === "settings" || route === "models"} aria-current={route === "settings" ? "page" : undefined} onclick={() => go({ name: "settings" })}>
+    <button type="button" class="yc-nav item" class:on={route === "settings" || route === "models" || route === "connections" || route === "google"} aria-current={route === "settings" ? "page" : undefined} onclick={() => go({ name: "settings" })}>
       <span class="ic"><Icon name="gear" size={16} /></span><span class="lbl">{t("Настройки")}</span>
     </button>
   </nav>

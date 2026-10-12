@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-resolve-detected-call"
+description = "Enables the resolve_detected_call command without any pre-configured scope."
+commands.allow = ["resolve_detected_call"]
+
+[[permission]]
+identifier = "deny-resolve-detected-call"
+description = "Denies the resolve_detected_call command without any pre-configured scope."
+commands.deny = ["resolve_detected_call"]

@@ -43,6 +43,8 @@ pub struct ShellState {
     mini_enabled: bool,
     record_key: Option<Shortcut>,
     bookmark_key: Option<Shortcut>,
+    /// Menu-bar text while idle: "1:1 с Аней 1:41" before a call, "звонок без записи" (see `integrations_shell`).
+    idle_title: Option<String>,
 }
 
 pub type Shared = Arc<Mutex<ShellState>>;
@@ -293,10 +295,37 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Whether a recording is running or paused.
+pub fn is_recording(app: &AppHandle) -> bool {
+    state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .recording
+}
+
+/// Sets the idle menu-bar text (call countdown); a running recording keeps its own timer.
+pub fn set_idle_title(app: &AppHandle, title: Option<String>) {
+    let (changed, rec) = {
+        let st = state(app);
+        let mut g = st.lock().unwrap_or_else(|e| e.into_inner());
+        let changed = g.idle_title != title;
+        g.idle_title = title;
+        (changed, g.recording)
+    };
+    if changed && !rec {
+        set_tray_state(app, false, 0, false);
+    }
+}
+
 fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: bool) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
     };
+    let idle = state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .idle_title
+        .clone();
     let secs = elapsed_ms / 1000;
     let clock = if secs >= 3600 {
         format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
@@ -308,13 +337,15 @@ fn set_tray_state(app: &AppHandle, recording: bool, elapsed_ms: u64, paused: boo
         let _ = tray.set_title(if recording {
             Some(format!("{}{clock}", if paused { "⏸ " } else { "● " }))
         } else {
-            None::<String>
+            idle
         });
     }
     #[cfg(not(target_os = "macos"))]
     {
         let _ = tray.set_tooltip(Some(if recording {
             format!("YadaCall · {clock}{}", if paused { " ⏸" } else { "" })
+        } else if let Some(t) = idle {
+            format!("YadaCall · {t}")
         } else {
             "YadaCall".to_string()
         }));

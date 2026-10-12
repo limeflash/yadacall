@@ -4,11 +4,11 @@
   import Switch from "../kit/Switch.svelte";
   import Mascot from "../kit/Mascot.svelte";
   import StatusDot from "../kit/StatusDot.svelte";
-  import { api } from "../api";
-  import type { MeetingListItem } from "../api";
-  import { app, elapsedMs, theme, levels, startRecording, stopRecording, togglePause, addBookmark } from "../state.svelte";
+  import { api, integrations } from "../api";
+  import type { AgendaEvent, CalendarAccount, DetectedCall, MeetingListItem } from "../api";
+  import { app, elapsedMs, theme, levels, startRecording, stopRecording, togglePause, addBookmark, onIntegrationEvent } from "../state.svelte";
   import { t } from "../i18n/index.svelte";
-  import { clock, hhmm } from "../format";
+  import { clock, hhmm, mss } from "../format";
   import { isMac, prettyAccel } from "../platform";
 
   let meetings = $state<MeetingListItem[]>([]);
@@ -24,9 +24,35 @@
   const hotkey = $derived(prettyAccel(app.settings?.hotkeyRecord ?? "Alt+Shift+R"));
   const busyModel = $derived(Object.keys(app.downloads)[0]);
 
+  // Before a call: the next calendar call (when it is close) and a call the shell noticed that no calendar knows.
+  let agenda = $state<AgendaEvent[]>([]);
+  let accounts = $state<CalendarAccount[]>([]);
+  let detected = $state<DetectedCall | null>(null);
+  async function loadCalls() {
+    const end = new Date(); end.setHours(24, 0, 0, 0);
+    try {
+      [agenda, accounts, detected] = await Promise.all([
+        integrations.agenda({ from: new Date().toISOString(), to: end.toISOString() }), integrations.accounts(), integrations.detectedCall(),
+      ]);
+    } catch { /* integrations not ready */ }
+  }
+  const upcoming = $derived(agenda.filter((e) => Date.parse(e.end) > app.now));
+  const nextCall = $derived(upcoming[0]);
+  const left = $derived(nextCall ? Math.round((Date.parse(nextCall.start) - app.now) / 1000) : 0);
+  /** The card replaces the idle popover from 15 minutes before the start until 5 minutes into the call. */
+  const soon = $derived(!!nextCall && left <= 900 && left > -300);
+  const nextAcc = $derived(accounts.find((a) => a.id === nextCall?.accountId));
+  const cd = $derived(left < 0 ? `+${mss(-left)}` : mss(left));
+  const accColor = (id: string) => accounts.find((a) => a.id === id)?.color;
+  async function joinRec(e: AgendaEvent) { await integrations.joinAndRecord(e.id); await api.hidePopover("tray"); }
+  async function joinOnly(e: AgendaEvent) { await integrations.joinWithoutRecording(e.id); await api.hidePopover("tray"); }
+  async function answer(c: DetectedCall, record: boolean) { detected = null; await integrations.resolveDetectedCall(c.id, record); if (record) await api.hidePopover("tray"); }
+
   async function load() { meetings = await api.listMeetings(); }
   onMount(() => {
-    load();
+    load(); loadCalls();
+    const off = onIntegrationEvent((e) => { if (e.type !== "addProgress") loadCalls(); });
+    const poll = setInterval(loadCalls, 15000);
     const iv = setInterval(() => {
       const lvl = Math.max(levels.mic.peak, levels.system.peak);
       hist.push(paused || !recording ? 3 : Math.round(4 + lvl * 20 + Math.random() * 6)); hist.shift();
@@ -34,9 +60,9 @@
     }, 90);
     const ro = new ResizeObserver(() => api.popoverFit("tray", Math.ceil(root.getBoundingClientRect().height) + 20));
     ro.observe(root);
-    const onFocus = () => load();
+    const onFocus = () => { load(); loadCalls(); };
     window.addEventListener("focus", onFocus);
-    return () => { clearInterval(iv); ro.disconnect(); window.removeEventListener("focus", onFocus); };
+    return () => { clearInterval(iv); clearInterval(poll); off(); ro.disconnect(); window.removeEventListener("focus", onFocus); };
   });
   $effect(() => { void app.rev; load(); });
 
@@ -45,6 +71,40 @@
   async function startNow() { await startRecording({}); }
   const stateOf = (m: MeetingListItem) => m.status.state;
 </script>
+
+{#snippet soonCard(e: AgendaEvent, win: boolean)}
+  <div class="scard" class:win>
+    <div style="display: flex; align-items: baseline; gap: 8px">
+      <span style="flex: 1; font-size: 12px; color: var(--muted)">{t("Следующая встреча")}</span>
+      <span class="mg-mono yc-num" style="font-size: 20px; font-weight: 600; letter-spacing: -0.04em; color: {left < 0 ? 'var(--danger)' : 'var(--accent-text)'}">{cd}</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span aria-hidden="true" style="flex: none; width: 3px; height: 34px; border-radius: 2px; background: {nextAcc?.color}"></span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+        <span class="yc-ellipsis" style="font-size: 14px; font-weight: 700">{e.title}</span>
+        <span class="yc-ellipsis" style="font-size: 12px; color: var(--muted)">{hhmm(e.start)} · {nextAcc?.label}</span>
+      </span>
+    </div>
+    <div style="display: flex; gap: 6px">
+      <button type="button" class="yc-press sj" onclick={() => joinRec(e)}><Icon name="video" size={14} />{t("Войти и записать")}</button>
+      <button type="button" aria-label={t("Войти без записи")} class="yc-press sn" onclick={() => joinOnly(e)}>{t("Без записи")}</button>
+    </div>
+  </div>
+{/snippet}
+
+{#snippet detectedCard(c: DetectedCall)}
+  <div class="scard dcard">
+    <div style="display: flex; flex-direction: column; gap: 1px">
+      <span style="font-size: 13px; font-weight: 700">{t("Ты в звонке {p}", { p: c.platform })}</span>
+      <span style="font-size: 13px">{t("Записать его?")}</span>
+      <span class="mg-mono yc-ellipsis" style="font-size: 11.5px; color: var(--muted)">{c.url}</span>
+    </div>
+    <div style="display: flex; gap: 6px">
+      <button type="button" class="yc-press sj" style="flex: 1.2; justify-content: center" onclick={() => answer(c, true)}>{t("Записать")}</button>
+      <button type="button" class="yc-press sn" onclick={() => answer(c, false)}>{t("Не сейчас")}</button>
+    </div>
+  </div>
+{/snippet}
 
 <div class="stage" class:win={!isMac}>
   <div bind:this={root} class="root">
@@ -69,6 +129,27 @@
           <button type="button" class="yc-press b fin" onclick={finish}>{t("Завершить")}</button>
         </div>
       </div>
+    {:else if isMac && soon && nextCall}
+      <div class="idle">
+        <div class="hdr" style="padding-bottom: 10px">
+          <span style="display: block; width: 28px; height: 28px; flex: none"><Mascot size={28} accent={theme.accent} /></span>
+          <span class="word">yada<span>call</span></span>
+        </div>
+        {#if detected}{@render detectedCard(detected)}{/if}
+        {@render soonCard(nextCall, false)}
+        {#if upcoming.length > 1}<div class="cap" style="padding: 12px 10px 4px">{t("Дальше сегодня")}</div>{/if}
+        {#each upcoming.slice(1, 4) as m (m.id)}
+          <button type="button" class="yc-mi li" onclick={() => openMain("#/calendar")}>
+            <span class="mg-mono" style="flex: none; width: 38px; font-size: 11.5px; color: var(--muted); text-align: left">{hhmm(m.start)}</span>
+            <span aria-hidden="true" style="flex: none; width: 6px; height: 6px; border-radius: 50%; background: {accColor(m.accountId)}"></span>
+            <span class="yc-ellipsis" style="flex: 1; text-align: left">{m.title}</span>
+          </button>
+        {/each}
+        <span aria-hidden="true" class="sep"></span>
+        <button type="button" class="yc-mi li sm" onclick={() => openMain("#/calendar")}><span style="flex: 1; text-align: left">{t("Весь календарь")}</span><span class="mg-mono k">⌘K</span></button>
+        <button type="button" class="yc-mi li sm" onclick={() => openMain("#/")}><span style="flex: 1; text-align: left">{t("Открыть YadaCall")}</span><span class="mg-mono k">⌘O</span></button>
+        <button type="button" class="yc-mi li sm" onclick={() => api.quit()}><span style="flex: 1; text-align: left">{t("Выйти")}</span><span class="mg-mono k">⌘Q</span></button>
+      </div>
     {:else if isMac}
       <div class="idle">
         <div class="hdr">
@@ -76,6 +157,7 @@
           <span class="word">yada<span>call</span></span>
           <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted)"><StatusDot kind={busyModel ? "busy" : "ok"} />{busyModel ? t("загрузка") : t("готов")}</span>
         </div>
+        {#if detected}{@render detectedCard(detected)}{/if}
         <button type="button" class="yc-press recbtn" onclick={startNow}>
           <Icon name="mic" size={14} /><span style="flex: 1; text-align: left">{t("Записать встречу")}</span><span class="mg-mono hk">{hotkey}</span>
         </button>
@@ -105,6 +187,12 @@
           <button type="button" aria-label={t("Настройки")} class="yc-nav ib" onclick={() => openMain("#/settings")}><Icon name="gear" size={16} /></button>
           <button type="button" aria-label={t("Открыть окно")} class="yc-nav ib" onclick={() => openMain("#/")}><Icon name="externalLink" size={16} /></button>
         </div>
+        {#if detected || (soon && nextCall)}
+          <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 16px 12px">
+            {#if detected}{@render detectedCard(detected)}{/if}
+            {#if soon && nextCall}{@render soonCard(nextCall, true)}{/if}
+          </div>
+        {/if}
         <div style="display: flex; flex-direction: column; gap: 10px; padding: 0 16px 14px">
           <button type="button" class="yc-press recbtn big" onclick={startNow}><Icon name="mic" size={14} /><span style="flex: 1; text-align: left">{t("Записать встречу")}</span><span class="mg-mono hk" style="font-size: 10px">{hotkey}</span></button>
           <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
@@ -158,5 +246,10 @@
   .whdr { display: flex; align-items: center; gap: 8px; padding: 12px 10px 10px 16px; }
   .ib { width: 30px; height: 30px; border: 0; border-radius: 9px; background: transparent; display: grid; place-items: center; color: var(--muted); }
   .tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); text-align: left; }
+  .scard { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--accent-line); border-radius: 13px; background: var(--bg); }
+  .scard.win { border-radius: 8px; }
+  .dcard { margin: 0 0 6px; padding: 12px 14px 14px; border-color: var(--border); }
+  .sj { flex: 1.6; height: 34px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 10px; background: var(--accent); color: var(--ink-on-accent); font-size: 13px; font-weight: 800; }
+  .sn { flex: 1; height: 34px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--text); font-size: 12.5px; font-weight: 700; }
   .wfoot { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 12px; color: var(--muted); }
 </style>

@@ -56,3 +56,32 @@ export function mbps(bytesPerSec: number): string {
 }
 
 export function pct(n: number): string { return `${Math.round(n * 100)}%`; }
+
+/** 101 -> "1:41", 5 -> "0:05". */
+export function mss(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 60)}:${p2(s % 60)}`;
+}
+
+/** Countdown to a call: "через 4:02", "через 12 мин", "через 1 ч 47 мин", "идёт 0:12" once it started. */
+export function until(leftSec: number): string {
+  const s = Math.round(leftSec);
+  if (s <= 0) return t("идёт {t}", { t: mss(-s) });
+  if (s < 600) return t("через {t}", { t: mss(s) });
+  const m = Math.round(s / 60);
+  if (m < 60) return t("через {n} мин", { n: m });
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? t("через {h} ч {m} мин", { h, m: r }) : t("через {h} ч", { h });
+}
+
+/** "понедельник, 12 октября" */
+export function longDate(d: Date): string {
+  return new Intl.DateTimeFormat(locale(), { weekday: "long", day: "numeric", month: "long" }).format(d);
+}
+
+/** Calendar duration: "30 мин", "1 ч", "1 ч 30 мин". */
+export function durLabel(min: number): string {
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h === 0) return t("{n} мин", { n: m });
+  return m ? t("{h} ч {m} мин", { h, m }) : t("{h} ч", { h });
+}

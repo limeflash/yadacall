@@ -608,5 +608,234 @@
    "name": "USB микрофон",
    "isDefault": false
   }
- ]
+ ],
+ "integrations": {
+  "accounts": [
+   {
+    "id": "work",
+    "label": "Рабочий",
+    "email": "lime@company.com",
+    "color": "#b8acf2",
+    "workspace": true,
+    "status": "ok",
+    "meetingsThisWeek": 12,
+    "recordPolicy": "always",
+    "visible": true
+   },
+   {
+    "id": "home",
+    "label": "Личный",
+    "email": "lime@gmail.com",
+    "color": "#8ec8ea",
+    "workspace": false,
+    "status": "ok",
+    "meetingsThisWeek": 4,
+    "recordPolicy": "ask",
+    "visible": true
+   },
+   {
+    "id": "free",
+    "label": "Фриланс",
+    "email": "lime.freelance@gmail.com",
+    "color": "#e6a6b0",
+    "workspace": false,
+    "status": "expired",
+    "meetingsThisWeek": 3,
+    "recordPolicy": "ask",
+    "visible": true
+   }
+  ],
+  "newAccount": {
+   "id": "studio",
+   "label": "Студия",
+   "email": "lime.studio@gmail.com",
+   "color": "#dcc68c",
+   "workspace": false,
+   "status": "ok",
+   "meetingsThisWeek": 2,
+   "recordPolicy": "ask",
+   "visible": true
+  },
+  "events": [
+   {
+    "id": "ev-standup",
+    "account": "work",
+    "title": "Стендап дизайн-команды",
+    "startOffsetMin": -295,
+    "durationMin": 15,
+    "attendees": [
+     "Аня",
+     "Борис",
+     "Катя"
+    ],
+    "meetUrl": "https://meet.google.com/dsg-stnd-upp",
+    "meetingId": "0199d0a0-0000-7000-8000-000000000003"
+   },
+   {
+    "id": "ev-sync",
+    "account": "work",
+    "title": "Синк по запуску онбординга",
+    "startOffsetMin": -233,
+    "durationMin": 48,
+    "attendees": [
+     "Аня",
+     "Борис"
+    ],
+    "meetUrl": "https://meet.google.com/onb-sync-lnc",
+    "meetingId": "0199d0a0-0000-7000-8000-000000000002"
+   },
+   {
+    "id": "ev-review",
+    "account": "work",
+    "title": "Ревью дизайна личного кабинета",
+    "startOffsetMin": -115,
+    "durationMin": 60,
+    "attendees": [
+     "Олег",
+     "Мария"
+    ],
+    "meetUrl": "https://meet.google.com/lkb-rvw-dsg"
+   },
+   {
+    "id": "ev-anya",
+    "account": "work",
+    "title": "1:1 с Аней",
+    "startOffsetMin": 4,
+    "durationMin": 30,
+    "attendees": [
+     "Аня Ковалёва"
+    ],
+    "meetUrl": "https://meet.google.com/ank-oyaa-111"
+   },
+   {
+    "id": "ev-acc",
+    "account": "home",
+    "title": "Звонок с бухгалтером",
+    "startOffsetMin": 34,
+    "durationMin": 30,
+    "attendees": [
+     "Ирина"
+    ],
+    "meetUrl": "https://meet.google.com/buh-irin-aaa"
+   },
+   {
+    "id": "ev-client",
+    "account": "work",
+    "title": "Ревью макетов у заказчика",
+    "startOffsetMin": 64,
+    "durationMin": 60,
+    "attendees": [
+     "Олег",
+     "Мария",
+     "Павел",
+     "Ира",
+     "Лев"
+    ],
+    "meetUrl": "https://meet.google.com/mkt-zkz-chk"
+   },
+   {
+    "id": "ev-realtor",
+    "account": "home",
+    "title": "Созвон с риелтором",
+    "startOffsetMin": 94,
+    "durationMin": 30,
+    "attendees": [
+     "Сергей"
+    ],
+    "meetUrl": "https://meet.google.com/rlt-srg-bbb"
+   }
+  ],
+  "tomorrow": [
+   {
+    "id": "ev-t-standup",
+    "account": "work",
+    "title": "Стендап дизайн-команды",
+    "time": "10:00",
+    "durationMin": 15,
+    "attendees": [
+     "Аня",
+     "Борис",
+     "Катя"
+    ],
+    "meetUrl": "https://meet.google.com/dsg-stnd-upp"
+   },
+   {
+    "id": "ev-t-sprint",
+    "account": "work",
+    "title": "Планирование спринта 44",
+    "time": "12:00",
+    "durationMin": 60,
+    "attendees": [
+     "Аня",
+     "Борис",
+     "Катя",
+     "Олег"
+    ],
+    "meetUrl": "https://meet.google.com/spr-44-plan"
+   },
+   {
+    "id": "ev-t-english",
+    "account": "home",
+    "title": "Урок английского",
+    "time": "19:00",
+    "durationMin": 60,
+    "attendees": [
+     "Эмма"
+    ],
+    "meetUrl": "https://meet.google.com/eng-lsn-emm"
+   }
+  ],
+  "connections": [
+   {
+    "id": "meet",
+    "name": "Google Meet",
+    "mono": "G",
+    "description": "Встречи из Google Календаря, напоминание и вход в звонок сразу в нужном аккаунте.",
+    "state": "connected"
+   },
+   {
+    "id": "zoom",
+    "name": "Zoom",
+    "mono": "Z",
+    "description": "Встречи из Zoom и вход по ссылке без выбора аккаунта.",
+    "state": "soon"
+   },
+   {
+    "id": "teams",
+    "name": "Microsoft Teams",
+    "mono": "T",
+    "description": "Встречи из календаря Outlook и звонки в Teams.",
+    "state": "soon"
+   },
+   {
+    "id": "discord",
+    "name": "Discord",
+    "mono": "D",
+    "description": "Голосовые каналы и звонки на серверах, где ты есть.",
+    "state": "soon"
+   },
+   {
+    "id": "telegram",
+    "name": "Telegram",
+    "mono": "T",
+    "description": "Групповые и личные звонки в Telegram.",
+    "state": "soon"
+   },
+   {
+    "id": "slack",
+    "name": "Slack",
+    "mono": "S",
+    "description": "Хаддлы в каналах и личных сообщениях.",
+    "state": "soon"
+   }
+  ],
+  "wantDefault": [
+   "discord"
+  ],
+  "detectedCall": {
+   "platform": "Google Meet",
+   "url": "meet.google.com/kqv-tdre-xmn",
+   "afterSec": 45
+  }
+ }
 }

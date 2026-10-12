@@ -245,3 +245,104 @@ export interface Api {
   /** Subscribe to engine events. Returns an unsubscribe function. */
   onEngine(cb: (e: EngineEvent) => void): Promise<() => void>;
 }
+
+// ---- integrations (`src-tauri/src/integrations_api.rs`) -------------------------------------------
+export type RecordPolicy = "ask" | "always" | "never";
+export type AccountStatus = "ok" | "expired" | "connecting";
+
+export interface CalendarAccount {
+  id: string;
+  /** "Рабочий", "Личный". */
+  label: string;
+  email: string;
+  /** Avatar colour, `#rrggbb`. */
+  color: string;
+  workspace: boolean;
+  status: AccountStatus;
+  meetingsThisWeek: number;
+  recordPolicy: RecordPolicy;
+  /** "В календаре": show the account's events in the agenda. */
+  visible: boolean;
+}
+
+export interface TimeRange { from: string; to: string }
+
+export interface AgendaEvent {
+  id: string;
+  accountId: string;
+  title: string;
+  start: string;
+  end: string;
+  meetUrl?: string;
+  /** Other participants (without the user). */
+  attendees: string[];
+  recordPolicy: RecordPolicy;
+  /** Account policy + the user's per-event choice. */
+  willRecord: boolean;
+  /** Ids of visible events of other accounts that run at the same time. */
+  overlaps: string[];
+  /** Library meeting recorded for this event. */
+  meetingId?: string;
+}
+
+export interface JoinOutcome {
+  title: string;
+  /** Link opened in the browser by the shell; absent when there is nothing to open. */
+  meetUrl?: string;
+  accountEmail: string;
+  record: boolean;
+  endsAt: string;
+}
+
+export type ConnectionState = "connected" | "soon";
+export interface Connection {
+  id: string;
+  name: string;
+  mono: string;
+  description: string;
+  state: ConnectionState;
+  accounts?: number;
+  /** "Хочу такое": a purely local flag, never sent anywhere. */
+  want: boolean;
+}
+
+export interface ReminderSettings {
+  /** 1, 2 or 5. */
+  remindMinutes: number;
+  openInAccount: boolean;
+  detectUnscheduled: boolean;
+}
+
+export interface DetectedCall { id: string; platform: string; url: string; detectedAt: string }
+
+/** The `integrations` Tauri event (tag = "type"). */
+export type IntegrationEvent =
+  | { type: "reminderDue"; event: AgendaEvent; accountLabel: string; accountEmail: string; minutesBefore: number }
+  | { type: "callDetected"; call: DetectedCall }
+  | { type: "authExpired"; accountId: string; email: string }
+  | { type: "addProgress"; step: number }
+  | { type: "agendaChanged" };
+
+/** Calendar accounts, agenda, connections catalog and reminders. Tauri `invoke` or the browser mock. */
+export interface IntegrationsApi {
+  accounts(): Promise<CalendarAccount[]>;
+  /** Resolves with the new account once the browser round-trip finished; rejects with "cancelled" after `cancelAddAccount`. */
+  addGoogleAccount(): Promise<CalendarAccount>;
+  cancelAddAccount(): Promise<void>;
+  removeAccount(id: string): Promise<void>;
+  reauthAccount(id: string): Promise<CalendarAccount>;
+  setAccountPolicy(id: string, policy: RecordPolicy): Promise<void>;
+  setAccountVisible(id: string, visible: boolean): Promise<void>;
+  agenda(range: TimeRange): Promise<AgendaEvent[]>;
+  setEventRecording(eventId: string, record: boolean): Promise<void>;
+  joinAndRecord(eventId: string): Promise<JoinOutcome>;
+  joinWithoutRecording(eventId: string): Promise<JoinOutcome>;
+  connections(): Promise<Connection[]>;
+  /** Flips "Хочу такое"; resolves with the new value. */
+  toggleWant(service: string): Promise<boolean>;
+  reminderSettings(): Promise<ReminderSettings>;
+  setReminderSettings(s: ReminderSettings): Promise<ReminderSettings>;
+  detectedCall(): Promise<DetectedCall | null>;
+  resolveDetectedCall(id: string, record: boolean): Promise<void>;
+  onIntegrations(cb: (e: IntegrationEvent) => void): Promise<() => void>;
+}

@@ -13,6 +13,9 @@
   import Upload from "./lib/screens/Upload.svelte";
   import Settings from "./lib/screens/Settings.svelte";
   import Models from "./lib/screens/Models.svelte";
+  import Calendar from "./lib/screens/Calendar.svelte";
+  import Connections from "./lib/screens/Connections.svelte";
+  import GoogleAccounts from "./lib/screens/GoogleAccounts.svelte";
   import Onboarding from "./lib/screens/Onboarding.svelte";
   import Tray from "./lib/screens/Tray.svelte";
   import Mini from "./lib/screens/Mini.svelte";
@@ -59,6 +62,9 @@
           {:else if route.name === "upload"}<Upload />
           {:else if route.name === "settings"}<Settings />
           {:else if route.name === "models"}<Models />
+          {:else if route.name === "calendar"}<Calendar />
+          {:else if route.name === "connections"}<Connections />
+          {:else if route.name === "google"}<GoogleAccounts />
           {/if}
         {/key}
       </div>

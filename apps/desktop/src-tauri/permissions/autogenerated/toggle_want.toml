@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-toggle-want"
+description = "Enables the toggle_want command without any pre-configured scope."
+commands.allow = ["toggle_want"]
+
+[[permission]]
+identifier = "deny-toggle-want"
+description = "Denies the toggle_want command without any pre-configured scope."
+commands.deny = ["toggle_want"]
