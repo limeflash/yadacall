@@ -1,1 +1,17 @@
-//! TODO: see docs/ARCHITECTURE.md
+//! On-device ONNX Runtime adapters for YadaCall.
+//!
+//! Third-party model and preprocessor provenance and licenses are listed in
+//! `MODEL_SOURCES.md` at the crate root.
+
+pub mod asr;
+mod backend;
+pub mod fbank;
+pub mod speaker;
+pub mod text_embedding;
+pub mod vad;
+
+pub use asr::{AsrEngine, AsrKind};
+pub use backend::Backend;
+pub use speaker::CampPlusEmbedder;
+pub use text_embedding::{OnnxTextEmbedder, Pooling, TextEmbeddingConfig};
+pub use vad::SileroVad;
