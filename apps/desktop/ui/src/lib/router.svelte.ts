@@ -8,6 +8,9 @@ export type Route =
   | { name: "upload" }
   | { name: "settings" }
   | { name: "models" }
+  | { name: "calendar" }
+  | { name: "connections" }
+  | { name: "google" }
   | { name: "onboarding" };
 
 export function parse(hash: string): Route {
@@ -23,6 +26,8 @@ export function parse(hash: string): Route {
     case "upload": return { name: "upload" };
     case "settings": return { name: "settings" };
     case "models": return { name: "models" };
+    case "calendar": return { name: "calendar" };
+    case "connections": return parts[1] === "google" ? { name: "google" } : { name: "connections" };
     case "onboarding": return { name: "onboarding" };
     default: return { name: "meetings" };
   }
@@ -33,6 +38,7 @@ export function href(r: Route): string {
     case "meeting": return `#/meeting/${r.id}/${r.tab}${r.at != null ? `?at=${Math.round(r.at)}` : ""}`;
     case "ask": return r.q ? `#/ask?q=${encodeURIComponent(r.q)}` : "#/ask";
     case "meetings": return "#/";
+    case "google": return "#/connections/google";
     default: return `#/${r.name}`;
   }
 }

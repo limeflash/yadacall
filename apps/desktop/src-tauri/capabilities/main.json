@@ -12,6 +12,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-set-focus",
     "dialog:allow-open",
+    "opener:default",
     "allow-list-meetings",
     "allow-get-meeting",
     "allow-rename-meeting",

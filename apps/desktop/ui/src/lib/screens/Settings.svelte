@@ -9,11 +9,12 @@
   import AccentPicker from "../kit/AccentPicker.svelte";
   import Mascot from "../kit/Mascot.svelte";
   import StatusPill from "../kit/StatusPill.svelte";
-  import { api } from "../api";
-  import type { ModelEntry, Permissions, SummaryProvider, ThemeChoice, KeepAudio } from "../api";
+  import { api, integrations } from "../api";
+  import type { Connection, ModelEntry, Permissions, SummaryProvider, ThemeChoice, KeepAudio } from "../api";
   import { app, saveSettings, theme } from "../state.svelte";
-  import { t } from "../i18n/index.svelte";
+  import { t, plural } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
+  import Icon from "../kit/Icon.svelte";
   import { bytes } from "../format";
   import { prettyAccel, isMac } from "../platform";
   import { toast } from "../toast.svelte";
@@ -25,7 +26,11 @@
   let apiKey = $state("");
 
   async function loadModels() { asr = (await api.modelsOverview()).models.filter((m) => m.kind === "asr"); }
-  onMount(() => { loadModels(); api.permissions().then((p) => (perms = p)); });
+  let meet = $state<Connection | null>(null);
+  onMount(() => {
+    loadModels(); api.permissions().then((p) => (perms = p));
+    integrations.connections().then((c) => (meet = c.find((x) => x.state === "connected") ?? null));
+  });
   // keep the three ASR rows live while something downloads
   $effect(() => { const d = JSON.stringify(app.downloads); void d; loadModels(); });
 
@@ -107,6 +112,17 @@
         {/each}
       </div>
       <div style="padding: 10px 2px 4px"><AccentPicker value={s.accent} onchange={(hex) => saveSettings({ accent: hex })} /></div>
+
+      <div style="padding: 14px 4px 0"><SectionLabel as="h2">{t("Подключения")}</SectionLabel></div>
+      <button type="button" class="yc-lift conn" onclick={() => go({ name: "connections" })}>
+        <span aria-hidden="true" class="gtile">G</span>
+        <span class="two">
+          <span style="font-size: 14px">Google Meet</span>
+          <span class="sub">{#if meet?.accounts != null}{meet.accounts} {plural(meet.accounts, ["аккаунт", "аккаунта", "аккаунтов"], ["account", "accounts"])} · {/if}{t("встречи из календаря и вход в звонок")}</span>
+        </span>
+        <span style="flex: none; font-size: 12px; color: var(--muted)">{t("Все сервисы")}</span>
+        <span style="display: inline-flex; color: var(--muted)"><Icon name="chevronRight" size={16} /></span>
+      </button>
 
       <div class="hrow">
         <SectionLabel as="h2">{t("Модель расшифровки")}</SectionLabel>
@@ -232,6 +248,8 @@
   .tl { display: flex; align-items: center; justify-content: center; gap: 5px; height: 16px; }
   .chk { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; }
   .chk span { display: block; width: 3px; height: 6px; margin-top: -2px; border-right: 1.8px solid var(--ink-on-accent); border-bottom: 1.8px solid var(--ink-on-accent); transform: rotate(45deg); }
+  .conn { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); text-align: left; font: inherit; }
+  .gtile { width: 32px; height: 32px; flex: none; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); font-size: 14px; font-weight: 800; display: grid; place-items: center; }
   .hrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 14px 4px 0; }
   .alllink { flex: none; margin-bottom: 8px; padding: 0; border: 0; background: none; font-size: 12.5px; font-weight: 600; color: var(--accent-text); white-space: nowrap; }
   .model { position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); transition: border-color 0.3s; }

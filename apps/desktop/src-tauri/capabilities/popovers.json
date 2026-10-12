@@ -28,6 +28,6 @@
     "allow-join-without-recording",
     "allow-detected-call",
     "allow-resolve-detected-call",
-    "allow-reminder-settings"
+    "allow-accounts"
   ]
 }
