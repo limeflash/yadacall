@@ -1,12 +1,13 @@
-//! Shell side of the "before the call" feature: a one-second scheduler that watches the agenda, shows the
-//! menu-bar countdown ("1:1 с Аней 1:41") and the "звонок без записи" state, fires reminders, and turns
-//! [`IntegrationEvent`]s into native notifications.
+//! Shell side of the "before the call" feature: a one-second tick that watches the agenda and shows the
+//! menu-bar countdown ("1:1 с Аней 1:41") and the "звонок без записи" state, and turns [`IntegrationEvent`]s
+//! into native notifications. Reminders come from the real `yc-connect` scheduler; only the demo, which has
+//! no scheduler of its own, lets this tick fire them (`local_reminders`).
 //!
 //! Desktop notifications cannot carry buttons (`tauri-plugin-notification` only supports actions on mobile), so
 //! the notification texts below list the actions and the tray popover — which shows the same "Следующая
 //! встреча" card with the real buttons — is where they are actually pressed.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,9 +16,18 @@ use chrono::{DateTime, Utc};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt as _;
 
+use yc_core::events::{EngineEvent, RecorderState};
+use yc_core::meeting::MeetingStatus;
+use yc_core::transcript::{SPEAKER_ME, SPEAKER_THEM};
+
 use crate::api::{Backend, RecorderStartOptions};
 use crate::integrations_api::*;
+use crate::integrations_real::RealIntegrations;
 use crate::shell;
+
+/// The real integrations, kept in Tauri state next to the `dyn Integrations` one so the shell can reach the
+/// parts that are not part of the trait (recording flag, event -> meeting links). Absent in demo mode.
+pub struct ConnectHandle(pub Arc<RealIntegrations>);
 
 /// How long before the start the menu bar switches to the countdown.
 const TITLE_WINDOW_SECS: i64 = 600;
@@ -32,6 +42,8 @@ pub struct IntegrationShell {
     dirty: AtomicBool,
     /// "Звонок без записи" is shown until this instant.
     no_record_until: Mutex<Option<DateTime<Utc>>>,
+    /// Attendee names of recordings started from the calendar, by meeting id, applied once the transcript is ready.
+    hints: Mutex<HashMap<String, Vec<String>>>,
 }
 
 /// The sink handed to the [`Integrations`] implementation: forwards to every webview and reacts in the shell.
@@ -43,8 +55,8 @@ pub fn sink(app: &AppHandle) -> IntegrationSink {
     })
 }
 
-/// Starts the scheduler. Called once from `setup`, after the integrations object is in state.
-pub fn start(app: &AppHandle) {
+/// Starts the tick. Called once from `setup`, after the integrations object is in state.
+pub fn start(app: &AppHandle, local_reminders: bool) {
     app.manage(IntegrationShell::default());
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -82,7 +94,7 @@ pub fn start(app: &AppHandle) {
                 g.is_some()
             };
             let p = plan(now, &events, remind, &reminded, recording, no_record);
-            if let Some((ev, minutes)) = p.remind {
+            if let Some((ev, minutes)) = p.remind.filter(|_| local_reminders) {
                 reminded.insert(ev.id.clone());
                 let (label, email) = account_of(&app, &ev.account_id).await;
                 sink(&app)(IntegrationEvent::ReminderDue {
@@ -211,8 +223,26 @@ pub fn reminder_notice(
 pub fn detected_notice(call: &DetectedCall) -> Notice {
     Notice {
         title: format!("Ты в звонке {}", call.platform),
-        body: format!("Записать его?\n{}", call.url),
+        body: if call.url.is_empty() {
+            "Записать его?".to_string()
+        } else {
+            format!("Записать его?\n{}", call.url)
+        },
         actions: vec!["Записать", "Не сейчас"],
+    }
+}
+
+/// A calendar call that is starting now and was not answered earlier.
+pub fn starting_notice(title: &str, label: &str, email: &str) -> Notice {
+    let who = if label.is_empty() {
+        email.to_string()
+    } else {
+        format!("{label} · {email}")
+    };
+    Notice {
+        title: "Звонок начинается".into(),
+        body: format!("{title}\n{who}"),
+        actions: vec!["Войти и записать", "Без записи"],
     }
 }
 
@@ -242,6 +272,14 @@ fn on_event(app: &AppHandle, e: &IntegrationEvent) {
                 account_email,
                 cfg!(target_os = "windows"),
             ),
+        ),
+        IntegrationEvent::CallStarting {
+            event,
+            account_label,
+            account_email,
+        } => show(
+            app,
+            &starting_notice(&event.title, account_label, account_email),
         ),
         IntegrationEvent::CallDetected { call } => show(app, &detected_notice(call)),
         IntegrationEvent::AuthExpired { email, .. } => show(
@@ -277,9 +315,89 @@ pub async fn apply_join(app: &AppHandle, backend: &Arc<dyn Backend>, out: &JoinO
     if out.record {
         let opts = RecorderStartOptions {
             title: Some(out.title.clone()),
+            expected_speakers: out.expected_speakers,
             ..Default::default()
         };
-        let _ = backend.recorder_start(opts).await;
+        match backend.recorder_start(opts).await {
+            Ok(snapshot) => note_started(app, out, snapshot.meeting_id),
+            Err(e) => tracing::warn!("could not start the recording for \"{}\": {e}", out.title),
+        }
+    }
+}
+
+/// Links the new meeting to its calendar event and remembers who was invited.
+fn note_started(app: &AppHandle, out: &JoinOutcome, meeting_id: Option<String>) {
+    let Some(meeting_id) = meeting_id else { return };
+    if let (Some(event_id), Some(real)) = (&out.event_id, app.try_state::<ConnectHandle>()) {
+        real.0.note_meeting(event_id, &meeting_id);
+    }
+    if !out.participants.is_empty()
+        && let Some(sh) = app.try_state::<IntegrationShell>()
+    {
+        sh.hints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(meeting_id, out.participants.clone());
+    }
+}
+
+/// Engine events the integrations care about: the recorder state (call detection must ignore our own microphone
+/// use) and a finished transcript (the invited people can now be put on the speakers).
+pub fn on_engine_event(app: &AppHandle, e: &EngineEvent) {
+    match e {
+        EngineEvent::Recorder { state, .. } => {
+            let recording = matches!(state, RecorderState::Recording | RecorderState::Paused);
+            if let Some(real) = app.try_state::<ConnectHandle>() {
+                real.0.set_recording(recording);
+            }
+        }
+        EngineEvent::Status { meeting, status } => {
+            let id = meeting.to_string();
+            match status {
+                MeetingStatus::Ready => {
+                    let names = app
+                        .try_state::<IntegrationShell>()
+                        .and_then(|sh| sh.hints.lock().ok()?.remove(&id));
+                    if let Some(names) = names {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let backend = app.state::<Arc<dyn Backend>>();
+                            name_speakers(backend.inner(), &id, &names).await;
+                        });
+                    }
+                }
+                MeetingStatus::Failed { .. } => {
+                    if let Some(sh) = app.try_state::<IntegrationShell>() {
+                        sh.hints
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .remove(&id);
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+}
+
+/// With exactly one invited person the remote side is that person; with several, the diarised voices cannot be
+/// matched to names, so they are left for the user to name.
+pub async fn name_speakers(backend: &Arc<dyn Backend>, meeting_id: &str, names: &[String]) {
+    let [name] = names else { return };
+    let Ok(detail) = backend.get_meeting(meeting_id).await else {
+        return;
+    };
+    let diarised = detail
+        .meeting
+        .participants
+        .iter()
+        .any(|p| p.key != SPEAKER_ME);
+    if diarised {
+        return; // the voice library already named someone, or several voices were told apart
+    }
+    if let Err(e) = backend.rename_speaker(meeting_id, SPEAKER_THEM, name).await {
+        tracing::warn!("could not name the remote speaker: {e}");
     }
 }
 
@@ -358,6 +476,20 @@ mod tests {
             "Ревью макетов у з… 1:05"
         );
         assert_eq!(menu_title("Синк", -3), "Синк 0:00");
+    }
+
+    #[test]
+    fn starting_and_unlinked_detected_notices() {
+        let n = starting_notice("1:1 с Аней", "Рабочий", "lime@company.com");
+        assert_eq!(n.title, "Звонок начинается");
+        assert_eq!(n.body, "1:1 с Аней\nРабочий · lime@company.com");
+        let c = detected_notice(&DetectedCall {
+            id: "c".into(),
+            platform: "Zoom".into(),
+            url: String::new(),
+            detected_at: now(),
+        });
+        assert_eq!(c.body, "Записать его?");
     }
 
     #[test]

@@ -10,6 +10,7 @@ pub mod engine_backend;
 pub mod integrations_api;
 pub mod integrations_commands;
 pub mod integrations_demo;
+pub mod integrations_real;
 pub mod integrations_shell;
 pub mod paths;
 pub mod permissions;
@@ -182,6 +183,7 @@ pub fn run() {
                 let h = handle.clone();
                 Arc::new(move |e| {
                     shell::on_engine_event(&h, &e);
+                    integrations_shell::on_engine_event(&h, &e);
                     let _ = h.emit("engine", &e);
                 })
             };
@@ -211,13 +213,43 @@ pub fn run() {
                 app.manage(EngineHandle(engine));
             }
 
-            // Integrations live next to the backend, never inside it: the real `yc-connect` replaces this line.
-            let integrations =
-                integrations_demo::DemoIntegrations::new(integrations_shell::sink(&handle));
-            let i: Arc<dyn Integrations> = integrations.clone();
-            app.manage(i);
-            tauri::async_runtime::spawn(integrations.run());
-            integrations_shell::start(&handle);
+            // Integrations live next to the backend, never inside it. `YADACALL_DEMO=1` keeps the in-memory ones.
+            let sink = integrations_shell::sink(&handle);
+            let demo = std::env::var_os("YADACALL_DEMO").is_some_and(|v| v != "0" && !v.is_empty());
+            if demo {
+                let integrations = integrations_demo::DemoIntegrations::new(sink);
+                let i: Arc<dyn Integrations> = integrations.clone();
+                app.manage(i);
+                tauri::async_runtime::spawn(integrations.run());
+            } else {
+                let data_dir = paths::data_dir(|| {
+                    handle
+                        .path()
+                        .app_data_dir()
+                        .unwrap_or_else(|_| paths::home_dir().join(".yadacall"))
+                });
+                let open: integrations_real::OpenUrl = Arc::new(|url| {
+                    let _ = tauri_plugin_opener::open_url(url, None::<&str>);
+                });
+                let real = integrations_real::RealIntegrations::open(&data_dir, sink, open)
+                    .map_err(|e| format!("could not start the calendar integrations: {e}"))?;
+                let i: Arc<dyn Integrations> = real.clone();
+                app.manage(i);
+                app.manage(integrations_shell::ConnectHandle(real.clone()));
+                // `AutoRecord` (policy "Всегда") starts the recorder the same way "Войти и записать" does.
+                let auto: integrations_real::AutoRecord = {
+                    let h = handle.clone();
+                    Arc::new(move |out| {
+                        let h = h.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let backend = h.state::<Arc<dyn Backend>>();
+                            integrations_shell::apply_join(&h, backend.inner(), &out).await;
+                        });
+                    })
+                };
+                tauri::async_runtime::spawn(real.clone().run(auto));
+            }
+            integrations_shell::start(&handle, demo);
 
             shell::create_popovers(&handle)?;
             shell::build_tray(&handle)?;
@@ -250,10 +282,13 @@ pub fn run() {
             if let RunEvent::Reopen { .. } = event {
                 shell::show_main(app);
             }
-            if let RunEvent::Exit = event
-                && let Some(h) = app.try_state::<EngineHandle>()
-            {
-                tauri::async_runtime::block_on(h.0.shutdown());
+            if let RunEvent::Exit = event {
+                if let Some(c) = app.try_state::<integrations_shell::ConnectHandle>() {
+                    c.0.stop();
+                }
+                if let Some(h) = app.try_state::<EngineHandle>() {
+                    tauri::async_runtime::block_on(h.0.shutdown());
+                }
             }
             let _ = (app, event);
         });
