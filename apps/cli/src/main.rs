@@ -33,6 +33,12 @@ enum Command {
     Models(cmd::models::ModelsArgs),
     /// Download and check the llama.cpp server runtime for this platform.
     Runtime(cmd::runtime::RuntimeArgs),
+    /// Google accounts: sign in, list, sign out, show the merged agenda.
+    Google(cmd::google::GoogleArgs),
+    /// Calendars through a secret ICS URL (no Google sign-in needed).
+    Ics(cmd::google::IcsArgs),
+    /// Detect a Google Meet / Zoom / Teams call that is in progress.
+    DetectCall(cmd::detect_call::DetectArgs),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -47,6 +53,9 @@ fn main() -> anyhow::Result<()> {
         Command::Hw(args) => block_on(cmd::hw::run(args))?,
         Command::Models(args) => block_on(cmd::models::run(args))?,
         Command::Runtime(args) => block_on(cmd::runtime::run(args))?,
+        Command::Google(args) => block_on(cmd::google::run(args))?,
+        Command::Ics(args) => block_on(cmd::google::run_ics(args))?,
+        Command::DetectCall(args) => block_on(cmd::detect_call::run(args))?,
     }
 }
 

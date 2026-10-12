@@ -16,12 +16,14 @@ yc-ml.workspace = true
 yc-llm.workspace = true
 yc-text.workspace = true
 yc-hub.workspace = true
+yc-connect = { path = "../../crates/yc-connect" }
 anyhow.workspace = true
 chrono.workspace = true
 clap = { version = "4.5", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "signal"] }
+tokio-util.workspace = true
 indicatif = "0.17"
 dirs = "6"
 symphonia = { version = "0.6.1", default-features = false, features = ["aac", "aiff", "alac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
