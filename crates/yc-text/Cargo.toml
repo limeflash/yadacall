@@ -7,3 +7,5 @@ license.workspace = true
 
 [dependencies]
 yc-core.workspace = true
+chrono.workspace = true
+rust-stemmers = "1.2"
