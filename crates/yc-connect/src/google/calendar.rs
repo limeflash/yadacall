@@ -153,7 +153,7 @@ impl CalendarClient {
                 .await?
             {
                 Fetched::Body(body) => body,
-                // `events.readonly` alone does not cover calendarList: stay within the minimal
+                // Grants made before `calendarlist.readonly` was requested lack calendarList: stay within the
                 // scope and read the primary calendar only.
                 Fetched::Forbidden => {
                     tracing::info!(

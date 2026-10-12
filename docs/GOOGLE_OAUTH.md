@@ -4,7 +4,7 @@ YadaCall reads your upcoming calls from Google Calendar so it can remind you bef
 record it. It asks for **read-only** access to calendar events and nothing else:
 
 ```
-openid email profile https://www.googleapis.com/auth/calendar.events.readonly
+openid email profile https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly
 ```
 
 Tokens never leave your machine except to Google: the refresh token is stored in the OS keychain
@@ -28,7 +28,9 @@ confidential (see Google's installed-app guidance), so embedding it in the binar
 2. App name `YadaCall`, support e-mail, developer contact e-mail.
 3. **Scopes -> Add or remove scopes**: add
    `.../auth/userinfo.email`, `.../auth/userinfo.profile`, `openid` and
-   `https://www.googleapis.com/auth/calendar.events.readonly`. Nothing else.
+   `https://www.googleapis.com/auth/calendar.events.readonly` and
+   `https://www.googleapis.com/auth/calendar.calendarlist.readonly` (the list of your calendars, so
+   shared and team calendars appear too). Nothing else.
 4. **Test users**: add the Google accounts you will sign in with (see "Publishing status").
 
 ## 3. Create the OAuth client

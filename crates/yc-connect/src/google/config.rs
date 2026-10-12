@@ -4,9 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{ConnectError, ConnectResult};
 
-/// Scopes requested at sign-in. Read-only calendar access and the basic identity; nothing else.
-pub const SCOPES: &str =
-    "openid email profile https://www.googleapis.com/auth/calendar.events.readonly";
+/// Scopes requested at sign-in: basic identity, read-only events, and the read-only list of the
+/// user's calendars (so shared/team/subscribed calendars show up, not just the primary one).
+pub const SCOPES: &str = "openid email profile \
+    https://www.googleapis.com/auth/calendar.events.readonly \
+    https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 
 /// The scope that must be present in the grant (users can untick it on the consent screen).
 pub const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events.readonly";
