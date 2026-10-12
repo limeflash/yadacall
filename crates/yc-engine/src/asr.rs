@@ -207,10 +207,27 @@ impl AsrWorker {
             if self.stop.load(Ordering::Relaxed) {
                 break;
             }
+            // A panicking model must not take the queue with it: the region becomes a gap that the
+            // finalize pass transcribes with a fresh instance.
             let result = match asr.as_mut() {
-                Some(a) => recognize_region(a.as_mut(), &self.language, &region),
+                Some(a) => {
+                    let language = &self.language;
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        recognize_region(a.as_mut(), language, &region)
+                    }))
+                    .unwrap_or_else(|_| {
+                        Err(Error::Model {
+                            model: a.info().id.clone(),
+                            message: "the recogniser panicked".into(),
+                        })
+                    })
+                }
                 None => Err(Error::ModelMissing("asr".into())),
             };
+            if matches!(&result, Err(Error::Model { message, .. }) if message.contains("panicked"))
+            {
+                asr = None;
+            }
             match result {
                 Ok(segments) => {
                     for segment in segments {

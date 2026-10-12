@@ -39,7 +39,12 @@ impl Engine {
     /// meeting must not be mid-processing, and a meeting whose transcription failed keeps its audio
     /// (it is the only way to get the text). Returns the number of meetings cleaned.
     pub async fn sweep_retention(self: &Arc<Self>) -> Result<usize> {
-        self.blocking(|e| e.sweep_blocking(Utc::now())).await
+        self.sweep_retention_at(Utc::now()).await
+    }
+
+    /// [`Engine::sweep_retention`] as if it were `now` (lets tests and the CLI simulate time).
+    pub async fn sweep_retention_at(self: &Arc<Self>, now: DateTime<Utc>) -> Result<usize> {
+        self.blocking(move |e| e.sweep_blocking(now)).await
     }
 
     pub(crate) fn sweep_blocking(&self, now: DateTime<Utc>) -> Result<usize> {

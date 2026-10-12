@@ -376,6 +376,8 @@ impl Engine {
                 events,
                 notify,
                 russian,
+                warned_drop: false,
+                silent_noticed: [false; 2],
             };
             std::thread::Builder::new()
                 .name("yc-monitor".into())
@@ -718,12 +720,14 @@ struct Monitor {
     events: broadcast::Sender<EngineEvent>,
     notify: Notifier,
     russian: bool,
+    warned_drop: bool,
+    /// Tracks the user was already told are silent (the recorder re-raises the warning).
+    silent_noticed: [bool; 2],
 }
 
 impl Monitor {
-    fn run(self, handle: &Mutex<Option<Box<dyn RecordingHandle>>>, stop: &AtomicBool) {
+    fn run(mut self, handle: &Mutex<Option<Box<dyn RecordingHandle>>>, stop: &AtomicBool) {
         let mut last_tick = Instant::now();
-        let mut warned_drop = false;
         let mut recorder_events: Option<Receiver<RecorderEvent>> = None;
         while !stop.load(Ordering::Relaxed) {
             {
@@ -744,14 +748,14 @@ impl Monitor {
                     });
                 }
                 while let Ok(ev) = rx.try_recv() {
-                    self.forward(ev, &mut warned_drop);
+                    self.forward(ev);
                 }
             }
             std::thread::sleep(Duration::from_millis(40));
         }
     }
 
-    fn forward(&self, ev: RecorderEvent, warned_drop: &mut bool) {
+    fn forward(&mut self, ev: RecorderEvent) {
         let ru = self.russian;
         let who = |t: TrackKind| match (t, ru) {
             (TrackKind::Mic, true) => "микрофон",
@@ -761,6 +765,20 @@ impl Monitor {
         };
         match ev {
             RecorderEvent::DeviceChanged { track, device } => {
+                (self.notify)(
+                    NoticeLevel::Info,
+                    if ru {
+                        format!(
+                            "Устройство ({}) сменилось: {device}. Запись продолжается.",
+                            who(track)
+                        )
+                    } else {
+                        format!(
+                            "Input changed ({}): {device}. Recording continues.",
+                            who(track)
+                        )
+                    },
+                );
                 let _ = self
                     .events
                     .send(EngineEvent::DeviceChanged { track, device });
@@ -774,6 +792,22 @@ impl Monitor {
                     track,
                     silent_for_ms,
                 });
+                if !std::mem::replace(&mut self.silent_noticed[idx(track)], true) {
+                    (self.notify)(
+                        NoticeLevel::Warning,
+                        if ru {
+                            format!("Больше минуты тишины: {}. Всё в порядке?", who(track))
+                        } else {
+                            format!(
+                                "More than a minute of silence from {}. Is everything alright?",
+                                who(track)
+                            )
+                        },
+                    );
+                }
+            }
+            RecorderEvent::TrackActive { track } => {
+                self.silent_noticed[idx(track)] = false;
             }
             RecorderEvent::PermissionSuspected { track, .. } => {
                 (self.notify)(
@@ -802,8 +836,8 @@ impl Monitor {
                 );
             }
             RecorderEvent::Overrun { .. } | RecorderEvent::FramesDropped { .. } => {
-                if !*warned_drop {
-                    *warned_drop = true;
+                if !self.warned_drop {
+                    self.warned_drop = true;
                     (self.notify)(
                         NoticeLevel::Warning,
                         if ru {
@@ -814,10 +848,8 @@ impl Monitor {
                     );
                 }
             }
-            RecorderEvent::TrackStarted { .. }
-            | RecorderEvent::TrackActive { .. }
-            | RecorderEvent::Paused
-            | RecorderEvent::Resumed => {}
+            RecorderEvent::TrackStarted { .. } | RecorderEvent::Paused | RecorderEvent::Resumed => {
+            }
         }
     }
 }

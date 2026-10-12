@@ -257,6 +257,7 @@ impl Engine {
             }
         }
         ranges.retain(|(_, s, e)| e > s);
+        let ranges = merge_ranges(ranges);
         if ranges.is_empty() {
             return Ok(());
         }
@@ -310,6 +311,19 @@ impl Engine {
         }
         Ok(())
     }
+}
+
+/// Sorts sample ranges per track and unions the overlapping ones, so no audio is transcribed twice.
+fn merge_ranges(mut ranges: Vec<(TrackKind, u64, u64)>) -> Vec<(TrackKind, u64, u64)> {
+    ranges.sort_by_key(|r| (r.0 as u8, r.1));
+    let mut out: Vec<(TrackKind, u64, u64)> = Vec::new();
+    for r in ranges {
+        match out.last_mut() {
+            Some(last) if last.0 == r.0 && r.1 <= last.2 => last.2 = last.2.max(r.2),
+            _ => out.push(r),
+        }
+    }
+    out
 }
 
 /// Live segments of the folder → one cleaned, merged, speaker-labelled list on the meeting timeline.

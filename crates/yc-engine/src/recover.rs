@@ -141,20 +141,19 @@ impl Engine {
             .clone()
             .unwrap_or_else(|| settings.meeting_language.code().to_owned());
         let modified: DateTime<Utc> = md.modified().map_or_else(|_| Utc::now(), Into::into);
-        let (title, title_auto) = match opts.title.as_deref().map(str::trim) {
-            Some(t) if !t.is_empty() => (t.to_owned(), false),
-            _ => (
-                path.file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| "Import".to_owned()),
-                true,
-            ),
+        // The file name is the user's own title for the material; a summary does not replace it.
+        let title = match opts.title.as_deref().map(str::trim) {
+            Some(t) if !t.is_empty() => t.to_owned(),
+            _ => path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "Import".to_owned()),
         };
         let meta = SessionMeta {
             id,
             title,
-            title_auto,
+            title_auto: false,
             started_at: modified,
             language: language.clone(),
             expected_speakers: opts.expected_speakers,
