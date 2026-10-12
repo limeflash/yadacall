@@ -52,8 +52,15 @@
   async function act(fn: () => Promise<unknown>) { try { await fn(); await load(); } catch (e) { toast.error(e); } }
   async function bench(m: ModelEntry) {
     benching = m.id;
-    try { const r = await api.modelBenchmark(m.id); measured[m.id] = r.realtimeFactor; toast(t("{name}: измерено ≈ {x}× быстрее реального времени", { name: m.name, x: r.realtimeFactor })); } catch (e) { toast.error(e); }
+    try { const r = await api.modelBenchmark(m.id); measured[m.id] = r.realtimeFactor; toast(`${m.name}: ${measuredLabel(m, r.realtimeFactor)}`); } catch (e) { toast.error(e); }
     benching = null;
+  }
+  /** "измерено: ≈ 3.1× быстрее реального времени" — the unit depends on what the model does. */
+  function measuredLabel(m: ModelEntry, v: number) {
+    const x = Number(v.toFixed(1));
+    if (m.kind === "embed") return t("измерено: ≈ {x} абзацев в секунду", { x });
+    if (m.kind === "llm") return t("измерено: ≈ {x} токенов в секунду", { x });
+    return t("измерено: ≈ {x}× быстрее реального времени", { x });
   }
   const hwLine = $derived(hardware ? `${hardware.label} · ${hardware.chip} · ${hardware.ramGb} ${t("ГБ")}` : "");
 </script>
@@ -131,7 +138,7 @@
                   {/if}
                 </div>
 
-                <span class="est"><span class="edot" style="background: var(--{m.verdict === 'great' ? 'ok' : m.verdict === 'ok' ? 'blip' : m.verdict === 'slow' ? 'warning' : 'danger'})"></span>{measured[m.id] ? t("измерено: ≈ {x}× быстрее реального времени", { x: measured[m.id] }) : t(m.estimate)}</span>
+                <span class="est"><span class="edot" style="background: var(--{m.verdict === 'great' ? 'ok' : m.verdict === 'ok' ? 'blip' : m.verdict === 'slow' ? 'warning' : 'danger'})"></span>{measured[m.id] ? measuredLabel(m, measured[m.id]) : t(m.estimate)}</span>
 
                 {#if d && ds !== "done"}
                   <div class="yc-in" style="display: flex; flex-direction: column; gap: 6px">

@@ -7,6 +7,7 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 use yc_core::events::EngineEvent;
+use yc_core::meeting::MeetingStatus;
 use yc_core::summary::Summary;
 
 use crate::api::*;
@@ -61,16 +62,47 @@ pub fn friendly(e: &yc_core::Error) -> &'static str {
     }
 }
 
-/// Same idea for an error that only survived as text (the answer stream reports `Error::to_string()`).
-pub fn friendly_text(text: &str) -> &'static str {
-    if text.starts_with("llm provider error") {
+/// Same idea for an error that only survived as text (`Error::to_string()` of the engine's own errors).
+fn friendly_known(text: &str) -> Option<&'static str> {
+    Some(if text.starts_with("llm provider error") {
         "Языковая модель не ответила. Проверь настройки итогов и повтори."
     } else if text.starts_with("network error") {
         "Нет связи с сервером. Проверь интернет и повтори."
     } else if text.contains("is not installed") {
         "Нужная модель не установлена. Скачай её в разделе «Модели»."
+    } else if text.starts_with("not enough disk space") {
+        "Не хватает места на диске. Освободи его и повтори."
+    } else if text.starts_with("audio device error") {
+        "Проблема с аудиоустройством. Проверь, что оно подключено, и повтори."
+    } else if text.starts_with("model `") {
+        "Модель не смогла выполнить задачу. Попробуй ещё раз или выбери другую."
+    } else if text.starts_with("storage error") || text.starts_with("integrity check") {
+        "Не удалось прочитать или сохранить данные приложения."
     } else {
-        "Не удалось получить ответ. Попробуй ещё раз."
+        return None;
+    })
+}
+
+/// Message for a failed answer.
+pub fn friendly_text(text: &str) -> &'static str {
+    friendly_known(text).unwrap_or("Не удалось получить ответ. Попробуй ещё раз.")
+}
+
+/// Replaces the raw engine text of a failed meeting by a short message (the UI translates it).
+pub fn friendly_status(status: MeetingStatus) -> MeetingStatus {
+    match status {
+        MeetingStatus::Failed {
+            stage,
+            message,
+            retryable,
+        } => MeetingStatus::Failed {
+            stage,
+            message: friendly_known(&message)
+                .unwrap_or("Не удалось обработать запись. Попробуй повторить обработку.")
+                .to_owned(),
+            retryable,
+        },
+        other => other,
     }
 }
 
@@ -297,5 +329,14 @@ mod tests {
             .contains("Google")
         );
         assert!(friendly_text("llm provider error: 401").starts_with("Языковая"));
+        let failed = MeetingStatus::Failed {
+            stage: yc_core::meeting::Stage::Transcribe,
+            message: "model `x` failed: oops".into(),
+            retryable: true,
+        };
+        let MeetingStatus::Failed { message, .. } = friendly_status(failed) else {
+            unreachable!()
+        };
+        assert!(message.starts_with("Модель"));
     }
 }

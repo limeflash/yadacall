@@ -215,4 +215,8 @@ export const en: Record<string, string> = {
   "Не удалось получить ответ. Попробуй ещё раз.": "Could not get an answer. Try again.",
   "Скачиваю модель смыслового поиска: {p}%. Пока ищу только по словам.": "Downloading the semantic search model: {p}%. Matching words only for now.",
   "Смысловой поиск выключен: модель не скачана, ищу только по словам.": "Semantic search is off: the model is not downloaded, matching words only.",
+  "Подсказки из приглашения": "Suggestions from the invite",
+  "Не удалось обработать запись. Попробуй повторить обработку.": "Could not process the recording. Try processing it again.",
+  "измерено: ≈ {x} абзацев в секунду": "measured: ≈ {x} passages per second",
+  "измерено: ≈ {x} токенов в секунду": "measured: ≈ {x} tokens per second",
 };

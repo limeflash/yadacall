@@ -15,7 +15,7 @@ export type MeetingStatus =
   | { state: "failed"; stage: Stage; message: string; retryable: boolean };
 
 export interface Bookmark { atMs: Ms; label?: string }
-export interface Participant { key: string; name: string; voiceId?: string }
+export interface Participant { key: string; name: string; voiceId?: string; /** Invite names ranked as likely identities of this speaker. */ suggestions?: string[] }
 export interface TrackInfo { kind: TrackKind; device: string; offsetMs: Ms; samples: number }
 
 /** `meeting.json` */

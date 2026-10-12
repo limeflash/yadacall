@@ -333,14 +333,11 @@ fn note_started(app: &AppHandle, out: &JoinOutcome, meeting_id: Option<String>) 
 /// Engine events the integrations care about: the recorder state (call detection must ignore our own microphone
 /// use).
 pub fn on_engine_event(app: &AppHandle, e: &EngineEvent) {
-    match e {
-        EngineEvent::Recorder { state, .. } => {
-            let recording = matches!(state, RecorderState::Recording | RecorderState::Paused);
-            if let Some(real) = app.try_state::<ConnectHandle>() {
-                real.0.set_recording(recording);
-            }
+    if let EngineEvent::Recorder { state, .. } = e {
+        let recording = matches!(state, RecorderState::Recording | RecorderState::Paused);
+        if let Some(real) = app.try_state::<ConnectHandle>() {
+            real.0.set_recording(recording);
         }
-        _ => {}
     }
 }
 
