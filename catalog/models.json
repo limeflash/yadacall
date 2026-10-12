@@ -1,0 +1,882 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-12T13:40:14Z",
+  "models": [
+    {
+      "id": "gigaam-v3-e2e-rnnt-int8",
+      "kind": "asr",
+      "name": "GigaAM v3 RNNT int8",
+      "descriptionRu": "Распознавание русской речи, рекомендовано для русского языка.",
+      "descriptionEn": "Russian speech recognition, recommended for Russian.",
+      "languages": [
+        "ru"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/istupakov/gigaam-v3-onnx",
+      "defaultTiers": [
+        "ru"
+      ],
+      "files": [
+        {
+          "path": "v3_e2e_rnnt_encoder.int8.onnx",
+          "size": 224570477,
+          "sha256": "4e0e076a6076cd110277e529b8ac8f32cd5297f7fbebad5341ae8ddb7d00817b",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_encoder.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_encoder.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "v3_e2e_rnnt_decoder.int8.onnx",
+          "size": 1159170,
+          "sha256": "89014e134865615b91e037157e46e389b1271e6072460efc010ea08e61e23146",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_decoder.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_decoder.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "v3_e2e_rnnt_joint.int8.onnx",
+          "size": 687791,
+          "sha256": "ade116563dbf66e503b0994efab6b5861412743e52bf31c39fc3fffa3783d5d1",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_joint.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_joint.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "v3_e2e_rnnt_vocab.txt",
+          "size": 13354,
+          "sha256": "39abae20e692998290c574e606f11a9edef2902a1995463fcff63d1490cf22b7",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_vocab.txt?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_rnnt_vocab.txt?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-v3-onnx",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 536870912,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 200000000,
+        "gflopPerAudioSec": 3.0,
+        "efficiency": 0.6,
+        "bytes": 226430792
+      },
+      "todo": "TODO: GigaAM v3 needs an ONNX preprocessor/featurizer from github.com/istupakov/onnx-asr; this catalog entry currently includes encoder, decoder, joint, and vocabulary only."
+    },
+    {
+      "id": "gigaam-v3-e2e-ctc-int8",
+      "kind": "asr",
+      "name": "GigaAM v3 CTC int8",
+      "descriptionRu": "CTC-вариант GigaAM v3 для русской речи.",
+      "descriptionEn": "CTC variant of GigaAM v3 for Russian speech.",
+      "languages": [
+        "ru"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/istupakov/gigaam-v3-onnx",
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "v3_e2e_ctc.int8.onnx",
+          "size": 224893347,
+          "sha256": "2e3fcb7a7b66030336fd10c2fcfb033bd1dc7e1bf238fe5cfd83b1d0cfc9d28e",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_ctc.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_ctc.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "v3_e2e_ctc_vocab.txt",
+          "size": 2007,
+          "sha256": "142de7570b3de5b3035ce111a89c228e80e6085273731d944093ddf24fa539cd",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_ctc_vocab.txt?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-v3-onnx/resolve/main/v3_e2e_ctc_vocab.txt?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-v3-onnx",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 536870912,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 200000000,
+        "gflopPerAudioSec": 3.5,
+        "efficiency": 0.6,
+        "bytes": 224895354
+      },
+      "todo": null
+    },
+    {
+      "id": "parakeet-tdt-0.6b-v3-int8",
+      "kind": "asr",
+      "name": "Parakeet TDT 0.6B v3 int8",
+      "descriptionRu": "Мультиязычное распознавание 25 европейских языков.",
+      "descriptionEn": "Multilingual recognition for 25 European languages.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+      "defaultTiers": [
+        "multilingual"
+      ],
+      "files": [
+        {
+          "path": "encoder-model.int8.onnx",
+          "size": 652183999,
+          "sha256": "6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/encoder-model.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/encoder-model.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "decoder_joint-model.int8.onnx",
+          "size": 18202004,
+          "sha256": "eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/decoder_joint-model.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/decoder_joint-model.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "nemo128.onnx",
+          "size": 139764,
+          "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/nemo128.onnx?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/nemo128.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+          "optional": false
+        },
+        {
+          "path": "vocab.txt",
+          "size": 93939,
+          "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/vocab.txt?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/vocab.txt?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v3-onnx",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 1073741824,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 600000000,
+        "gflopPerAudioSec": 12.0,
+        "efficiency": 0.6,
+        "bytes": 670619706
+      },
+      "todo": null
+    },
+    {
+      "id": "silero-vad-v5",
+      "kind": "vad",
+      "name": "Silero VAD v5",
+      "descriptionRu": "Автоматически устанавливаемое определение речи.",
+      "descriptionEn": "Automatically installed voice activity detector.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "MIT",
+      "homepage": "https://github.com/snakers4/silero-vad",
+      "defaultTiers": [
+        "auto"
+      ],
+      "files": [
+        {
+          "path": "silero_vad.onnx",
+          "size": 2327524,
+          "sha256": "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f",
+          "urls": [
+            "https://raw.githubusercontent.com/snakers4/silero-vad/v5.1.2/src/silero_vad/data/silero_vad.onnx"
+          ],
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 67108864,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 1000000,
+        "bytes": 2327524
+      }
+    },
+    {
+      "id": "speaker-campplus-zh-en-16k",
+      "kind": "speaker",
+      "name": "3D-Speaker CAM++",
+      "descriptionRu": "Эмбеддинги голосов для разделения участников группового звонка.",
+      "descriptionEn": "Speaker embeddings for diarising group calls.",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/k2-fsa/sherpa-onnx",
+      "defaultTiers": [
+        "speaker"
+      ],
+      "files": [
+        {
+          "path": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+          "size": 28281164,
+          "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+          "urls": [
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+          ],
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 268435456,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 20000000,
+        "bytes": 28281164
+      }
+    },
+    {
+      "id": "multilingual-e5-small-int8",
+      "kind": "embed",
+      "name": "Multilingual E5 small int8",
+      "descriptionRu": "Лёгкая мультиязычная модель семантического поиска.",
+      "descriptionEn": "Light multilingual semantic search model.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "MIT",
+      "homepage": "https://huggingface.co/intfloat/multilingual-e5-small",
+      "defaultTiers": [
+        "light"
+      ],
+      "files": [
+        {
+          "path": "onnx/model_int8.onnx",
+          "size": 118054593,
+          "sha256": "4d24e2bc01a447951524466ef533e52944bf48509e6552810bcee1a2711cb02c",
+          "urls": [
+            "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_int8.onnx?download=true",
+            "https://hf-mirror.com/Xenova/multilingual-e5-small/resolve/main/onnx/model_int8.onnx?download=true"
+          ],
+          "hfRepo": "Xenova/multilingual-e5-small",
+          "optional": false
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 17082730,
+          "sha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+          "urls": [
+            "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json?download=true",
+            "https://hf-mirror.com/Xenova/multilingual-e5-small/resolve/main/tokenizer.json?download=true"
+          ],
+          "hfRepo": "Xenova/multilingual-e5-small",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 536870912,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 118000000,
+        "gflopPerPassage": 120.0,
+        "efficiency": 0.65,
+        "bytes": 135137323
+      }
+    },
+    {
+      "id": "embeddinggemma-300m-q4f16",
+      "kind": "embed",
+      "name": "EmbeddingGemma 300M q4f16",
+      "descriptionRu": "Качественные мультиязычные эмбеддинги; применяются Gemma Terms.",
+      "descriptionEn": "Higher-quality multilingual embeddings; Gemma Terms apply.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Gemma Terms",
+      "homepage": "https://huggingface.co/google/embeddinggemma-300m",
+      "defaultTiers": [
+        "quality"
+      ],
+      "files": [
+        {
+          "path": "onnx/model_q4f16.onnx",
+          "size": 705221,
+          "sha256": "4df4a2a44253865800b8882a497badf67c2707a487267460813f78da339c753f",
+          "urls": [
+            "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4f16.onnx?download=true",
+            "https://hf-mirror.com/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4f16.onnx?download=true"
+          ],
+          "hfRepo": "onnx-community/embeddinggemma-300m-ONNX",
+          "optional": false
+        },
+        {
+          "path": "onnx/model_q4f16.onnx_data",
+          "size": 175410176,
+          "sha256": "c9cc456a345e6aa9bc5fb75b54c10b3e0edbb4f80708f749dc4c45dbed5b6edf",
+          "urls": [
+            "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4f16.onnx_data?download=true",
+            "https://hf-mirror.com/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4f16.onnx_data?download=true"
+          ],
+          "hfRepo": "onnx-community/embeddinggemma-300m-ONNX",
+          "optional": false
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 20323312,
+          "sha256": "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",
+          "urls": [
+            "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.json?download=true",
+            "https://hf-mirror.com/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.json?download=true"
+          ],
+          "hfRepo": "onnx-community/embeddinggemma-300m-ONNX",
+          "optional": false
+        },
+        {
+          "path": "tokenizer.model",
+          "size": 4689074,
+          "sha256": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c",
+          "urls": [
+            "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.model?download=true",
+            "https://hf-mirror.com/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.model?download=true"
+          ],
+          "hfRepo": "onnx-community/embeddinggemma-300m-ONNX",
+          "optional": false
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 1156830,
+          "sha256": "3ca953eea6c3c9fcda9cf3df22949ff18b216f7c74bd6459230f3f1013953f3a",
+          "urls": [
+            "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer_config.json?download=true",
+            "https://hf-mirror.com/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer_config.json?download=true"
+          ],
+          "hfRepo": "onnx-community/embeddinggemma-300m-ONNX",
+          "optional": false
+        },
+        {
+          "path": "config.json",
+          "size": 1765,
+          "sha256": "6e1f06404b7163e0325ed2ea3e6781cde50f4a50b31780a95ad0d30e8404d77b",
+          "urls": [
+            "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/config.json?download=true",
+            "https://hf-mirror.com/onnx-community/embeddinggemma-300m-ONNX/resolve/main/config.json?download=true"
+          ],
+          "hfRepo": "onnx-community/embeddinggemma-300m-ONNX",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 1073741824,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 300000000,
+        "gflopPerPassage": 307.0,
+        "efficiency": 0.65,
+        "bytes": 202286378
+      }
+    },
+    {
+      "id": "qwen3-embedding-0.6b-int8",
+      "kind": "embed",
+      "name": "Qwen3 Embedding 0.6B int8",
+      "descriptionRu": "Самая качественная модель эмбеддингов в наборе.",
+      "descriptionEn": "Highest-capacity embedding model in the catalog.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B",
+      "defaultTiers": [
+        "max"
+      ],
+      "files": [
+        {
+          "path": "onnx/model_int8.onnx",
+          "size": 613527539,
+          "sha256": "6d0ea863f78b4a84afa3c7fcba1ec341572b5e28121aef77b7092b1dfdf679c7",
+          "urls": [
+            "https://huggingface.co/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/onnx/model_int8.onnx?download=true",
+            "https://hf-mirror.com/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/onnx/model_int8.onnx?download=true"
+          ],
+          "hfRepo": "onnx-community/Qwen3-Embedding-0.6B-ONNX",
+          "optional": false
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11423705,
+          "sha256": "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a",
+          "urls": [
+            "https://huggingface.co/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/tokenizer.json?download=true",
+            "https://hf-mirror.com/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/tokenizer.json?download=true"
+          ],
+          "hfRepo": "onnx-community/Qwen3-Embedding-0.6B-ONNX",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 1610612736,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 600000000,
+        "gflopPerPassage": 614.0,
+        "efficiency": 0.65,
+        "bytes": 624951244
+      }
+    },
+    {
+      "id": "gemma-4-e2b-q4-0",
+      "kind": "llm",
+      "name": "Gemma 4 E2B Q4_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF",
+      "defaultTiers": [
+        "light"
+      ],
+      "files": [
+        {
+          "path": "gemma-4-E2B-it-Q4_0.gguf",
+          "size": 2841481184,
+          "sha256": "8e30dff3ac4c8434c49a7036fa15564bdbb6044e42bf04550bf1a096ad7e6a52",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-E2B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 3378352096,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 5100000000.0,
+        "activeParams": 2300000000.0,
+        "bytesPerToken": 2841481184,
+        "nLayers": 35,
+        "kvHeads": 1,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 512,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8285714285714286,
+        "globalLayerFraction": 0.17142857142857143,
+        "bytes": 2841481184
+      }
+    },
+    {
+      "id": "gemma-4-e2b-q8-0",
+      "kind": "llm",
+      "name": "Gemma 4 E2B Q8_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF",
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "gemma-4-E2B-it-Q8_0.gguf",
+          "size": 4967497152,
+          "sha256": "996d08777aadc6bfd3c7375ef70ba25a0f55240075860754fdb18d6d860aa63a",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q8_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q8_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-E2B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 5504368064,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 5100000000.0,
+        "activeParams": 2300000000.0,
+        "bytesPerToken": 4967497152,
+        "nLayers": 35,
+        "kvHeads": 1,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 512,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8285714285714286,
+        "globalLayerFraction": 0.17142857142857143,
+        "bytes": 4967497152
+      }
+    },
+    {
+      "id": "gemma-4-e4b-q4-0",
+      "kind": "llm",
+      "name": "Gemma 4 E4B Q4_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF",
+      "defaultTiers": [
+        "quality"
+      ],
+      "files": [
+        {
+          "path": "gemma-4-E4B-it-Q4_0.gguf",
+          "size": 4590807392,
+          "sha256": "a555b900214b477d8880e7832e0b8925e139b0159640036b09fe472b6f2097f2",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-E4B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 5127678304,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 8000000000.0,
+        "activeParams": 4500000000.0,
+        "bytesPerToken": 4590807392,
+        "nLayers": 42,
+        "kvHeads": 2,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 512,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8333333333333334,
+        "globalLayerFraction": 0.16666666666666666,
+        "bytes": 4590807392
+      }
+    },
+    {
+      "id": "gemma-4-e4b-q8-0",
+      "kind": "llm",
+      "name": "Gemma 4 E4B Q8_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF",
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "gemma-4-E4B-it-Q8_0.gguf",
+          "size": 8031242688,
+          "sha256": "34be82b17b4942d389b9b527170c4b058027abdd32531fda063d3d97dd8ce80a",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q8_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q8_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-E4B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 8568113600,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 8000000000.0,
+        "activeParams": 4500000000.0,
+        "bytesPerToken": 8031242688,
+        "nLayers": 42,
+        "kvHeads": 2,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 512,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8333333333333334,
+        "globalLayerFraction": 0.16666666666666666,
+        "bytes": 8031242688
+      }
+    },
+    {
+      "id": "gemma-4-26b-a4b-q4-0",
+      "kind": "llm",
+      "name": "Gemma 4 26B-A4B Q4_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-26B-A4B-it-GGUF",
+      "defaultTiers": [
+        "max"
+      ],
+      "files": [
+        {
+          "path": "gemma-4-26B-A4B-it-Q4_0.gguf",
+          "size": 14618145824,
+          "sha256": "d208665ab1cd3a69f7a9a4bc59430e8448c8093d9b06334f566ac59d6d504a03",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-Q4_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-Q4_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 15155016736,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 25200000000.0,
+        "activeParams": 3800000000.0,
+        "bytesPerToken": 14618145824,
+        "nLayers": 30,
+        "kvHeads": 8,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 1024,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8,
+        "globalLayerFraction": 0.2,
+        "bytes": 14618145824
+      }
+    },
+    {
+      "id": "gemma-4-31b-q4-0",
+      "kind": "llm",
+      "name": "Gemma 4 31B Q4_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-31B-it-GGUF",
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "gemma-4-31B-it-Q4_0.gguf",
+          "size": 17992313088,
+          "sha256": "031dc1c5fa9c5a0abbf3c39c5173fb2af65f5ac2dc2a090268561d3c72dcd834",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-31B-it-GGUF/resolve/main/gemma-4-31B-it-Q4_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-31B-it-GGUF/resolve/main/gemma-4-31B-it-Q4_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-31B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 18529184000,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 31000000000.0,
+        "activeParams": 31000000000.0,
+        "bytesPerToken": 17992313088,
+        "nLayers": 60,
+        "kvHeads": 16,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 1024,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8333333333333334,
+        "globalLayerFraction": 0.16666666666666666,
+        "bytes": 17992313088
+      }
+    },
+    {
+      "id": "gemma-4-12b-q4-0",
+      "kind": "llm",
+      "name": "Gemma 4 12B Q4_0",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
+      "descriptionEn": "Local language model for meeting summaries.",
+      "languages": [
+        "multilingual"
+      ],
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF",
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "gemma-4-12B-it-Q4_0.gguf",
+          "size": 7219673216,
+          "sha256": "3712b9bd32cae83a22f67ee7a4466d8d7a4f21646ac8a07d19bf9418e8767a70",
+          "urls": [
+            "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q4_0.gguf?download=true",
+            "https://hf-mirror.com/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q4_0.gguf?download=true"
+          ],
+          "hfRepo": "ggml-org/gemma-4-12B-it-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 7756544128,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 12000000000.0,
+        "activeParams": 12000000000.0,
+        "bytesPerToken": 7219673216,
+        "nLayers": 48,
+        "kvHeads": 8,
+        "headDim": 512,
+        "localHeadDim": 256,
+        "slidingWindow": 1024,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.8333333333333334,
+        "globalLayerFraction": 0.16666666666666666,
+        "bytes": 7219673216
+      }
+    }
+  ],
+  "runtimes": [
+    {
+      "id": "llama-b11569-macos-arm64-metal",
+      "platform": "macos-arm64",
+      "backend": "metal",
+      "releaseTag": "b11569",
+      "assetName": "llama-b11569-bin-macos-arm64.tar.gz",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/llama-b11569-bin-macos-arm64.tar.gz",
+      "size": 12108021,
+      "sha256": "f8cc54ec6506ba51a7afd5ba3e3b8d551124d222dea6b75f92bb37c2bdef3db3",
+      "releaseApi": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11569",
+      "extraAssets": []
+    },
+    {
+      "id": "llama-b11569-windows-x64-cpu",
+      "platform": "windows-x64",
+      "backend": "cpu",
+      "releaseTag": "b11569",
+      "assetName": "llama-b11569-bin-win-cpu-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/llama-b11569-bin-win-cpu-x64.zip",
+      "size": 19502348,
+      "sha256": "8f6829181423f1f1f1fc27c6976445e54b09ac9751f337be14be28bd1d313372",
+      "releaseApi": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11569",
+      "extraAssets": []
+    },
+    {
+      "id": "llama-b11569-windows-x64-vulkan",
+      "platform": "windows-x64",
+      "backend": "vulkan",
+      "releaseTag": "b11569",
+      "assetName": "llama-b11569-bin-win-vulkan-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/llama-b11569-bin-win-vulkan-x64.zip",
+      "size": 32084619,
+      "sha256": "da9a44e01cc51b5ef3070be3369dde6c8af0c7853c23f814b59a1bc971ab30c8",
+      "releaseApi": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11569",
+      "extraAssets": []
+    },
+    {
+      "id": "llama-b11569-windows-x64-cuda",
+      "platform": "windows-x64",
+      "backend": "cuda",
+      "releaseTag": "b11569",
+      "assetName": "llama-b11569-bin-win-cuda-12.4-x64.zip",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/llama-b11569-bin-win-cuda-12.4-x64.zip",
+      "size": 265217770,
+      "sha256": "ab70a1f558d052072a31571eba5267a40f991519ef41c2eeb8baf61f71bb455b",
+      "releaseApi": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11569",
+      "extraAssets": [
+        {
+          "assetName": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/cudart-llama-bin-win-cuda-12.4-x64.zip",
+          "size": 391443627,
+          "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+        }
+      ]
+    },
+    {
+      "id": "llama-b11569-linux-x64-cpu",
+      "platform": "linux-x64",
+      "backend": "cpu",
+      "releaseTag": "b11569",
+      "assetName": "llama-b11569-bin-ubuntu-x64.tar.gz",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/llama-b11569-bin-ubuntu-x64.tar.gz",
+      "size": 17712742,
+      "sha256": "ad8acc130fa5337b7c044c8d4fef4ce0a6efb3543b8495b272b0a7f6848b6224",
+      "releaseApi": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11569",
+      "extraAssets": []
+    },
+    {
+      "id": "llama-b11569-linux-x64-vulkan",
+      "platform": "linux-x64",
+      "backend": "vulkan",
+      "releaseTag": "b11569",
+      "assetName": "llama-b11569-bin-ubuntu-vulkan-x64.tar.gz",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11569/llama-b11569-bin-ubuntu-vulkan-x64.tar.gz",
+      "size": 30275565,
+      "sha256": "4e32ba6b004ce366b9306a6b451efccedb4b14fb75c0867bd2368d259c55315a",
+      "releaseApi": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11569",
+      "extraAssets": []
+    }
+  ]
+}

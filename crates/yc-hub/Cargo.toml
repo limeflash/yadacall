@@ -7,3 +7,29 @@ license.workspace = true
 
 [dependencies]
 yc-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync", "time", "net", "process"] }
+tokio-util = { workspace = true, features = ["rt"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "system-proxy"] }
+futures-util = "0.3"
+sha2 = "0.10"
+hex = "0.4"
+fs2 = "0.4"
+sysinfo = "0.35"
+matrixmultiply = "0.3"
+urlencoding = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+tar = "0.4"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSProcessInfo"] }
+objc2-metal = { version = "0.3", features = ["MTLDevice"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_Storage_FileSystem"] }
