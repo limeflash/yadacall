@@ -174,6 +174,15 @@ impl Engine {
     /// Answers a question over the library: retrieves the best passages and streams the
     /// [`Answerer`](crate::ports::Answerer)'s reply, including its egress note and citations.
     pub async fn ask(self: &Arc<Self>, question: String) -> Result<mpsc::Receiver<AnswerEvent>> {
+        Ok(self.ask_with_excerpts(question).await?.1)
+    }
+
+    /// Like [`Engine::ask`], and also returns the excerpts handed to the answerer, so a caller can
+    /// resolve the indices of [`AnswerEvent::Citations`] into meetings and quotes.
+    pub async fn ask_with_excerpts(
+        self: &Arc<Self>,
+        question: String,
+    ) -> Result<(Vec<Excerpt>, mpsc::Receiver<AnswerEvent>)> {
         let answerer = self
             .ports
             .answerer
@@ -191,14 +200,14 @@ impl Engine {
         let request = AnswerRequest {
             question,
             language,
-            excerpts,
+            excerpts: excerpts.clone(),
         };
         tokio::spawn(async move {
             if let Err(e) = answerer.answer(request, tx.clone()).await {
                 let _ = tx.send(AnswerEvent::Failed(e.to_string())).await;
             }
         });
-        Ok(rx)
+        Ok((excerpts, rx))
     }
 
     /// Turns hits into passages with some surrounding dialogue.

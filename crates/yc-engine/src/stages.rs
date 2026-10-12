@@ -294,6 +294,7 @@ impl Engine {
         let input = SummaryInput {
             meeting_id: id,
             title: rec.meeting.title.clone(),
+            started_at: rec.meeting.started_at,
             language: rec.meeting.language.clone(),
             duration_ms: rec.meeting.duration_ms,
             turns,

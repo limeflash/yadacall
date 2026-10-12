@@ -230,7 +230,8 @@ impl Engine {
         self.app_data.join("tmp")
     }
 
-    pub(crate) fn library_root(&self) -> PathBuf {
+    /// Folder holding the meeting folders.
+    pub fn library_root(&self) -> PathBuf {
         self.store.library_root().to_path_buf()
     }
 
