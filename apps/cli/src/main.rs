@@ -42,6 +42,14 @@ enum Command {
 }
 
 fn main() -> anyhow::Result<()> {
+    // Logs go to stderr; `RUST_LOG=yc_connect=info` (or `debug`) turns them on.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
     match Cli::parse().command {
         Command::Devices(args) => cmd::devices::run(args),
         Command::Record(args) => cmd::record::run(args),

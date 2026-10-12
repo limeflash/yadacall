@@ -29,3 +29,4 @@ dirs = "6"
 symphonia = { version = "0.6.1", default-features = false, features = ["aac", "aiff", "alac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
 rubato = "5.0.1"
 libc = "0.2"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }

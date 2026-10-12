@@ -191,6 +191,7 @@ impl CalendarClient {
             }
             page = body["nextPageToken"].as_str().map(str::to_string);
             if page.is_none() {
+                tracing::info!("{account}: reading {} calendar(s)", out.len());
                 return Ok(out);
             }
         }
