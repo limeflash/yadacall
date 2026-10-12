@@ -117,13 +117,16 @@ pub fn probe(models_dir: &Path) -> Result<HardwareProfile> {
     };
 
     #[cfg(target_os = "linux")]
-    let (apple, perf_cores, eff_cores, gpus) = (None, None, None, probe_linux_gpus());
+    let (apple, perf_cores, eff_cores, gpus): (Option<AppleChipInfo>, _, _, _) =
+        (None, None, None, probe_linux_gpus());
 
     #[cfg(target_os = "windows")]
-    let (apple, perf_cores, eff_cores, gpus) = (None, None, None, probe_windows_gpus());
+    let (apple, perf_cores, eff_cores, gpus): (Option<AppleChipInfo>, _, _, _) =
+        (None, None, None, probe_windows_gpus());
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    let (apple, perf_cores, eff_cores, gpus) = (None, None, None, Vec::new());
+    let (apple, perf_cores, eff_cores, gpus): (Option<AppleChipInfo>, _, _, _) =
+        (None, None, None, Vec::new());
 
     let memory_bandwidth_gbps = apple.as_ref().and_then(|chip| chip.memory_bandwidth_gbps);
     let npu_present = apple
@@ -207,9 +210,6 @@ fn detect_isa() -> Vec<String> {
         }
         if std::is_x86_feature_detected!("avx512f") {
             features.push("avx512".to_owned());
-        }
-        if std::is_x86_feature_detected!("amx-tile") {
-            features.push("amx".to_owned());
         }
         features
     }

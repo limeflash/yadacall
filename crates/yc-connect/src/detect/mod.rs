@@ -144,7 +144,7 @@ fn system_sources() -> Box<dyn CallSources> {
 
 #[cfg(target_os = "windows")]
 fn system_sources() -> Box<dyn CallSources> {
-    Box::new(windows::WindowsSources::default())
+    Box::new(windows::WindowsSources)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
