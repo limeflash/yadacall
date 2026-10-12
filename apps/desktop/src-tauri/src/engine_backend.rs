@@ -560,8 +560,9 @@ impl Backend for EngineBackend {
         let (excerpts, mut rx) = match self.engine.ask_with_excerpts(question.to_owned()).await {
             Ok(r) => r,
             Err(e) => {
+                tracing::warn!("ask failed: {e}");
                 sink(AskEvent::Error {
-                    message: e.to_string(),
+                    message: crate::commands::friendly(&e).to_owned(),
                 });
                 return Ok(());
             }
@@ -602,7 +603,10 @@ impl Backend for EngineBackend {
                     break;
                 }
                 AnswerEvent::Failed(message) => {
-                    sink(AskEvent::Error { message });
+                    tracing::warn!("answer failed: {message}");
+                    sink(AskEvent::Error {
+                        message: crate::commands::friendly_text(&message).to_owned(),
+                    });
                     break;
                 }
             }

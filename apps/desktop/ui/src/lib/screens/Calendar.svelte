@@ -91,16 +91,16 @@
   async function toggleRec(e: AgendaEvent) {
     const v = !e.willRecord;
     events = events.map((x) => (x.id === e.id ? { ...x, willRecord: v } : x));
-    try { await integrations.setEventRecording(e.id, v); } catch (er) { toast.error(String(er)); load(); }
+    try { await integrations.setEventRecording(e.id, v); } catch (er) { toast.error(er); load(); }
   }
   async function joinRec(e: AgendaEvent) {
-    try { await integrations.joinAndRecord(e.id); go({ name: "record" }); } catch (er) { toast.error(String(er)); }
+    try { await integrations.joinAndRecord(e.id); go({ name: "record" }); } catch (er) { toast.error(er); }
   }
   async function joinOnly(e: AgendaEvent) {
     try {
       const o = await integrations.joinWithoutRecording(e.id);
       toast(t("Открыл Meet в {email} — без записи", { email: o.accountEmail }));
-    } catch (er) { toast.error(String(er)); }
+    } catch (er) { toast.error(er); }
   }
 </script>
 

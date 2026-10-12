@@ -12,19 +12,65 @@ use yc_core::summary::Summary;
 use crate::api::*;
 use crate::shell;
 
-/// Error type sent to the UI: a plain, user-presentable string.
-#[derive(Debug)]
-pub struct CmdError(String);
+/// Error sent to the UI: a short user-facing `message` (Russian; the UI translates it) and the raw
+/// error text as `detail` for an expandable "Подробнее".
+#[derive(Debug, Serialize)]
+pub struct CmdError {
+    message: String,
+    detail: String,
+}
 
 impl From<yc_core::Error> for CmdError {
     fn from(e: yc_core::Error) -> Self {
-        CmdError(e.to_string())
+        tracing::warn!("command failed: {e}");
+        CmdError {
+            message: friendly(&e).to_owned(),
+            detail: e.to_string(),
+        }
     }
 }
 
-impl Serialize for CmdError {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&self.0)
+/// A short, actionable message for `e`, in Russian (the UI maps it to the interface language).
+pub fn friendly(e: &yc_core::Error) -> &'static str {
+    use yc_core::Error as E;
+    use yc_core::error::PermissionKind;
+    match e {
+        E::Permission(PermissionKind::Microphone) => {
+            "Нет доступа к микрофону. Разреши его в настройках системы."
+        }
+        E::Permission(PermissionKind::SystemAudio) => {
+            "Нет доступа к системному звуку. Разреши его в настройках системы."
+        }
+        E::Device(_) => "Проблема с аудиоустройством. Проверь, что оно подключено, и повтори.",
+        E::ModelMissing(_) => "Нужная модель не установлена. Скачай её в разделе «Модели».",
+        E::Model { .. } => "Модель не смогла выполнить задачу. Попробуй ещё раз или выбери другую.",
+        E::DiskFull { .. } => "Не хватает места на диске. Освободи его и повтори.",
+        E::Network(_) => "Нет связи с сервером. Проверь интернет и повтори.",
+        E::Integrity(_) => "Файл повреждён. Скачай его заново.",
+        E::Storage(_) => "Не удалось прочитать или сохранить данные приложения.",
+        E::Llm(_) => "Языковая модель не ответила. Проверь настройки итогов и повтори.",
+        E::Cancelled => "Отменено.",
+        E::NotFound(_) => "Не найдено: возможно, это уже удалено.",
+        E::Invalid(m) if m.contains("GOOGLE_OAUTH.md") => {
+            "Вход через Google не настроен в этой сборке."
+        }
+        E::Invalid(m) if m.contains("sign in again") => "Вход в Google истёк. Войди заново.",
+        E::Invalid(m) if m.contains("sign-in was denied") => "Вход в Google отменён.",
+        E::Invalid(_) => "Сейчас это действие недоступно.",
+        E::Io(_) => "Ошибка чтения или записи файла.",
+    }
+}
+
+/// Same idea for an error that only survived as text (the answer stream reports `Error::to_string()`).
+pub fn friendly_text(text: &str) -> &'static str {
+    if text.starts_with("llm provider error") {
+        "Языковая модель не ответила. Проверь настройки итогов и повтори."
+    } else if text.starts_with("network error") {
+        "Нет связи с сервером. Проверь интернет и повтори."
+    } else if text.contains("is not installed") {
+        "Нужная модель не установлена. Скачай её в разделе «Модели»."
+    } else {
+        "Не удалось получить ответ. Попробуй ещё раз."
     }
 }
 
@@ -229,4 +275,27 @@ pub fn hide_popover(app: AppHandle, label: String) {
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
     app.exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use yc_core::Error;
+
+    #[test]
+    fn errors_become_short_user_messages_and_keep_the_raw_text() {
+        let e = CmdError::from(Error::Network("dns error: lookup failed".into()));
+        assert!(e.message.starts_with("Нет связи"));
+        assert_eq!(e.detail, "network error: dns error: lookup failed");
+        let json = serde_json::to_value(&e).unwrap();
+        assert_eq!(json["message"], e.message);
+        assert!(!friendly(&Error::Invalid("`x` cannot be benchmarked".into())).is_ascii());
+        assert!(
+            friendly(&Error::Invalid(
+                "Google sign-in is not configured: see docs/GOOGLE_OAUTH.md".into()
+            ))
+            .contains("Google")
+        );
+        assert!(friendly_text("llm provider error: 401").starts_with("Языковая"));
+    }
 }

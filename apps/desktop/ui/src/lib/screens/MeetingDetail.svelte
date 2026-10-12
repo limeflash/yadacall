@@ -142,12 +142,12 @@
   function closeSearch() { searchOpen = false; query = ""; }
   async function regenerate() {
     menuOpen = false; busy = true;
-    try { const s = await api.regenerateSummary(id); if (detail) detail.summary = s; toast(t("Итоги пересобраны")); } catch (e) { toast.error(String(e)); }
+    try { const s = await api.regenerateSummary(id); if (detail) detail.summary = s; toast(t("Итоги пересобраны")); } catch (e) { toast.error(e); }
     busy = false;
   }
   async function doExport(fmt: "md" | "json") {
     menuOpen = false;
-    try { const p = await api.exportMeeting(id, fmt); toast(t("Сохранено: {path}", { path: p })); } catch (e) { toast.error(String(e)); }
+    try { const p = await api.exportMeeting(id, fmt); toast(t("Сохранено: {path}", { path: p })); } catch (e) { toast.error(e); }
   }
   async function copyClaude() {
     menuOpen = false;

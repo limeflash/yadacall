@@ -43,7 +43,7 @@
   const keychain = $derived(isMac ? t("Связке ключей macOS") : isWindows ? t("Диспетчере учётных данных Windows") : t("хранилище паролей системы"));
 
   function patch(id: string, p: Partial<CalendarAccount>) { accounts = accounts.map((a) => (a.id === id ? { ...a, ...p } : a)); }
-  async function safely(job: Promise<unknown>) { try { await job; } catch (e) { toast.error(String(e)); load(); } }
+  async function safely(job: Promise<unknown>) { try { await job; } catch (e) { toast.error(e); load(); } }
   const setPolicy = (a: CalendarAccount, v: RecordPolicy) => { patch(a.id, { recordPolicy: v }); safely(integrations.setAccountPolicy(a.id, v)); };
   const setShow = (a: CalendarAccount, v: boolean) => { patch(a.id, { visible: v }); safely(integrations.setAccountVisible(a.id, v)); };
   async function remove(a: CalendarAccount) {
@@ -57,7 +57,7 @@
     try {
       await integrations.reauthAccount(a.id);
       toast(t("Снова вижу календарь {email}", { email: a.email }));
-    } catch (e) { toast.error(String(e)); }
+    } catch (e) { toast.error(e); }
     load();
   }
   async function startAdd() {
@@ -72,7 +72,7 @@
     } catch (e) {
       if (run !== addRun || adding === 0) return; // cancelled by the user
       adding = 0;
-      toast.error(String(e));
+      toast.error(e);
     }
   }
   function cancelAdd() { addRun++; adding = 0; integrations.cancelAddAccount(); }

@@ -24,7 +24,7 @@
   /** "Хочу такое" is a local flag: nothing is sent anywhere. */
   async function toggle(c: Connection) {
     items = items.map((x) => (x.id === c.id ? { ...x, want: !x.want } : x));
-    try { await integrations.toggleWant(c.id); } catch (e) { toast.error(String(e)); load(); }
+    try { await integrations.toggleWant(c.id); } catch (e) { toast.error(e); load(); }
   }
   const accounts = (n = 0) => `${n} ${plural(n, ["аккаунт", "аккаунта", "аккаунтов"], ["account", "accounts"])}`;
 </script>

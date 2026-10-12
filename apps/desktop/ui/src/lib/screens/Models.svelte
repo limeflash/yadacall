@@ -49,10 +49,10 @@
   const pctOf = (m: ModelEntry) => (m.download ? Math.floor((m.download.doneBytes / Math.max(1, m.download.totalBytes)) * 100) : 0);
   function etaLabel(s?: number) { if (!s) return ""; return s > 60 ? "~" + Math.ceil(s / 60) + " " + t("мин") : "~" + Math.max(1, s) + " " + t("с"); }
 
-  async function act(fn: () => Promise<unknown>) { try { await fn(); await load(); } catch (e) { toast.error(String(e)); } }
+  async function act(fn: () => Promise<unknown>) { try { await fn(); await load(); } catch (e) { toast.error(e); } }
   async function bench(m: ModelEntry) {
     benching = m.id;
-    try { const r = await api.modelBenchmark(m.id); measured[m.id] = r.realtimeFactor; toast(t("{name}: измерено ≈ {x}× быстрее реального времени", { name: m.name, x: r.realtimeFactor })); } catch (e) { toast.error(String(e)); }
+    try { const r = await api.modelBenchmark(m.id); measured[m.id] = r.realtimeFactor; toast(t("{name}: измерено ≈ {x}× быстрее реального времени", { name: m.name, x: r.realtimeFactor })); } catch (e) { toast.error(e); }
     benching = null;
   }
   const hwLine = $derived(hardware ? `${hardware.label} · ${hardware.chip} · ${hardware.ramGb} ${t("ГБ")}` : "");

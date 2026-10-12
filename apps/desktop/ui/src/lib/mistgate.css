@@ -383,6 +383,7 @@
 .mg-toast__check { display: block; width: 4px; height: 8px; margin-top: -2px; transform: rotate(45deg); border-right: 2px solid #0c0c0e; border-bottom: 2px solid #0c0c0e; }
 .mg-toast__bang { font-size: 13px; line-height: 1; font-weight: 800; color: #0c0c0e; }
 .mg-toast__msg { min-width: 0; }
+.mg-toast__detail { display: block; margin-top: 6px; font-family: var(--font-mono); font-size: 11px; opacity: 0.7; overflow-wrap: anywhere; user-select: text; }
 .mg-toast__action { margin-left: 4px; flex: none; padding: 0; border: 0; background: none; color: inherit; font-weight: 800; text-decoration: underline; }
 .mg-toast__close { margin-right: -6px; display: grid; width: 24px; height: 24px; flex: none; place-items: center; padding: 0; border: 0; border-radius: 999px; background: none; color: inherit; opacity: 0.6; transition: opacity 0.15s; }
 .mg-toast__close:hover { opacity: 1; }

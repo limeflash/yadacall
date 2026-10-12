@@ -8,6 +8,7 @@
   import { clock, shortDate } from "../format";
   import { go, back, href } from "../router.svelte";
   import { speakerName } from "../speakers";
+  import { errText } from "../api/error";
 
   let { q }: { q?: string } = $props();
 
@@ -25,9 +26,9 @@
         if (e.kind === "token") qa.text += e.text;
         else if (e.kind === "citations") qa.citations = e.items;
         else if (e.kind === "done") { qa.sent = e.sent; qa.busy = false; }
-        else if (e.kind === "error") { qa.error = e.message; qa.busy = false; }
+        else if (e.kind === "error") { qa.error = t(e.message); qa.busy = false; }
       });
-    } catch (err) { qa.error = String(err); }
+    } catch (err) { qa.error = errText(err); }
     qa.busy = false;
   }
   onMount(() => { if (q) ask(q); });
