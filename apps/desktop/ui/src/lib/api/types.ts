@@ -299,7 +299,7 @@ export interface JoinOutcome {
   /** Remote people expected; absent when the guest list is unknown. */
   expectedSpeakers?: number;
   /** Display names of the other attendees. */
-  participants?: string[];
+  participants?: { name: string; email?: string }[];
 }
 
 /** "unconfigured": this build has no Google OAuth client; `docsUrl` explains how to add one. */
