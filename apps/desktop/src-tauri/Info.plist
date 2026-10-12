@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>LSUIElement</key>
+  <false/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>YadaCall записывает ваш голос с микрофона во время встречи. Запись и текст остаются на этом компьютере. / YadaCall records your voice from the microphone during a meeting. Recordings and text stay on this computer.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>YadaCall записывает звук собеседников из системы (Zoom, Meet, Telegram…), чтобы расшифровать встречу. Всё остаётся на этом компьютере. / YadaCall captures system audio (Zoom, Meet, Telegram…) to transcribe the meeting. Everything stays on this computer.</string>
+  <key>CFBundleLocalizations</key>
+  <array><string>ru</string><string>en</string></array>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>ru</string>
+</dict>
+</plist>

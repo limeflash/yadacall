@@ -1,0 +1,228 @@
+/*
+ * YadaCall — токены дизайн-системы Mistgate (значения из её tokens.json, тёмная тема первая)
+ * и несколько помощников приложения. Подключать ДО ds/mistgate/components/bundle.css.
+ * Цвета — только через var(--…). Классы приложения — с префиксом yc-.
+ */
+
+:root {
+  color-scheme: dark;
+  --bg: #0c0c0e;
+  --surface: #141417;
+  --surface-2: #1d1d22;
+  --border: #25252b;
+  --text: #f3f3f5;
+  --muted: #8b8b94;
+  --faint: #4a4a52;
+  --them: #d4d4dc;
+  --dock: rgba(24, 24, 28, 0.78);
+  --backdrop: rgba(0, 0, 0, 0.5);
+  --ink-on-accent: #0c0c0e;
+  --accent: #7dd3a0;
+  --accent-soft: color-mix(in oklch, #7dd3a0 14%, #0c0c0e);
+  --accent-line: color-mix(in oklch, #7dd3a0 50%, #25252b);
+  --accent-text: #7dd3a0;
+  --accent-fill: #6e50c0;
+  --accent-fill-hover: #6040af;
+  --focus: #7dd3a0;
+  --accent-mint: #7dd3a0;
+  --accent-lavender: #b8acf2;
+  --accent-sky: #8ec8ea;
+  --accent-sand: #dcc68c;
+  --accent-rose: #e6a6b0;
+  --accent-sage: #b0cc90;
+  --ok: #7dd3a0;
+  --busy: #8ec8ea;
+  --blip: #89a5b5;
+  --warning: #febc2e;
+  --warning-soft: rgba(254, 188, 46, 0.12);
+  --warning-line: rgba(254, 188, 46, 0.35);
+  --warning-text: #febc2e;
+  --danger: #ff5a5f;
+  --danger-soft: rgba(255, 90, 95, 0.14);
+  --danger-line: #853f3e;
+  --danger-text: #ff5a5f;
+  --tone-lavender: #b8acf2;
+  --tone-lavender-bg: #2d2b38;
+  --tone-sky: #8ec8ea;
+  --tone-sky-bg: #263037;
+  --tone-sand: #dcc68c;
+  --tone-sand-bg: #332f25;
+  --tone-sage: #b0cc90;
+  --tone-sage-bg: #2c3126;
+  --tone-mint: #7dd3a0;
+  --tone-mint-bg: #243229;
+  --tone-rose: #e6a6b0;
+  --tone-rose-bg: #362a2c;
+  --chart-line: #7dd3a0;
+  --avatar-7: #c9b8e8;
+  --avatar-8: #9fd6cf;
+  --avatar-9: #e8b98f;
+
+  --font-sans: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-10: 40px;
+
+  --radius-id-chip: 7px;
+  --radius-inner: 9px;
+  --radius-chip: 11px;
+  --radius-ctl: 11px;
+  --radius-field: 14px;
+  --radius-card: 16px;
+  --radius-card-lg: 18px;
+  --radius-dock: 20px;
+  --radius-sheet: 22px;
+
+  --shadow-dock: 0 12px 30px -12px rgba(0, 0, 0, 0.5);
+  --shadow-toast: 0 14px 30px -10px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 14px 30px -10px rgba(0, 0, 0, 0.5);
+
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.3, 1.5, 0.5, 1);
+  --ease-spring-strong: cubic-bezier(0.3, 1.6, 0.5, 1);
+  --ease-segment: cubic-bezier(0.3, 1.4, 0.5, 1);
+  --opacity-disabled: 0.35;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f8f8f6;
+  --surface: #ffffff;
+  --surface-2: #efefec;
+  --border: #e3e3df;
+  --text: #16161a;
+  --muted: #6b6b73;
+  --faint: #c4c4c8;
+  --them: #a4a4ac;
+  --dock: rgba(255, 255, 255, 0.82);
+  --accent-soft: color-mix(in oklch, #7dd3a0 24%, #f8f8f6);
+  --accent-line: color-mix(in oklch, #7dd3a0 65%, #e3e3df);
+  --accent-text: color-mix(in oklch, #7dd3a0 50%, #000);
+  --focus: #00582f;
+  --blip: #7691a0;
+  --warning-text: #63470b;
+  --danger-line: #f9aaa6;
+  --danger-text: #631e20;
+  --tone-lavender: #473a73;
+  --tone-lavender-bg: #eae8fc;
+  --tone-sky: #174e6a;
+  --tone-sky-bg: #e0f0fa;
+  --tone-sand: #5c4a12;
+  --tone-sand-bg: #f5efdf;
+  --tone-sage: #3b511d;
+  --tone-sage-bg: #e8f1e0;
+  --tone-mint: #00582f;
+  --tone-mint-bg: #dcf3e4;
+  --tone-rose: #67343e;
+  --tone-rose-bg: #f9e6e8;
+  --chart-line: #897fc7;
+  --shadow-dock: none;
+  --shadow-toast: none;
+  --shadow-pop: 0 12px 40px -12px rgba(20, 20, 30, 0.25);
+}
+
+/* ---------- оболочка окна ---------- */
+.yc-app { height: 100vh; display: flex; flex-wrap: wrap; overflow: hidden; }
+.yc-scroll { overflow-y: auto; scrollbar-gutter: stable; }
+.yc-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.yc-scroll::-webkit-scrollbar-thumb { background: var(--surface-2); border: 3px solid var(--bg); border-radius: 10px; }
+.yc-scroll::-webkit-scrollbar-track { background: transparent; }
+
+@media (max-width: 760px) {
+  .yc-app { height: auto; min-height: 100vh; overflow: visible; }
+  .yc-scroll { overflow: visible; }
+  .yc-side { flex: 1 1 100% !important; max-width: none !important; border-right: 0 !important; border-bottom: 1px solid var(--border); }
+  .yc-hide-sm { display: none !important; }
+}
+
+/* ---------- состояния: ховер, нажатие, появление ---------- */
+.yc-nav { transition: background-color 0.16s, color 0.16s; }
+.yc-nav:hover { background: var(--surface-2) !important; }
+.yc-row { transition: background-color 0.16s, border-color 0.2s, transform 0.35s var(--ease-spring); }
+.yc-row:hover { background: var(--surface-2) !important; }
+.yc-lift { transition: transform 0.35s var(--ease-spring), border-color 0.2s; }
+.yc-lift:hover { transform: translateY(-2px); border-color: var(--accent-line) !important; }
+.yc-tc { transition: background-color 0.16s, color 0.16s, border-color 0.16s; cursor: pointer; }
+.yc-tc:hover { background: var(--accent-soft) !important; color: var(--accent-text) !important; border-color: var(--accent-line) !important; }
+.yc-press { transition: transform 0.18s var(--ease-spring), background-color 0.16s; }
+.yc-press:active { transform: scale(0.97); }
+.yc-chipbtn { transition: background-color 0.16s, border-color 0.16s, color 0.16s; cursor: pointer; }
+.yc-chipbtn:hover { border-color: var(--accent-line) !important; color: var(--text) !important; }
+
+.yc-in { animation: yc-in 0.45s var(--ease-out-soft) both; }
+.yc-in-2 { animation: yc-in 0.45s var(--ease-out-soft) 0.07s both; }
+.yc-in-3 { animation: yc-in 0.45s var(--ease-out-soft) 0.14s both; }
+@keyframes yc-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+
+/* запись: точка мигает раз в секунду, живые столбики дышат */
+.yc-rec { animation: yc-blink 1s steps(1) infinite; }
+@keyframes yc-blink { 50% { opacity: 0.25; } }
+.yc-live { transform-origin: center; animation: yc-live 0.9s ease-in-out infinite alternate; }
+@keyframes yc-live { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
+.yc-caret::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -2px; border-radius: 1px; background: var(--accent); animation: yc-blink 1s steps(1) infinite; }
+.yc-spin { animation: yc-spin 1s linear infinite; }
+@keyframes yc-spin { to { transform: rotate(360deg); } }
+
+/* ---------- иконки, которых нет в наборе: сетка 24, обводка 2.2, скругления ---------- */
+.yc-ic { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.yc-icf { fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; flex: none; }
+
+/* ---------- чекбокс задачи ---------- */
+.yc-check { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 0; border-radius: 6px; border: 1.5px solid var(--faint); background: var(--surface); display: inline-grid; place-content: center; cursor: pointer; flex: none; transition: background-color 0.16s, border-color 0.16s; }
+.yc-check::after { content: ""; width: 8px; height: 4px; border-left: 2.2px solid var(--ink-on-accent); border-bottom: 2.2px solid var(--ink-on-accent); transform: translate(0, -1px) rotate(-45deg) scale(0); transition: transform 0.3s var(--ease-spring-strong); }
+.yc-check:checked { background: var(--accent); border-color: var(--accent); }
+.yc-check:checked::after { transform: translate(0, -1px) rotate(-45deg) scale(1); }
+.yc-check:hover { border-color: var(--accent-line); }
+.yc-task-done { color: var(--muted) !important; text-decoration: line-through; text-decoration-color: var(--faint); }
+
+/* ---------- расшифровка ---------- */
+.yc-tb { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; padding: 12px 14px 12px 8px; border-radius: 14px; border: 1px solid transparent; transition: background-color 0.2s, border-color 0.2s; }
+.yc-tb-on { background: var(--accent-soft); border-color: var(--accent-line); }
+.yc-tb-on .yc-tcx { color: var(--accent-text) !important; }
+mark.yc-hit { background: var(--accent-soft); color: var(--text); border-bottom: 2px solid var(--accent-line); border-radius: 4px; padding: 0 2px; }
+.yc-tb-on mark.yc-hit { background: var(--bg); }
+
+/* ---------- реплики-пузыри, ссылки-пунктиры, меню ---------- */
+.yc-bub-on { border-color: var(--accent-line) !important; background: var(--accent-soft) !important; }
+.yc-bub-on .yc-tcx { color: var(--accent-text) !important; }
+.yc-dash { margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: underline dashed var(--faint); text-decoration-thickness: 1px; text-underline-offset: 4px; transition: text-decoration-color 0.16s, color 0.16s; }
+.yc-dash:hover { text-decoration-color: var(--accent-text); color: var(--text); }
+.yc-mi { transition: background-color 0.16s; }
+.yc-mi:hover { background: var(--surface-2) !important; }
+.yc-pop { animation: yc-pop 0.22s var(--ease-out-soft) both; transform-origin: top right; }
+@keyframes yc-pop { from { opacity: 0; transform: translateY(-4px) scale(0.97); } }
+.yc-sheet { animation: yc-sheet 0.5s var(--ease-out-soft) both; }
+@keyframes yc-sheet { from { transform: translateY(24px); opacity: 0.6; } }
+
+/* ---------- маскот: моргает, оглядывается, наушники покачиваются ---------- */
+@keyframes ycmBlink { 0%, 90%, 100% { transform: scaleY(1); } 93% { transform: scaleY(0.08); } 96% { transform: scaleY(1); } }
+@keyframes ycmLook { 0%, 18% { transform: translate(0, 0); } 24%, 40% { transform: translate(2.6%, -1%); } 46%, 62% { transform: translate(-2.2%, 0.6%); } 68%, 80% { transform: translate(0.8%, 1.4%); } 86%, 100% { transform: translate(0, 0); } }
+@keyframes ycmCup { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2%); } }
+@keyframes ycmBand { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-1.5deg); } }
+@keyframes ycFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes ycPopIn { 0% { opacity: 0; transform: scale(0.6); } 60% { transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes ycEq { 0%, 100% { height: 3px; } 50% { height: 10px; } }
+@keyframes ycShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.yc-float { animation: ycFloat 3.4s ease-in-out infinite; }
+.yc-popin { animation: ycPopIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+/* ---------- текст ---------- */
+.yc-pretty { text-wrap: pretty; }
+.yc-balance { text-wrap: balance; }
+.yc-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yc-num { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .yc-in, .yc-in-2, .yc-in-3, .yc-rec, .yc-live, .yc-spin, .yc-pop, .yc-sheet, .yc-float, .yc-popin, .yc-caret::after, .ycm-anim, .ycm-anim * { animation: none !important; }
+  .yc-lift:hover { transform: none; }
+}

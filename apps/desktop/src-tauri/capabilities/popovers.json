@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "popover-windows",
+  "description": "Minimal permissions for the tray popover and the mini-player",
+  "windows": ["tray", "mini"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-hide"
+  ]
+}
