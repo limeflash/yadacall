@@ -1,0 +1,38 @@
+[package]
+name = "yc-connect"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Google accounts, calendar agenda, pre-call scheduler and call detection for YadaCall"
+
+[dependencies]
+yc-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+tokio = { workspace = true, features = ["net", "io-util", "time", "sync", "macros", "rt-multi-thread"] }
+tokio-util.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "system-proxy"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.9"
+regex = "1"
+url = "2"
+icalendar = { version = "0.17", default-features = false, features = ["parser"] }
+rrule = "0.14"
+chrono-tz = "0.10"
+sysinfo = { version = "0.35", default-features = false, features = ["system"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+winreg = "0.55"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3"
