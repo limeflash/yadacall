@@ -292,9 +292,16 @@ export interface JoinOutcome {
   accountEmail: string;
   record: boolean;
   endsAt: string;
+  /** Calendar event the call belongs to. */
+  eventId?: string;
+  /** Remote people expected; absent when the guest list is unknown. */
+  expectedSpeakers?: number;
+  /** Display names of the other attendees. */
+  participants?: string[];
 }
 
-export type ConnectionState = "connected" | "soon";
+/** "unconfigured": this build has no Google OAuth client; `docsUrl` explains how to add one. */
+export type ConnectionState = "connected" | "soon" | "unconfigured";
 export interface Connection {
   id: string;
   name: string;
@@ -304,6 +311,7 @@ export interface Connection {
   accounts?: number;
   /** "Хочу такое": a purely local flag, never sent anywhere. */
   want: boolean;
+  docsUrl?: string;
 }
 
 export interface ReminderSettings {
@@ -311,6 +319,8 @@ export interface ReminderSettings {
   remindMinutes: number;
   openInAccount: boolean;
   detectUnscheduled: boolean;
+  /** The user pressed "Разрешить": detection may read browser tabs (macOS asks for Automation access then). */
+  browserAccess: boolean;
 }
 
 export interface DetectedCall { id: string; platform: string; url: string; detectedAt: string }
@@ -318,6 +328,7 @@ export interface DetectedCall { id: string; platform: string; url: string; detec
 /** The `integrations` Tauri event (tag = "type"). */
 export type IntegrationEvent =
   | { type: "reminderDue"; event: AgendaEvent; accountLabel: string; accountEmail: string; minutesBefore: number }
+  | { type: "callStarting"; event: AgendaEvent; accountLabel: string; accountEmail: string }
   | { type: "callDetected"; call: DetectedCall }
   | { type: "authExpired"; accountId: string; email: string }
   | { type: "addProgress"; step: number }

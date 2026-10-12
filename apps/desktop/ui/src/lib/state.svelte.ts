@@ -113,6 +113,12 @@ function onIntegration(e: IntegrationEvent) {
         });
         break;
       }
+      case "callStarting":
+        toast(`${t("Звонок начинается")} · ${e.event.title}`, {
+          actionLabel: t("Войти и записать"),
+          onAction: () => { integrations.joinAndRecord(e.event.id).then(() => go({ name: "record" })).catch((er) => toast.error(String(er))); },
+        });
+        break;
       case "callDetected":
         toast(t("Ты в звонке {p} — записать его?", { p: e.call.platform }), {
           actionLabel: t("Записать"),

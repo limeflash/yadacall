@@ -9,7 +9,7 @@
   import StatusDot from "../kit/StatusDot.svelte";
   import SectionLabel from "../kit/SectionLabel.svelte";
   import { integrations } from "../api";
-  import type { CalendarAccount, RecordPolicy, ReminderSettings } from "../api";
+  import type { CalendarAccount, Connection, RecordPolicy, ReminderSettings } from "../api";
   import { onIntegrationEvent } from "../state.svelte";
   import { t, plural } from "../i18n/index.svelte";
   import { href } from "../router.svelte";
@@ -17,7 +17,9 @@
   import { toast } from "../toast.svelte";
 
   let accounts = $state<CalendarAccount[]>([]);
-  let settings = $state<ReminderSettings>({ remindMinutes: 2, openInAccount: true, detectUnscheduled: true });
+  let settings = $state<ReminderSettings>({ remindMinutes: 2, openInAccount: true, detectUnscheduled: true, browserAccess: false });
+  /** The "Google Meet" card of the catalog: tells whether this build can sign in at all. */
+  let meet = $state<Connection | null>(null);
   let confirm = $state<string | null>(null);
   /** 0 = idle, 1..3 = steps of "Добавить аккаунт Google". */
   let adding = $state(0);
@@ -27,6 +29,7 @@
   onMount(() => {
     load();
     integrations.reminderSettings().then((s) => (settings = s));
+    integrations.connections().then((all) => (meet = all.find((c) => c.id === "meet") ?? null)).catch(() => {});
     return onIntegrationEvent((e) => {
       if (e.type === "agendaChanged" || e.type === "authExpired") load();
       else if (e.type === "addProgress" && adding > 0) adding = e.step;
@@ -145,7 +148,16 @@
           </div>
         {/each}
 
-        {#if adding === 0}
+        {#if meet?.state === "unconfigured"}
+          <div class="yc-in unconf">
+            <span style="display: inline-flex; padding-top: 2px; color: var(--warning-text)"><Icon name="warn" size={14} /></span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+              <span style="font-size: 14px; font-weight: 700">{t("Вход через Google не настроен")}</span>
+              <span class="yc-pretty" style="font-size: 12.5px; color: var(--muted)">{t("В эту сборку не вшит ключ Google OAuth, поэтому календарь подключить нельзя. Записывать звонки можно и без него.")}</span>
+              <a href={meet.docsUrl} target="_blank" rel="noopener noreferrer" style="align-self: flex-start; font-size: 12.5px; font-weight: 700; color: var(--accent-text)">{t("Как настроить (docs/GOOGLE_OAUTH.md)")}</a>
+            </span>
+          </div>
+        {:else if adding === 0}
           <button type="button" class="yc-press addbtn" onclick={startAdd}><Icon name="plus" size={14} />{t("Добавить аккаунт Google")}</button>
         {:else}
           <div class="yc-in adding">
@@ -185,6 +197,17 @@
           <span class="two"><span style="font-size: 14px">{t("Замечать звонки не из календаря")}</span><span class="subtext">{t("Зашёл в Meet по ссылке из чата — предложу записать")}</span></span>
           <Switch checked={settings.detectUnscheduled} onchange={(v) => saveReminders({ detectUnscheduled: v })} />
         </label>
+        {#if isMac && settings.detectUnscheduled}
+          <div class="grow bt" style="flex-wrap: wrap; gap: 10px 16px">
+            <span class="two" style="flex: 1 1 220px"><span style="font-size: 14px">{t("Видеть вкладки браузера")}</span><span class="subtext">{settings.browserAccess ? t("Комнату Meet узнаю по адресу вкладки. Доступ к браузеру можно отозвать в Системных настройках → Конфиденциальность → Автоматизация.") : t("Без этого звонок замечу по микрофону и заголовку окна. С доступом — точнее: узнаю комнату Meet по адресу вкладки. macOS спросит разрешение только после нажатия.")}</span></span>
+            {#if settings.browserAccess}
+              <span class="st"><StatusDot kind="ok" />{t("Разрешено")}</span>
+              <Button size="sm" variant="ghost" onclick={() => saveReminders({ browserAccess: false })}>{t("Выключить")}</Button>
+            {:else}
+              <Button size="sm" variant="secondary" onclick={() => saveReminders({ browserAccess: true })}>{t("Разрешить")}</Button>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <div style="padding: 14px 4px 0"><SectionLabel as="h2">{t("Что видит YadaCall")}</SectionLabel></div>
@@ -219,6 +242,7 @@
   .shw { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
   .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-left: 48px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
   .addbtn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border: 1px dashed var(--faint); border-radius: 16px; background: transparent; color: var(--text); font: inherit; font-size: 13.5px; font-weight: 700; }
+  .unconf { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--warning-line); border-radius: 16px; background: var(--surface); }
   .adding { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--accent-line); border-radius: 16px; background: var(--surface); }
   .step { display: flex; align-items: center; gap: 10px; font-size: 13px; }
   .sdot { width: 18px; height: 18px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--ink-on-accent); }

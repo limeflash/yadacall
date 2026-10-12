@@ -36,7 +36,7 @@ export function createMockIntegrations(rec: Pick<Api, "recorderStart">): Integra
 
   let accounts: CalendarAccount[] = data.accounts.map((a) => ({ ...a }));
   const chosen = new Map<string, boolean>();
-  let settings: ReminderSettings = { remindMinutes: 2, openInAccount: true, detectUnscheduled: true };
+  let settings: ReminderSettings = { remindMinutes: 2, openInAccount: true, detectUnscheduled: true, browserAccess: false };
   let detected: DetectedCall | null = null;
   let addToken = 0;
   let want = new Set<string>(data.wantDefault);
