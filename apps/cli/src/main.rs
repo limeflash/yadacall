@@ -27,6 +27,12 @@ enum Command {
     BenchAsr(cmd::bench_asr::Args),
     /// Summarize a transcript file with a local or remote LLM.
     Summarize(cmd::summarize::SummarizeArgs),
+    /// Inspect this machine: CPU, memory, GPU, bandwidth and GEMM micro-benchmarks.
+    Hw(cmd::hw::HwArgs),
+    /// List, download, verify or remove models, with a "will it run?" verdict for each.
+    Models(cmd::models::ModelsArgs),
+    /// Download and check the llama.cpp server runtime for this platform.
+    Runtime(cmd::runtime::RuntimeArgs),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -35,8 +41,15 @@ fn main() -> anyhow::Result<()> {
         Command::Record(args) => cmd::record::run(args),
         Command::Transcribe(args) => cmd::transcribe::run(args),
         Command::BenchAsr(args) => cmd::bench_asr::run(args),
-        Command::Summarize(args) => tokio::runtime::Runtime::new()?
-            .block_on(cmd::summarize::run(args))
-            .map_err(|error| anyhow::anyhow!("{error}")),
+        Command::Summarize(args) => {
+            block_on(cmd::summarize::run(args))?.map_err(|error| anyhow::anyhow!("{error}"))
+        }
+        Command::Hw(args) => block_on(cmd::hw::run(args))?,
+        Command::Models(args) => block_on(cmd::models::run(args))?,
+        Command::Runtime(args) => block_on(cmd::runtime::run(args))?,
     }
+}
+
+fn block_on<F: std::future::Future>(future: F) -> anyhow::Result<F::Output> {
+    Ok(tokio::runtime::Runtime::new()?.block_on(future))
 }

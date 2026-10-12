@@ -1,7 +1,10 @@
 pub mod audio;
 pub mod bench_asr;
 pub mod devices;
+pub mod hw;
+pub mod models;
 pub mod record;
+pub mod runtime;
 pub mod shared;
 pub mod summarize;
 pub mod transcribe;
