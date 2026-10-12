@@ -11,8 +11,8 @@
   import StatusPill from "../kit/StatusPill.svelte";
   import { api, integrations } from "../api";
   import type { Connection, ModelEntry, Permissions, SummaryProvider, ThemeChoice, KeepAudio } from "../api";
-  import { app, saveSettings, theme } from "../state.svelte";
-  import { t, plural } from "../i18n/index.svelte";
+  import { app, saveSettings, theme, update, checkForUpdates, installUpdate } from "../state.svelte";
+  import { t, plural, i18n } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
   import Icon from "../kit/Icon.svelte";
   import { bytes } from "../format";
@@ -229,10 +229,33 @@
 
       <div class="foot">
         <div style="width: 28px; height: 28px; flex: none"><Mascot size={28} variant={theme.resolved === "dark" ? "white" : "black"} accent={theme.accent} /></div>
-        <span class="mg-mono" style="font-size: 11px; color: var(--muted)">YadaCall 0.1.0 · MIT · {t("исходники на GitHub")}</span>
+        <span class="mg-mono" style="font-size: 11px; color: var(--muted)">YadaCall {update.current} · MIT · {t("исходники на GitHub")} ·
+          {#if update.phase === "checking"}{t("проверяю…")}
+          {:else if update.phase === "none"}{t("последняя версия")}
+          {:else if update.phase === "available" || update.phase === "installing"}<button type="button" class="uplink" onclick={() => (update.sheet = true)}>{t("доступна {v}", { v: update.version ?? "" })}</button>
+          {:else}<button type="button" class="uplink" onclick={checkForUpdates}>{t("Проверить обновления")}</button>{/if}
+        </span>
+        {#if update.phase === "error" && update.error}<span class="sub" role="alert" style="color: var(--danger-text)">{update.error}</span>{/if}
       </div>
     </div>
   </div>
+
+  {#if update.sheet && update.version}
+    <div class="veil" role="presentation" onclick={() => { if (update.phase !== "installing") update.sheet = false; }}></div>
+    <div class="yc-pop usheet" role="dialog" aria-label={t("Обновление")}>
+      <h2>{t("Доступна версия {v}", { v: update.version })}</h2>
+      {#if update.date}<p>{new Date(update.date).toLocaleDateString(i18n.lang === "en" ? "en-GB" : "ru-RU", { day: "numeric", month: "long", year: "numeric" })}</p>{/if}
+      {#if update.notes}<div class="unotes yc-scroll">{update.notes}</div>{/if}
+      {#if update.phase === "installing"}
+        {@const pct = update.total ? Math.min(100, Math.floor((update.downloaded / update.total) * 100)) : null}
+        <span aria-hidden="true" class="ubar"><span style="width: {pct ?? 100}%; {pct === null ? 'opacity: 0.4' : ''}"></span></span>
+        <span class="sub mg-mono">{#if update.total && update.downloaded < update.total}{t("Скачиваю")} · {bytes(update.downloaded)} {t("из")} {bytes(update.total)}{:else}{t("Устанавливаю и перезапускаю…")}{/if}</span>
+      {:else}
+        {#if update.error}<span class="sub" role="alert" style="color: var(--danger-text)">{update.error}</span>{/if}
+        <div class="ubtns"><Button size="md" variant="ghost" onclick={() => (update.sheet = false)}>{t("Позже")}</Button><Button size="md" variant="primary" onclick={installUpdate}>{t("Обновить")}</Button></div>
+      {/if}
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -267,5 +290,15 @@
   .kbtn { padding: 2px; border: 0; border-radius: 8px; background: none; cursor: pointer; }
   .kbtn:hover { background: var(--surface-2); }
   .cap { font-size: 12px; color: var(--accent-text); padding: 0 6px; }
+  .foot { flex-wrap: wrap; }
+  .uplink { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-text); text-decoration: underline; }
+  .veil { position: fixed; inset: 0; z-index: 6; background: var(--backdrop); }
+  .usheet { position: fixed; z-index: 7; left: 50%; top: 18vh; transform: translateX(-50%); width: min(400px, calc(100% - 32px)); box-sizing: border-box; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 10px; }
+  .usheet h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+  .usheet p { margin: 0; font-size: 12px; color: var(--muted); }
+  .unotes { max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+  .ubar { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .ubar span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+  .ubtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
   .foot { display: flex; align-items: center; gap: 10px; padding: 22px 4px 0; }
 </style>

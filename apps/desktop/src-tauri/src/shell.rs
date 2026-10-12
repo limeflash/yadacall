@@ -60,6 +60,9 @@ pub struct ShellState {
     /// The meeting the tray menu's "open last" entry points at.
     last_ready: Option<String>,
     last_item: Option<MenuItem<Wry>>,
+    /// The tray menu and its "update" entry (present only while an update is available).
+    tray_menu: Option<Menu<Wry>>,
+    update_item: Option<MenuItem<Wry>>,
 }
 
 pub type Shared = Arc<Mutex<ShellState>>;
@@ -264,6 +267,37 @@ pub fn on_main_focus(app: &AppHandle, focused: bool) {
 
 // ---- tray icon ----------------------------------------------------------------------------------------
 
+/// Shows "Обновить YadaCall до <version>" in the tray menu while an update is available, removes it otherwise.
+pub fn set_update_available(app: &AppHandle, version: Option<&str>) {
+    let shared = state(app);
+    let mut g = shared.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(menu) = g.tray_menu.clone() else {
+        return;
+    };
+    match (version, g.update_item.clone()) {
+        (Some(v), Some(item)) => {
+            let _ = item.set_text(format!("Обновить YadaCall до {v}"));
+        }
+        (Some(v), None) => {
+            if let Ok(item) = MenuItem::with_id(
+                app,
+                "update",
+                format!("Обновить YadaCall до {v}"),
+                true,
+                None::<&str>,
+            ) && menu.insert(&item, 3).is_ok()
+            {
+                g.update_item = Some(item);
+            }
+        }
+        (None, Some(item)) => {
+            let _ = menu.remove(&item);
+            g.update_item = None;
+        }
+        (None, None) => {}
+    }
+}
+
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let record = MenuItem::with_id(app, "record", "Записать встречу", true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "Открыть YadaCall", true, None::<&str>)?;
@@ -291,6 +325,11 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &quit,
         ],
     )?;
+
+    state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .tray_menu = Some(menu.clone());
 
     #[cfg(target_os = "macos")]
     let icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
@@ -326,6 +365,16 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         "settings" => {
             show_main(app);
             let _ = tauri::Emitter::emit_to(app, "main", "navigate", "#/settings");
+        }
+        "update" => {
+            show_main(app);
+            let _ = tauri::Emitter::emit_to(app, "main", "navigate", "#/settings");
+            let _ = tauri::Emitter::emit_to(
+                app,
+                "main",
+                "update",
+                crate::updates::UpdateEvent::OpenSheet,
+            );
         }
         "quit" => app.exit(0),
         _ => {}

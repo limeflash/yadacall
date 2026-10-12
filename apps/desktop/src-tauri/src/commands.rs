@@ -55,6 +55,9 @@ pub fn friendly(e: &yc_core::Error) -> &'static str {
         E::Invalid(m) if m.contains("GOOGLE_OAUTH.md") => {
             "Вход через Google не настроен в этой сборке."
         }
+        E::Invalid(m) if m.contains("active recording") => {
+            "Идёт запись. Заверши или отмени её, потом обнови приложение."
+        }
         E::Invalid(m) if m.contains("sign in again") => "Вход в Google истёк. Войди заново.",
         E::Invalid(m) if m.contains("sign-in was denied") => "Вход в Google отменён.",
         E::Invalid(_) => "Сейчас это действие недоступно.",
