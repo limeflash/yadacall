@@ -1,0 +1,18 @@
+{
+  "standard": {
+    "ru": "Сделай краткое резюме разговора, решения, поручения и нерешённые вопросы.",
+    "en": "Summarize the conversation, decisions, commitments, and unresolved questions concisely."
+  },
+  "standup": {
+    "ru": "Сгруппируй сказанное по итогам, планам и препятствиям. Не превращай обсуждение в поручение без явного обещания выполнить действие.",
+    "en": "Organize the discussion into completed work, plans, and blockers. Do not turn discussion into an action item without an explicit commitment."
+  },
+  "one_on_one": {
+    "ru": "Выдели рабочие итоги, обратную связь, договорённости и темы для продолжения. Сохраняй нейтральный тон.",
+    "en": "Capture work updates, feedback, agreements, and topics to follow up. Keep a neutral tone."
+  },
+  "interview": {
+    "ru": "Кратко зафиксируй вопросы и ответы, подтверждённый опыт и факты, а также явно названные следующие шаги. Не делай выводов о кандидате сверх сказанного.",
+    "en": "Briefly capture questions and answers, stated experience and facts, and explicit next steps. Do not infer traits beyond what was said."
+  }
+}

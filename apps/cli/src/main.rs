@@ -25,6 +25,8 @@ enum Command {
     Transcribe(cmd::transcribe::Args),
     /// Benchmark an installed ASR engine on the fixed sample.
     BenchAsr(cmd::bench_asr::Args),
+    /// Summarize a transcript file with a local or remote LLM.
+    Summarize(cmd::summarize::SummarizeArgs),
 }
 
 fn main() -> anyhow::Result<()> {
@@ -33,5 +35,8 @@ fn main() -> anyhow::Result<()> {
         Command::Record(args) => cmd::record::run(args),
         Command::Transcribe(args) => cmd::transcribe::run(args),
         Command::BenchAsr(args) => cmd::bench_asr::run(args),
+        Command::Summarize(args) => tokio::runtime::Runtime::new()?
+            .block_on(cmd::summarize::run(args))
+            .map_err(|error| anyhow::anyhow!("{error}")),
     }
 }
