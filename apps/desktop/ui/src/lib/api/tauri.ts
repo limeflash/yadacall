@@ -2,7 +2,7 @@
 import { invoke as rawInvoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Api, AskEvent, EngineEvent } from "./types";
+import type { Api, AskEvent, EngineEvent, UpdateEvent } from "./types";
 import { toAppError } from "./error";
 
 /** `invoke` that rejects with an `AppError` (short message + raw detail). */
@@ -70,6 +70,11 @@ export function createTauriApi(): Api {
     popoverFit: (label, height) => invoke("popover_fit", { label, height }),
     hidePopover: (label) => invoke("hide_popover", { label }),
     quit: () => invoke("quit_app"),
+    checkUpdate: () => invoke("check_update"),
+    installUpdate: () => invoke("install_update"),
+    async onUpdate(cb) {
+      return listen<UpdateEvent>("update", (e) => cb(e.payload));
+    },
     async onNavigate(cb) {
       const un = await listen<string>("navigate", (e) => cb(e.payload));
       return un;

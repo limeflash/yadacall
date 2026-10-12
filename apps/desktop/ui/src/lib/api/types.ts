@@ -163,6 +163,17 @@ export interface RuntimeInfo { id: string; name: string; sizeBytes: number; inst
 export interface ModelsOverview { hardware: HardwareProfile; models: ModelEntry[]; runtime?: RuntimeInfo }
 export interface BenchmarkResult { modelId: string; realtimeFactor: number }
 
+// ---- updates -------------------------------------------------------------------------------------
+export interface UpdateStatus { available: boolean; version?: string; notes?: string; date?: string }
+export type UpdateEvent =
+  | { event: "available"; version: string; notes?: string; date?: string }
+  | { event: "downloading"; downloadedBytes: number; contentLength?: number }
+  | { event: "downloadProgress"; downloadedBytes: number; contentLength?: number }
+  | { event: "downloaded" }
+  | { event: "installDeferred"; reason: string }
+  | { event: "installed" }
+  | { event: "openSheet" };
+
 // ---- settings ------------------------------------------------------------------------------------
 export type ThemeChoice = "system" | "light" | "dark";
 export type UiLanguage = "ru" | "en";
@@ -246,6 +257,12 @@ export interface Api {
   quit(): Promise<void>;
   /** Hash routes requested by other windows (tray popover). */
   onNavigate(cb: (hash: string) => void): Promise<() => void>;
+  /** Application updates (`src-tauri/src/updates.rs`). */
+  checkUpdate(): Promise<UpdateStatus>;
+  /** Downloads and installs the update, then the app restarts; rejects while a recording is active. */
+  installUpdate(): Promise<void>;
+  /** Update events: found by the background check, download progress, tray click. */
+  onUpdate(cb: (e: UpdateEvent) => void): Promise<() => void>;
   /** Subscribe to engine events. Returns an unsubscribe function. */
   onEngine(cb: (e: EngineEvent) => void): Promise<() => void>;
 }

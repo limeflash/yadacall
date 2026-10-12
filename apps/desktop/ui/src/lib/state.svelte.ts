@@ -1,5 +1,5 @@
 import { api, inTauri, integrations } from "./api";
-import type { EngineEvent, IntegrationEvent, Level, RecorderSnapshot, Segment, Settings, SettingsPatch } from "./api";
+import type { EngineEvent, IntegrationEvent, Level, RecorderSnapshot, Segment, Settings, SettingsPatch, UpdateEvent } from "./api";
 import { i18n, plural, t } from "./i18n/index.svelte";
 import { go } from "./router.svelte";
 import { toast } from "./toast.svelte";
@@ -21,6 +21,58 @@ export const app = $state({
   rev: 0,
   downloads: {} as Record<string, { done: number; total: number; state: string; bytesPerSec: number }>,
 });
+
+/** Application updates: what Settings, the toast and the update sheet share. */
+export const update = $state({
+  /** idle: unknown; checking; none: up to date; available; installing: downloading / installing; error. */
+  phase: "idle" as "idle" | "checking" | "none" | "available" | "installing" | "error",
+  version: undefined as string | undefined,
+  notes: undefined as string | undefined,
+  date: undefined as string | undefined,
+  downloaded: 0,
+  total: undefined as number | undefined,
+  /** Message to show under the sheet (e.g. a recording is active). */
+  error: undefined as string | undefined,
+  sheet: false,
+  /** The running application's version (footer). */
+  current: "0.1.0",
+});
+let toastedVersion: string | null = null;
+
+export async function checkForUpdates() {
+  if (update.phase === "checking" || update.phase === "installing") return;
+  update.phase = "checking"; update.error = undefined;
+  try {
+    const s = await api.checkUpdate();
+    if (s.available) { Object.assign(update, { phase: "available", version: s.version, notes: s.notes, date: s.date }); }
+    else update.phase = "none";
+  } catch (e) { update.phase = "error"; update.error = errText(e); }
+}
+
+export async function installUpdate() {
+  if (update.phase === "installing") return;
+  update.phase = "installing"; update.error = undefined; update.downloaded = 0; update.total = undefined;
+  try { await api.installUpdate(); }
+  catch (e) { update.phase = "available"; update.error = errText(e); }
+}
+
+function onUpdateEvent(e: UpdateEvent) {
+  switch (e.event) {
+    case "available":
+      if (update.phase === "installing") break;
+      Object.assign(update, { phase: "available", version: e.version, notes: e.notes, date: e.date });
+      // One quiet toast per version and session, never while recording.
+      if (inMainWindow && app.recorder.phase === "idle" && toastedVersion !== e.version) {
+        toastedVersion = e.version;
+        toast(t("Доступна версия {v}", { v: e.version }), { actionLabel: t("Обновить"), onAction: () => { update.sheet = true; go({ name: "settings" }); } });
+      }
+      break;
+    case "downloading": case "downloadProgress":
+      update.phase = "installing"; update.downloaded = e.downloadedBytes; update.total = e.contentLength; break;
+    case "installDeferred": update.phase = "available"; update.error = t("Идёт запись. Заверши или отмени её, потом обнови приложение."); break;
+    case "openSheet": update.sheet = true; break;
+  }
+}
 
 /** Live input levels, ~25 Hz. Plain object: read by canvas loops, not by templates. */
 export const levels: { mic: Level; system: Level } = { mic: { rms: 0, peak: 0 }, system: { rms: 0, peak: 0 } };
@@ -164,6 +216,8 @@ export async function initApp() {
   await api.onEngine(onEvent);
   await integrations.onIntegrations(onIntegration);
   await api.onNavigate((hash) => { location.hash = hash; });
+  await api.onUpdate(onUpdateEvent);
+  if (inTauri) import("@tauri-apps/api/app").then((m) => m.getVersion()).then((v) => { update.current = v; }).catch(() => {});
   try {
     const [s, r] = await Promise.all([api.getSettings(), api.recorderState()]);
     app.settings = s; i18n.lang = s.uiLanguage; setRecorder(r);

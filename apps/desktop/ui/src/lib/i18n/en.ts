@@ -222,4 +222,8 @@ export const en: Record<string, string> = {
   "Не удалось установить рантайм llama.cpp. Проверь интернет и повтори.": "Could not install the llama.cpp runtime. Check your connection and try again.",
   "Ставлю рантайм {name} · {size}… {p}%": "Installing runtime {name} · {size}… {p}%",
   "Рантайм": "Runtime", "установлен": "installed", "поставится при первом запуске": "installs on first use", "Переустановить": "Reinstall",
+  "Проверить обновления": "Check for updates", "проверяю…": "checking…", "последняя версия": "up to date", "доступна {v}": "{v} available",
+  "Обновление": "Update", "Доступна версия {v}": "Version {v} is available", "Обновить": "Update", "Позже": "Later", "Скачиваю": "Downloading",
+  "Устанавливаю и перезапускаю…": "Installing and restarting…",
+  "Идёт запись. Заверши или отмени её, потом обнови приложение.": "A recording is in progress. Finish or cancel it, then update.",
 };

@@ -29,7 +29,11 @@ pub struct UpdateStatus {
 
 /// Update events emitted on the `update` channel.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "event", rename_all = "camelCase")]
+#[serde(
+    tag = "event",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum UpdateEvent {
     /// A newer release was found by the background check.
     Available {
@@ -53,12 +57,16 @@ pub enum UpdateEvent {
     InstallDeferred { reason: String },
     /// Installation was started; the app will relaunch after the updater finishes.
     Installed,
+    /// The tray's update entry was clicked: the main window shows the update sheet.
+    OpenSheet,
 }
 
 /// Checks the configured updater endpoint and returns the available release metadata.
 pub async fn check(app: &AppHandle) -> Result<UpdateStatus> {
     let update = get_update(app).await?;
-    Ok(status(update.as_ref()))
+    let info = status(update.as_ref());
+    crate::shell::set_update_available(app, info.version.as_deref());
+    Ok(info)
 }
 
 /// Downloads and installs the newest update, refusing to interrupt an active recording.
@@ -122,6 +130,7 @@ pub fn start_background_check(app: AppHandle) {
             match get_update(&app).await {
                 Ok(Some(update)) => {
                     let info = status(Some(&update));
+                    crate::shell::set_update_available(&app, info.version.as_deref());
                     let _ = app.emit(
                         "update",
                         UpdateEvent::Available {
@@ -177,5 +186,22 @@ fn status(update: Option<&Update>) -> UpdateStatus {
             notes: None,
             date: None,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_events_serialize_with_camel_case_fields() {
+        let json = serde_json::to_value(UpdateEvent::DownloadProgress {
+            downloaded_bytes: 5,
+            content_length: Some(10),
+        })
+        .unwrap();
+        assert_eq!(json["event"], "downloadProgress");
+        assert_eq!(json["downloadedBytes"], 5);
+        assert_eq!(json["contentLength"], 10);
     }
 }

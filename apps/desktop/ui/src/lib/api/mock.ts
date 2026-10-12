@@ -231,6 +231,9 @@ export function createMockApi(): Api {
     async hidePopover() {},
     async quit() {},
     async onNavigate() { return () => {}; },
+    async checkUpdate() { await sleep(400); return { available: false }; },
+    async installUpdate() { throw new Error("no update in the browser mock"); },
+    async onUpdate() { return () => {}; },
     async onEngine(cb) { listeners.add(cb); return () => listeners.delete(cb); },
   };
   return api;
