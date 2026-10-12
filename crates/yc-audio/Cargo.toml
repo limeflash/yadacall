@@ -1,5 +1,6 @@
 [package]
 name = "yc-audio"
+description = "YadaCall two-track capture: microphone + system audio, 16 kHz mono pipeline, crash-safe writer"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,3 +8,25 @@ license.workspace = true
 
 [dependencies]
 yc-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+cpal = "0.18"
+rubato = "5"
+audioadapter-buffers = "5.1"
+rtrb = "0.4"
+crossbeam-channel = "0.5"
+flacenc = "0.5"
+keepawake = "0.6"
+fs4 = "1.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Core Audio process-tap bindings (see capture/macos_tap.rs for why cidre).
+cidre = { version = "0.29", default-features = false, features = ["core_audio", "dispatch", "macos_14_2"] }
+
+[dev-dependencies]
+claxon = "0.4"
+tempfile = "3"
