@@ -8,10 +8,12 @@
 //!
 //! [`open_system_settings`] opens the matching privacy pane.
 
+#[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
 use yc_core::Result;
 use yc_core::error::PermissionKind;
+#[cfg(target_os = "macos")]
 use yc_core::meeting::TrackKind;
 
 use crate::api::PermissionState;

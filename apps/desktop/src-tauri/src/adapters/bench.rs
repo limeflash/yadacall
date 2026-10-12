@@ -196,6 +196,7 @@ async fn speaker(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Resul
 
 #[cfg(test)]
 mod tests {
+    #[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
     use std::sync::Arc;
 
     use super::*;
