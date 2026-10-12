@@ -93,16 +93,10 @@ impl Llm {
         match cfg.provider {
             SummaryProvider::Local => {
                 self.hub.installed_runtime(None).is_some()
-                    && self
-                        .hub
-                        .installed_of(ModelKind::Llm)
-                        .first()
-                        .is_some()
+                    && !self.hub.installed_of(ModelKind::Llm).is_empty()
             }
             SummaryProvider::Claude => self.key_present(KEY_ANTHROPIC),
-            SummaryProvider::Openai => {
-                cfg.current().base_url.is_some_and(|u| !u.trim().is_empty())
-            }
+            SummaryProvider::Openai => cfg.current().base_url.is_some_and(|u| !u.trim().is_empty()),
             SummaryProvider::Ollama => true,
         }
     }
@@ -405,10 +399,16 @@ mod tests {
 
     #[test]
     fn urls_are_normalised() {
-        assert_eq!(with_v1("http://localhost:11434"), "http://localhost:11434/v1");
+        assert_eq!(
+            with_v1("http://localhost:11434"),
+            "http://localhost:11434/v1"
+        );
         assert_eq!(with_v1("http://x/v1/"), "http://x/v1");
         assert!(is_loopback("http://localhost:1234/v1"));
         assert!(!is_loopback("https://api.example.com/v1"));
-        assert_eq!(host_of("https://api.example.com/v1").as_deref(), Some("api.example.com"));
+        assert_eq!(
+            host_of("https://api.example.com/v1").as_deref(),
+            Some("api.example.com")
+        );
     }
 }

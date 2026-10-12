@@ -6,10 +6,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use yc_engine::settings as es;
 
-use crate::adapters::{ProviderEntry, SummaryConfig};
-use crate::api::{
-    KeepAudio, Settings, SettingsPatch, SummarySettings, ThemeChoice, UiLanguage,
-};
+use crate::adapters::SummaryConfig;
+use crate::api::{KeepAudio, Settings, SettingsPatch, SummarySettings, ThemeChoice, UiLanguage};
 use crate::paths;
 
 /// What we learned about the system-audio permission (macOS has no query API).
@@ -197,7 +195,7 @@ pub fn apply_summary_patch(cfg: &mut SummaryConfig, p: &crate::api::SummaryPatch
     let entry = cfg
         .entries
         .entry(SummaryConfig::key(provider).to_owned())
-        .or_insert_with(ProviderEntry::default);
+        .or_default();
     if let Some(m) = &p.model {
         entry.model = m.trim().to_owned();
     }
@@ -234,8 +232,14 @@ mod tests {
     #[test]
     fn local_choice_matches_catalog_ids() {
         let ids = ["gemma-4-e2b-q4-0", "gemma-4-e4b-q4-0", "gemma-4-e4b-q8-0"];
-        assert_eq!(local_model_choice(&ids, "gemma-4-e4b").as_deref(), Some("gemma-4-e4b-q4-0"));
-        assert_eq!(local_model_choice(&ids, "gemma-4-e4b-q8-0").as_deref(), Some("gemma-4-e4b-q8-0"));
+        assert_eq!(
+            local_model_choice(&ids, "gemma-4-e4b").as_deref(),
+            Some("gemma-4-e4b-q4-0")
+        );
+        assert_eq!(
+            local_model_choice(&ids, "gemma-4-e4b-q8-0").as_deref(),
+            Some("gemma-4-e4b-q8-0")
+        );
         assert_eq!(local_model_choice(&ids, "llama").as_deref(), None);
     }
 

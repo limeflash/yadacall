@@ -56,7 +56,9 @@ fn prepare_data_dir(data: &Path, cache: &Path) {
     }
     // CAM++ is stored under its catalog id.
     let camp = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx";
-    let src = cache.join("k2-fsa__sherpa-onnx__speaker-recongition-models").join(camp);
+    let src = cache
+        .join("k2-fsa__sherpa-onnx__speaker-recongition-models")
+        .join(camp);
     let dst = cache.join("speaker-campplus-zh-en-16k").join(camp);
     if src.is_file() && !dst.is_file() {
         std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
@@ -79,10 +81,22 @@ async fn import_transcribe_search_summarise_ask() {
     // Speech fixture.
     let aiff = tmp.path().join("clip.aiff");
     let wav = tmp.path().join("совещание.wav");
-    run("say", &["-v", "Milena", SPEECH, "-o", aiff.to_str().unwrap()]);
+    run(
+        "say",
+        &["-v", "Milena", SPEECH, "-o", aiff.to_str().unwrap()],
+    );
     run(
         "afconvert",
-        &["-f", "WAVE", "-d", "LEI16@16000", "-c", "1", aiff.to_str().unwrap(), wav.to_str().unwrap()],
+        &[
+            "-f",
+            "WAVE",
+            "-d",
+            "LEI16@16000",
+            "-c",
+            "1",
+            aiff.to_str().unwrap(),
+            wav.to_str().unwrap(),
+        ],
     );
 
     let events: Arc<Mutex<Vec<EngineEvent>>> = Arc::default();
@@ -128,7 +142,13 @@ async fn import_transcribe_search_summarise_ask() {
 
     // Models: the cache provides GigaAM/Parakeet/Gemma; E5 comes through the app's download path.
     let overview = backend.models_overview().await.unwrap();
-    let find = |id: &str| overview.models.iter().find(|m| m.id == id).unwrap_or_else(|| panic!("{id}"));
+    let find = |id: &str| {
+        overview
+            .models
+            .iter()
+            .find(|m| m.id == id)
+            .unwrap_or_else(|| panic!("{id}"))
+    };
     assert!(find("gigaam-v3-e2e-rnnt-int8").installed && find("gigaam-v3-e2e-rnnt-int8").active);
     assert!(find("gemma-4-e2b-q4-0").installed);
     eprintln!(
@@ -150,7 +170,13 @@ async fn import_transcribe_search_summarise_ask() {
         let deadline = Instant::now() + Duration::from_secs(600);
         loop {
             let done = seen.lock().unwrap().iter().any(|e| {
-                matches!(e, EngineEvent::Download { state: DownloadState::Done, .. })
+                matches!(
+                    e,
+                    EngineEvent::Download {
+                        state: DownloadState::Done,
+                        ..
+                    }
+                )
             });
             if done {
                 break;
@@ -159,9 +185,20 @@ async fn import_transcribe_search_summarise_ask() {
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
         let progress = seen.lock().unwrap().len();
-        eprintln!("E5 download: {:?} ({progress} progress events)", t.elapsed());
+        eprintln!(
+            "E5 download: {:?} ({progress} progress events)",
+            t.elapsed()
+        );
     }
-    assert!(backend.models_overview().await.unwrap().models.iter().any(|m| m.id == e5 && m.installed));
+    assert!(
+        backend
+            .models_overview()
+            .await
+            .unwrap()
+            .models
+            .iter()
+            .any(|m| m.id == e5 && m.installed)
+    );
     backend.model_set_active(e5).await.unwrap();
 
     // Import -> ready.
@@ -183,7 +220,10 @@ async fn import_transcribe_search_summarise_ask() {
     assert_eq!(status, MeetingStatus::Ready, "meeting failed");
 
     for (at, label) in timeline.lock().unwrap().iter() {
-        eprintln!("  +{:>6.1}s  {label}", (*at - import_started.min(*at)).as_secs_f64());
+        eprintln!(
+            "  +{:>6.1}s  {label}",
+            (*at - import_started.min(*at)).as_secs_f64()
+        );
     }
 
     // Transcript text.
@@ -215,9 +255,18 @@ async fn import_transcribe_search_summarise_ask() {
     let list = backend.list_meetings().await.unwrap();
     assert_eq!(list.len(), 1);
     assert!(list[0].snippet.is_some());
-    let path = backend.export_meeting(&meeting_id, ExportFormat::Md).await.unwrap();
+    let path = backend
+        .export_meeting(&meeting_id, ExportFormat::Md)
+        .await
+        .unwrap();
     assert!(Path::new(&path).is_file());
-    assert!(!backend.copy_for_claude(&meeting_id).await.unwrap().is_empty());
+    assert!(
+        !backend
+            .copy_for_claude(&meeting_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
     // Ask over the library with the local model.
     let tokens = Arc::new(Mutex::new(String::new()));
@@ -244,22 +293,37 @@ async fn import_transcribe_search_summarise_ask() {
     for id in ["gigaam-v3-e2e-rnnt-int8", "gemma-4-e2b-q4-0"] {
         let t = Instant::now();
         let r = backend.model_benchmark(id).await.unwrap();
-        eprintln!("benchmark {id}: {:.1} in {:?}", r.realtime_factor, t.elapsed());
+        eprintln!(
+            "benchmark {id}: {:.1} in {:?}",
+            r.realtime_factor,
+            t.elapsed()
+        );
         assert!(r.realtime_factor > 0.0);
     }
     let calibration = std::fs::read_to_string(data.join("calibration.json")).unwrap();
     eprintln!("calibration.json: {calibration}");
-    assert!(calibration.contains("gigaam-v3-e2e-rnnt-int8") && calibration.contains("gemma-4-e2b-q4-0"));
+    assert!(
+        calibration.contains("gigaam-v3-e2e-rnnt-int8") && calibration.contains("gemma-4-e2b-q4-0")
+    );
     let after = backend.models_overview().await.unwrap();
-    let giga = after.models.iter().find(|m| m.id == "gigaam-v3-e2e-rnnt-int8").unwrap();
-    eprintln!("gigaam after calibration: {:?} \"{}\"", giga.verdict, giga.estimate);
+    let giga = after
+        .models
+        .iter()
+        .find(|m| m.id == "gigaam-v3-e2e-rnnt-int8")
+        .unwrap();
+    eprintln!(
+        "gigaam after calibration: {:?} \"{}\"",
+        giga.verdict, giga.estimate
+    );
 
     // Status events reached the sink.
-    assert!(events
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|e| matches!(e, EngineEvent::Status { status: MeetingStatus::Ready, .. })));
+    assert!(events.lock().unwrap().iter().any(|e| matches!(
+        e,
+        EngineEvent::Status {
+            status: MeetingStatus::Ready,
+            ..
+        }
+    )));
 
     backend.shutdown().await;
 }

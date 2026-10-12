@@ -19,7 +19,11 @@ pub fn home_dir() -> PathBuf {
 
 /// Default library folder for a UI language.
 pub fn default_library_dir(russian: bool) -> PathBuf {
-    home_dir().join(if russian { "Созвоны" } else { "YadaCall" })
+    home_dir().join(if russian {
+        "Созвоны"
+    } else {
+        "YadaCall"
+    })
 }
 
 /// Whether the system language is Russian (used for first-run defaults before the user chose one).
@@ -104,6 +108,8 @@ mod tests {
     #[test]
     fn asset_url_encodes_like_convert_file_src() {
         let url = asset_url(Path::new("/Users/a b/Созвоны/x.flac"));
-        assert!(url.ends_with("%2FUsers%2Fa%20b%2F%D0%A1%D0%BE%D0%B7%D0%B2%D0%BE%D0%BD%D1%8B%2Fx.flac"));
+        assert!(
+            url.ends_with("%2FUsers%2Fa%20b%2F%D0%A1%D0%BE%D0%B7%D0%B2%D0%BE%D0%BD%D1%8B%2Fx.flac")
+        );
     }
 }

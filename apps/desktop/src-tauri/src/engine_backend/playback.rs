@@ -28,7 +28,11 @@ impl EngineBackend {
 
     /// `asset://` URL of the meeting's playable audio, if any is still on disk.
     pub(super) async fn audio_url(&self, detail: &yc_engine::MeetingDetail) -> Option<String> {
-        let audio_dir = self.engine().library_root().join(&detail.folder).join("audio");
+        let audio_dir = self
+            .engine()
+            .library_root()
+            .join(&detail.folder)
+            .join("audio");
         let mut sources = Vec::new();
         for kind in TrackKind::ALL {
             let path = audio_dir.join(format!("{}.flac", kind.file_stem()));
@@ -77,7 +81,8 @@ impl EngineBackend {
     }
 
     fn mix_path(&self, detail: &yc_engine::MeetingDetail) -> PathBuf {
-        self.playback_dir().join(format!("{}.flac", detail.meeting.id))
+        self.playback_dir()
+            .join(format!("{}.flac", detail.meeting.id))
     }
 }
 

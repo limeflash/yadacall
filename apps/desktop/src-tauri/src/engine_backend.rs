@@ -20,9 +20,7 @@ use yc_core::meeting::{MeetingId, MeetingStatus};
 use yc_core::summary::Summary;
 use yc_core::{Error, Result};
 use yc_engine::ports::{AnswerEvent, Ports};
-use yc_engine::{
-    Engine, EngineConfig, ImportOptions, MicChoice, StartOptions, YadaRecorder,
-};
+use yc_engine::{Engine, EngineConfig, ImportOptions, MicChoice, StartOptions, YadaRecorder};
 use yc_hub::catalog::ModelKind as CatKind;
 use yc_store::SearchFilters;
 
@@ -96,15 +94,14 @@ fn invalid(m: impl Into<String>) -> Error {
 }
 
 fn mid(id: &str) -> Result<MeetingId> {
-    id.parse().map_err(|_| invalid(format!("bad meeting id `{id}`")))
+    id.parse()
+        .map_err(|_| invalid(format!("bad meeting id `{id}`")))
 }
 
 fn parse_time(s: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(s)
         .map(|d| d.with_timezone(&Utc))
-        .or_else(|_| {
-            NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").map(|n| n.and_utc())
-        })
+        .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").map(|n| n.and_utc()))
         .unwrap_or_else(|_| Utc::now())
 }
 
@@ -176,9 +173,7 @@ impl EngineBackend {
     }
 
     fn arc(&self) -> Result<Arc<Self>> {
-        self.me
-            .upgrade()
-            .ok_or_else(|| Error::Cancelled)
+        self.me.upgrade().ok_or(Error::Cancelled)
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -288,7 +283,11 @@ impl EngineBackend {
                     .unwrap_or_else(|| if russian { "Встреча" } else { "Meeting" }.to_owned()),
             ),
             elapsed_ms: info.elapsed_ms,
-            bookmarks: g.rec.as_ref().map(|r| r.bookmarks.clone()).unwrap_or_default(),
+            bookmarks: g
+                .rec
+                .as_ref()
+                .map(|r| r.bookmarks.clone())
+                .unwrap_or_default(),
             mic_device: g.rec.as_ref().and_then(|r| r.mic_device.clone()),
             system_source: Some(if russian { "Система" } else { "System" }.to_owned()),
         }
@@ -441,7 +440,10 @@ impl Backend for EngineBackend {
             crate::api::ExportFormat::Json => (yc_engine::ExportFormat::Json, "export.json"),
         };
         let content = self.engine.export(mid, fmt).await?;
-        let folder = self.engine.library_root().join(self.engine.get_meeting(mid).await?.folder);
+        let folder = self
+            .engine
+            .library_root()
+            .join(self.engine.get_meeting(mid).await?.folder);
         let path = folder.join(file);
         tokio::fs::write(&path, content).await?;
         Ok(path.to_string_lossy().into_owned())
@@ -588,7 +590,11 @@ impl Backend for EngineBackend {
                     let provider = self.llm.egress_label();
                     sink(AskEvent::Done {
                         sent: SentNote {
-                            excerpts: if provider == "local" { 0 } else { excerpts.len() as u32 },
+                            excerpts: if provider == "local" {
+                                0
+                            } else {
+                                excerpts.len() as u32
+                            },
                             provider,
                             audio: false,
                         },
@@ -616,18 +622,16 @@ impl Backend for EngineBackend {
             .collect();
         Ok(tasks
             .into_iter()
-            .map(|t| {
-                TaskItem {
-                    started_at: started.get(&t.meeting_id).copied().unwrap_or_else(Utc::now),
-                    meeting_id: t.meeting_id.to_string(),
-                    meeting_title: t.meeting_title,
-                    index: t.idx as usize,
-                    text: t.text,
-                    owner: t.owner,
-                    due: t.due,
-                    at_ms: t.at_ms,
-                    done: t.done,
-                }
+            .map(|t| TaskItem {
+                started_at: started.get(&t.meeting_id).copied().unwrap_or_else(Utc::now),
+                meeting_id: t.meeting_id.to_string(),
+                meeting_title: t.meeting_title,
+                index: t.idx as usize,
+                text: t.text,
+                owner: t.owner,
+                due: t.due,
+                at_ms: t.at_ms,
+                done: t.done,
             })
             .collect())
     }
@@ -648,7 +652,11 @@ impl Backend for EngineBackend {
                 meeting_id: None,
                 error: None,
             };
-            match self.engine.import_file(&path, ImportOptions::default()).await {
+            match self
+                .engine
+                .import_file(&path, ImportOptions::default())
+                .await
+            {
                 Ok(meeting) => {
                     job.meeting_id = Some(meeting.to_string());
                     let mut g = self.lock();
@@ -725,7 +733,11 @@ impl Backend for EngineBackend {
         let before = read_prefs(&self.prefs).summary.provider;
         let summary_patch = patch.summaries.clone();
         if let Some(sp) = &summary_patch
-            && let Some(key) = sp.api_key.as_deref().map(str::trim).filter(|k| !k.is_empty())
+            && let Some(key) = sp
+                .api_key
+                .as_deref()
+                .map(str::trim)
+                .filter(|k| !k.is_empty())
         {
             let provider = sp.provider.unwrap_or(before);
             if let Some(account) = Llm::account_of(provider) {
@@ -736,7 +748,8 @@ impl Backend for EngineBackend {
             .update_settings(|s| {
                 settings::apply_patch(s, &mut app, &patch);
                 if let Some(sp) = &summary_patch {
-                    let mut cfg = SummaryConfig::from_value(&s.summary_provider).unwrap_or_default();
+                    let mut cfg =
+                        SummaryConfig::from_value(&s.summary_provider).unwrap_or_default();
                     settings::apply_summary_patch(&mut cfg, sp);
                     if cfg.provider == SummaryProvider::Local
                         && let Some(model) = &sp.model
@@ -782,8 +795,9 @@ impl Backend for EngineBackend {
                     .map_err(|e| Error::Device(e.to_string()))?;
                 let known = match probe {
                     Ok(permissions::SystemAudioProbe::Heard) => Some(SystemAudioKnown::Granted),
-                    Ok(permissions::SystemAudioProbe::Denied)
-                    | Err(Error::Permission(_)) => Some(SystemAudioKnown::Denied),
+                    Ok(permissions::SystemAudioProbe::Denied) | Err(Error::Permission(_)) => {
+                        Some(SystemAudioKnown::Denied)
+                    }
                     Ok(permissions::SystemAudioProbe::Inconclusive) => None,
                     Err(e) => return Err(e),
                 };

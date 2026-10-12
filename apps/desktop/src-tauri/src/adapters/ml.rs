@@ -12,7 +12,9 @@ use yc_ml::{
 };
 
 use super::SharedPrefs;
-use super::hub::{ASR_GIGAAM, ASR_GIGAAM_CTC, ASR_PARAKEET, EMBED_E5_SMALL, ModelHub, SPEAKER_CAMPPLUS};
+use super::hub::{
+    ASR_GIGAAM, ASR_GIGAAM_CTC, ASR_PARAKEET, EMBED_E5_SMALL, ModelHub, SPEAKER_CAMPPLUS,
+};
 use super::read_prefs;
 
 /// Maps a catalog ASR id to the recogniser implementation.

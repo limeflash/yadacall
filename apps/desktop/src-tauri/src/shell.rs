@@ -10,9 +10,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tauri::Wry;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::Wry;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
     AppHandle, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
@@ -265,8 +265,17 @@ pub fn on_main_focus(app: &AppHandle, focused: bool) {
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let record = MenuItem::with_id(app, "record", "Записать встречу", true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "Открыть YadaCall", true, None::<&str>)?;
-    let last = MenuItem::with_id(app, "last", "Открыть последнюю встречу", false, None::<&str>)?;
-    state(app).lock().unwrap_or_else(|e| e.into_inner()).last_item = Some(last.clone());
+    let last = MenuItem::with_id(
+        app,
+        "last",
+        "Открыть последнюю встречу",
+        false,
+        None::<&str>,
+    )?;
+    state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .last_item = Some(last.clone());
     let settings = MenuItem::with_id(app, "settings", "Настройки", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
     let menu = Menu::with_items(
@@ -304,7 +313,12 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 .clone();
             if let Some(id) = id {
                 show_main(app);
-                let _ = tauri::Emitter::emit_to(app, "main", "navigate", format!("#/meeting/{id}/summary"));
+                let _ = tauri::Emitter::emit_to(
+                    app,
+                    "main",
+                    "navigate",
+                    format!("#/meeting/{id}/summary"),
+                );
             }
         }
         "settings" => {
@@ -344,7 +358,10 @@ fn idle_badge(g: &ShellState) -> Option<&'static str> {
 
 /// Re-draws the tray for the not-recording state (after a processing / error / ready change).
 fn refresh_idle_tray(app: &AppHandle) {
-    let recording = state(app).lock().unwrap_or_else(|e| e.into_inner()).recording;
+    let recording = state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .recording;
     if !recording {
         set_tray_state(app, false, 0, false);
     }
@@ -602,7 +619,11 @@ fn on_status(app: &AppHandle, id: String, status: &MeetingStatus) {
         let (head, body) = match announce {
             Announce::TranscriptReady => (tr("Расшифровка готова", "Transcript ready"), title),
             Announce::Ready if has_summary => {
-                state(&app).lock().unwrap_or_else(|e| e.into_inner()).announced.remove(&id);
+                state(&app)
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .announced
+                    .remove(&id);
                 let body = if tasks > 0 {
                     if russian {
                         format!("{title}\n{tasks} задач(и) в итогах")
@@ -625,7 +646,13 @@ fn on_status(app: &AppHandle, id: String, status: &MeetingStatus) {
                 }
                 (tr("Расшифровка готова", "Transcript ready"), title)
             }
-            Announce::Failed(message) => (tr("Не удалось обработать встречу", "Could not process the meeting"), message),
+            Announce::Failed(message) => (
+                tr(
+                    "Не удалось обработать встречу",
+                    "Could not process the meeting",
+                ),
+                message,
+            ),
         };
         let _ = app.notification().builder().title(head).body(body).show();
     });

@@ -95,7 +95,11 @@ impl ModelHub {
 
     /// Sum of the sizes of the files a download fetches.
     pub fn download_bytes(spec: &ModelSpec) -> u64 {
-        spec.files.iter().filter(|f| !f.optional).map(|f| f.size).sum()
+        spec.files
+            .iter()
+            .filter(|f| !f.optional)
+            .map(|f| f.size)
+            .sum()
     }
 
     /// The default ASR model for a meeting language.
@@ -110,9 +114,10 @@ impl ModelHub {
     /// The installed ASR model to use: the user's choice if installed, else the language default, else
     /// any installed one.
     pub fn pick_asr(&self, language: &str, chosen: Option<&str>) -> Result<&ModelSpec> {
-        let candidates = chosen
-            .into_iter()
-            .chain([Self::default_asr(language), ASR_GIGAAM, ASR_PARAKEET]);
+        let candidates =
+            chosen
+                .into_iter()
+                .chain([Self::default_asr(language), ASR_GIGAAM, ASR_PARAKEET]);
         for id in candidates {
             if let Ok(spec) = self.spec(id)
                 && self.is_installed(spec)
@@ -124,12 +129,14 @@ impl ModelHub {
     }
 
     /// The llama.cpp runtime pack for this machine.
-    pub fn runtime_pack(&self, hardware: Option<&HardwareProfile>) -> Result<&yc_hub::catalog::RuntimeSpec> {
+    pub fn runtime_pack(
+        &self,
+        hardware: Option<&HardwareProfile>,
+    ) -> Result<&yc_hub::catalog::RuntimeSpec> {
         let platform = runtime::current_platform();
         let backend = runtime_backend(hardware);
-        runtime::select(&self.catalog.runtimes, platform, backend).or_else(|_| {
-            runtime::select(&self.catalog.runtimes, platform, RuntimeBackend::Cpu)
-        })
+        runtime::select(&self.catalog.runtimes, platform, backend)
+            .or_else(|_| runtime::select(&self.catalog.runtimes, platform, RuntimeBackend::Cpu))
     }
 
     /// An already-extracted llama.cpp runtime for this platform: its pack, directory and server binary.
@@ -306,13 +313,23 @@ impl Insights {
     pub async fn predict(&self, spec: &ModelSpec) -> Result<Prediction> {
         let hardware = self.hardware().await?;
         let benchmarks = self.benchmarks().await;
-        Ok(predictor::predict(spec, hardware, benchmarks, &self.calibration()))
+        Ok(predictor::predict(
+            spec,
+            hardware,
+            benchmarks,
+            &self.calibration(),
+        ))
     }
 
     /// Prediction without calibration (the "predicted" half of a calibration measurement).
     pub async fn predict_uncalibrated(&self, spec: &ModelSpec) -> Result<Prediction> {
         let hardware = self.hardware().await?;
         let benchmarks = self.benchmarks().await;
-        Ok(predictor::predict(spec, hardware, benchmarks, &Calibration::default()))
+        Ok(predictor::predict(
+            spec,
+            hardware,
+            benchmarks,
+            &Calibration::default(),
+        ))
     }
 }

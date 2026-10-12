@@ -30,7 +30,10 @@ pub async fn run(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Resul
         ModelKind::Asr => asr(hub, insights, spec).await,
         ModelKind::Embed => embed(hub, insights, spec).await,
         ModelKind::Llm => llm(hub, insights, spec).await,
-        _ => Err(Error::Invalid(format!("`{}` cannot be benchmarked", spec.id))),
+        _ => Err(Error::Invalid(format!(
+            "`{}` cannot be benchmarked",
+            spec.id
+        ))),
     }
 }
 
