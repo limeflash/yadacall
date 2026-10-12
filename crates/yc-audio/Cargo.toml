@@ -22,6 +22,7 @@ crossbeam-channel = "0.5"
 flacenc = "0.5"
 keepawake = "0.6"
 fs4 = "1.1"
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "ogg", "vorbis", "wav", "pcm", "alac", "adpcm", "aiff", "caf", "mkv"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Core Audio process-tap bindings (see capture/macos_tap.rs for why cidre).
