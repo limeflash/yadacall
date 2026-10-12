@@ -355,12 +355,55 @@ pub fn extract_zip_flattened(archive_path: &Path, destination: &Path) -> Result<
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            // Symlink entry: its content is the link target (e.g. `libllama.0.dylib -> libllama.0.6.0.dylib`).
+            let mut link = String::new();
+            std::io::Read::read_to_string(&mut entry, &mut link)?;
+            create_archive_symlink(&target, Path::new(link.trim()), destination)?;
+            continue;
+        }
         let mut output = File::create(&target)?;
         std::io::copy(&mut entry, &mut output)?;
         #[cfg(unix)]
         if let Some(mode) = entry.unix_mode() {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&target, std::fs::Permissions::from_mode(mode & 0o777))?;
+        }
+    }
+    Ok(())
+}
+
+/// Recreates a symlink from an archive. Runtime packs ship versioned dylibs/so files reached through
+/// links (`libllama-common.0.dylib -> libllama-common.0.6.0.dylib`); without them the server can't
+/// load. Only relative targets that stay inside `destination` are accepted.
+fn create_archive_symlink(link_path: &Path, link_target: &Path, destination: &Path) -> Result<()> {
+    let escapes = link_target.is_absolute()
+        || link_target.components().any(|part| {
+            matches!(
+                part,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        });
+    let resolved = link_path.parent().unwrap_or(destination).join(link_target);
+    if escapes || !resolved.starts_with(destination) {
+        return Err(Error::Storage(format!(
+            "runtime archive link {} points outside the pack",
+            link_path.display()
+        )));
+    }
+    let _ = std::fs::remove_file(link_path);
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(link_target, link_path)?;
+    #[cfg(not(unix))]
+    {
+        // Windows packs don't rely on links; if one appears, materialise it as a copy when possible.
+        if resolved.is_file() {
+            std::fs::copy(&resolved, link_path)?;
         }
     }
     Ok(())
@@ -418,6 +461,15 @@ fn extract_tar_gz_flattened(archive_path: &Path, destination: &Path) -> Result<(
         let target = destination.join(relative);
         if entry.header().entry_type().is_dir() {
             std::fs::create_dir_all(&target)?;
+            continue;
+        }
+        if entry.header().entry_type().is_symlink() {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            if let Ok(Some(link)) = entry.link_name() {
+                create_archive_symlink(&target, &link, destination)?;
+            }
             continue;
         }
         if !entry.header().entry_type().is_file() {
