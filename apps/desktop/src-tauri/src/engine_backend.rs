@@ -481,6 +481,7 @@ impl Backend for EngineBackend {
                 .map_or(MicChoice::Configured, MicChoice::Device),
             system_audio: true,
             language: None,
+            participant_hints: Vec::new(),
         };
         self.engine.start_recording(start).await?;
         let russian = self.engine.settings().russian();

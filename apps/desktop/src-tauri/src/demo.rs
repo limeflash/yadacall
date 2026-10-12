@@ -278,6 +278,7 @@ impl DemoBackend {
                 key: p.key.clone(),
                 name: p.name.clone(),
                 voice_id: None,
+                suggestions: Vec::new(),
             })
             .collect();
         let turns = m
@@ -327,6 +328,7 @@ impl DemoBackend {
             duration_ms: ms(m.duration_sec),
             language: "ru".into(),
             expected_speakers: None,
+            participant_hints: Vec::new(),
             tracks: vec![
                 TrackInfo {
                     kind: TrackKind::Mic,
@@ -548,12 +550,14 @@ impl DemoBackend {
                         duration_ms: 60_000,
                         language: "ru".into(),
                         expected_speakers: None,
+                        participant_hints: Vec::new(),
                         tracks: vec![],
                         bookmarks: vec![],
                         participants: vec![Participant {
                             key: "them".into(),
                             name: "Собеседник".into(),
                             voice_id: None,
+                            suggestions: Vec::new(),
                         }],
                         asr_model: Some("gigaam-v3-rnnt".into()),
                         status: MeetingStatus::Ready,
@@ -853,6 +857,7 @@ impl Backend for DemoBackend {
                 key: key.into(),
                 name: name.into(),
                 voice_id: None,
+                suggestions: Vec::new(),
             }),
         }
         Ok(())
@@ -1019,6 +1024,7 @@ impl Backend for DemoBackend {
                 duration_ms: dur,
                 language: "ru".into(),
                 expected_speakers: None,
+                participant_hints: Vec::new(),
                 tracks: vec![],
                 bookmarks: r
                     .marks
@@ -1029,6 +1035,7 @@ impl Backend for DemoBackend {
                     key: "them".into(),
                     name: "Собеседник".into(),
                     voice_id: None,
+                    suggestions: Vec::new(),
                 }],
                 asr_model: Some("gigaam-v3-rnnt".into()),
                 status: MeetingStatus::Processing {
