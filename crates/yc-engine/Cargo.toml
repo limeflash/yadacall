@@ -1,5 +1,6 @@
 [package]
 name = "yc-engine"
+description = "YadaCall orchestration: recording sessions, live transcription, job pipeline"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,3 +8,19 @@ license.workspace = true
 
 [dependencies]
 yc-core.workspace = true
+yc-text.workspace = true
+yc-audio.workspace = true
+yc-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+async-trait = "0.1"
+crossbeam-channel = "0.5"
+
+[dev-dependencies]
+tempfile = "3"

@@ -11,6 +11,7 @@
 //! [`encode_flac`] for retention, [`prevent_sleep`] and [`disk`] helpers, [`devices`] for the UI.
 
 pub mod config;
+pub mod decode;
 pub mod devices;
 pub mod disk;
 pub mod flac;
@@ -28,6 +29,7 @@ mod pipeline;
 mod supervisor;
 
 pub use config::{AudioFrame, DeviceSel, RecorderConfig, RecorderEvent, SilenceConfig};
+pub use decode::{DecodeInfo, decode_to_16k_mono};
 pub use devices::{
     DeviceInfo, input_is_bluetooth, list_input_devices, list_output_devices,
     output_is_builtin_speakers, system_audio_support,
