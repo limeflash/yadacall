@@ -26,6 +26,7 @@ use yc_store::SearchFilters;
 
 use crate::adapters::hub::{Insights, ModelHub};
 use crate::adapters::llm::Llm;
+use crate::adapters::runtime_keeper::RuntimeKeeper;
 use crate::adapters::{Prefs, SharedPrefs, SummaryConfig, ml, read_prefs};
 use crate::api::*;
 use crate::{paths, permissions};
@@ -81,6 +82,7 @@ pub struct EngineBackend {
     hub: Arc<ModelHub>,
     insights: Arc<Insights>,
     llm: Arc<Llm>,
+    keeper: Arc<RuntimeKeeper>,
     prefs: SharedPrefs,
     data_dir: PathBuf,
     events: EventSink,
@@ -116,7 +118,17 @@ impl EngineBackend {
             russian: russian_system,
             ..Prefs::default()
         }));
-        let llm = Llm::new(Arc::clone(&hub), Arc::clone(&insights), Arc::clone(&prefs));
+        let keeper = RuntimeKeeper::new(
+            Arc::clone(&hub),
+            Arc::clone(&insights),
+            Arc::clone(&cfg.events),
+        );
+        let llm = Llm::new(
+            Arc::clone(&hub),
+            Arc::clone(&insights),
+            Arc::clone(&keeper),
+            Arc::clone(&prefs),
+        );
         let ports = Ports {
             asr: Arc::new(ml::Asr::new(Arc::clone(&hub), Arc::clone(&prefs))),
             vad: Arc::new(ml::Vad::new(&hub)),
@@ -141,6 +153,7 @@ impl EngineBackend {
             hub,
             insights,
             llm,
+            keeper: Arc::clone(&keeper),
             prefs,
             data_dir: cfg.data_dir.clone(),
             events: cfg.events,
@@ -158,6 +171,8 @@ impl EngineBackend {
         }
         backend.sync_prefs();
         backend.spawn_event_pump();
+        // A broken or removed llama.cpp runtime is repaired in the background.
+        tokio::spawn(keeper.validate_in_background());
         // Existing installs that predate the automatic search-model download.
         let me = Arc::clone(&backend);
         tokio::spawn(async move { me.queue_default_embedder().await });

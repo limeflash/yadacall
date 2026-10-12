@@ -219,4 +219,7 @@ export const en: Record<string, string> = {
   "Не удалось обработать запись. Попробуй повторить обработку.": "Could not process the recording. Try processing it again.",
   "измерено: ≈ {x} абзацев в секунду": "measured: ≈ {x} passages per second",
   "измерено: ≈ {x} токенов в секунду": "measured: ≈ {x} tokens per second",
+  "Не удалось установить рантайм llama.cpp. Проверь интернет и повтори.": "Could not install the llama.cpp runtime. Check your connection and try again.",
+  "Ставлю рантайм {name} · {size}… {p}%": "Installing runtime {name} · {size}… {p}%",
+  "Рантайм": "Runtime", "установлен": "installed", "поставится при первом запуске": "installs on first use", "Переустановить": "Reinstall",
 };

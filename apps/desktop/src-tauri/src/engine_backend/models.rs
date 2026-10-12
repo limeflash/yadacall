@@ -19,7 +19,7 @@ use crate::adapters::hub::{EMBED_E5_SMALL, ModelHub, SPEAKER_CAMPPLUS, runtime_b
 use crate::adapters::read_prefs;
 use crate::api::{
     BenchmarkResult, EventSink, HardwareProfile, ModelDownload, ModelEntry, ModelKind,
-    ModelsOverview, Verdict,
+    ModelsOverview, RuntimeInfo, Verdict,
 };
 
 /// A download in flight (or paused): its control and where its events go.
@@ -188,7 +188,19 @@ impl EngineBackend {
             .unwrap_or_else(|| hardware.cpu_brand.clone());
         let ram_gb = (hardware.total_ram_bytes as f64 / (1u64 << 30) as f64).round() as u32;
         std::fs::create_dir_all(self.hub.root().join("models")).ok();
+        let runtime = self
+            .keeper
+            .status()
+            .await
+            .map(|(pack, installed)| RuntimeInfo {
+                name: format!("llama.cpp {}", pack.release_tag),
+                size_bytes: pack.size + pack.extra_assets.iter().map(|a| a.size).sum::<u64>(),
+                id: pack.id,
+                installed,
+                busy: self.keeper.busy(),
+            });
         Ok(ModelsOverview {
+            runtime,
             hardware: HardwareProfile {
                 label: format!("{chip} · {ram_gb} {}", if russian { "ГБ" } else { "GB" }),
                 chip,
@@ -204,6 +216,18 @@ impl EngineBackend {
 
     /// Starts or resumes a download. Returns immediately; progress goes to `sink`.
     pub(super) async fn start_download(self: &Arc<Self>, id: &str, sink: EventSink) -> Result<()> {
+        if let Some((pack, _)) = self.keeper.status().await
+            && pack.id == id
+        {
+            // "Переустановить" on the runtime row: runs in the background, progress goes to `sink`.
+            let keeper = Arc::clone(&self.keeper);
+            tokio::spawn(async move {
+                if let Err(e) = keeper.reinstall(sink).await {
+                    tracing::warn!("runtime reinstall failed: {e}");
+                }
+            });
+            return Ok(());
+        }
         let spec = self.hub.spec(id)?.clone();
         {
             let g = self.lock();
@@ -319,6 +343,11 @@ impl EngineBackend {
             if spec.kind == CatKind::Asr {
                 me.queue_default_embedder().await;
             }
+            if spec.kind == CatKind::Llm
+                && let Err(e) = me.keeper.ensure().await
+            {
+                tracing::warn!("llama.cpp runtime is not usable: {e}");
+            }
             if spec.kind == CatKind::Embed {
                 me.settle_embedder();
                 // Resets the engine's cached "no embedder" and indexes the meetings that exist.
@@ -397,7 +426,7 @@ impl EngineBackend {
         if background && self.engine().recording().is_some() {
             return Err(Error::Invalid("a recording is in progress".into()));
         }
-        let measured = bench::run(&self.hub, &self.insights, spec).await?;
+        let measured = bench::run(&self.hub, &self.insights, &self.keeper, spec).await?;
         tracing::info!("benchmark {}: {:.1}", spec.id, measured.value);
         Ok(measured.value)
     }
