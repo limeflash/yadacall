@@ -80,6 +80,9 @@ pub struct RecorderStartOptions {
     pub expected_speakers: Option<u8>,
     #[serde(default)]
     pub mic_device: Option<String>,
+    /// People invited to the calendar event behind the recording (names and emails).
+    #[serde(default)]
+    pub participant_hints: Vec<yc_core::meeting::ParticipantHint>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]

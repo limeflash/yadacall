@@ -15,7 +15,7 @@ export type MeetingStatus =
   | { state: "failed"; stage: Stage; message: string; retryable: boolean };
 
 export interface Bookmark { atMs: Ms; label?: string }
-export interface Participant { key: string; name: string; voiceId?: string }
+export interface Participant { key: string; name: string; voiceId?: string; /** Invite names ranked as likely identities of this speaker. */ suggestions?: string[] }
 export interface TrackInfo { kind: TrackKind; device: string; offsetMs: Ms; samples: number }
 
 /** `meeting.json` */
@@ -299,7 +299,7 @@ export interface JoinOutcome {
   /** Remote people expected; absent when the guest list is unknown. */
   expectedSpeakers?: number;
   /** Display names of the other attendees. */
-  participants?: string[];
+  participants?: { name: string; email?: string }[];
 }
 
 /** "unconfigured": this build has no Google OAuth client; `docsUrl` explains how to add one. */

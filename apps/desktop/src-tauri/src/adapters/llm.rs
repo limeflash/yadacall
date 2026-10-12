@@ -431,6 +431,7 @@ mod tests {
                 key: "s1".into(),
                 name: "Иван".into(),
                 voice_id: None,
+                suggestions: Vec::new(),
             }],
             bookmarks: vec![],
         };

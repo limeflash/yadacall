@@ -22,6 +22,7 @@ use yc_connect as yc;
 use yc_connect::detect::system_detector;
 use yc_connect::google::TokenStore;
 use yc_core::Error;
+use yc_core::meeting::ParticipantHint;
 
 use crate::integrations_api::*;
 
@@ -423,7 +424,7 @@ impl RealIntegrations {
         open: bool,
     ) -> JoinOutcome {
         let pin = lock(&self.prefs).reminder.open_in_account;
-        let remote = remote_attendees(e);
+        let remote = remote_hints(e);
         JoinOutcome {
             title: e.title.clone(),
             meet_url: if open {
@@ -436,7 +437,7 @@ impl RealIntegrations {
             ends_at: e.end,
             event_id: Some(e.id.clone()),
             expected_speakers: if record {
-                expected_speakers(&remote)
+                expected_speakers(remote.len())
             } else {
                 None
             },
@@ -740,8 +741,8 @@ fn local_midnight(now: DateTime<Utc>) -> DateTime<Utc> {
         .map_or(now, |t| t.with_timezone(&Utc))
 }
 
-/// Display names of the people the user will talk to: everyone but the user, declined invitations and rooms.
-pub fn remote_attendees(e: &yc::AgendaEvent) -> Vec<String> {
+/// The people the user will talk to (name and email): everyone but the user, declined invitations and rooms.
+pub fn remote_hints(e: &yc::AgendaEvent) -> Vec<ParticipantHint> {
     e.attendees
         .iter()
         .filter(|a| !a.is_self && a.response.as_deref() != Some("declined"))
@@ -751,19 +752,28 @@ pub fn remote_attendees(e: &yc::AgendaEvent) -> Vec<String> {
                 .is_some_and(|m| m.ends_with("@resource.calendar.google.com"))
         })
         .filter_map(|a| {
-            a.name
+            let name = a
+                .name
                 .as_deref()
                 .map(str::trim)
                 .filter(|n| !n.is_empty())
-                .or_else(|| a.email.as_deref().and_then(|m| m.split('@').next()))
-                .map(str::to_owned)
+                .or_else(|| a.email.as_deref().and_then(|m| m.split('@').next()))?;
+            Some(ParticipantHint {
+                name: name.to_owned(),
+                email: a.email.clone().filter(|m| !m.trim().is_empty()),
+            })
         })
         .collect()
 }
 
+/// Display names of [`remote_hints`].
+pub fn remote_attendees(e: &yc::AgendaEvent) -> Vec<String> {
+    remote_hints(e).into_iter().map(|h| h.name).collect()
+}
+
 /// `None` when the guest list is unknown (an ad-hoc event), so diarisation decides.
-pub fn expected_speakers(remote: &[String]) -> Option<u8> {
-    (!remote.is_empty()).then(|| u8::try_from(remote.len()).unwrap_or(u8::MAX))
+pub fn expected_speakers(remote: usize) -> Option<u8> {
+    (remote > 0).then(|| u8::try_from(remote).unwrap_or(u8::MAX))
 }
 
 fn platform_name(app: &yc::types::DetectedApp) -> String {
@@ -971,8 +981,11 @@ mod tests {
         let e = event("lime@company.com", "e1", 5, guests());
         let names = remote_attendees(&e);
         assert_eq!(names, ["Аня Петрова", "boris"]);
-        assert_eq!(expected_speakers(&names), Some(2));
-        assert_eq!(expected_speakers(&[]), None);
+        assert_eq!(expected_speakers(names.len()), Some(2));
+        assert_eq!(expected_speakers(0), None);
+        let hints = remote_hints(&e);
+        assert_eq!(hints[0].email.as_deref(), Some("anya@company.com"));
+        assert_eq!(hints[1].name, "boris");
     }
 
     #[test]
@@ -988,7 +1001,12 @@ mod tests {
                 .contains("authuser=lime%40company.com")
         );
         assert_eq!(out.expected_speakers, Some(2));
-        assert_eq!(out.participants, ["Аня Петрова", "boris"]);
+        let names: Vec<_> = out.participants.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Аня Петрова", "boris"]);
+        assert_eq!(
+            out.participants[0].email.as_deref(),
+            Some("anya@company.com")
+        );
         assert_eq!(out.event_id.as_deref(), Some("e1"));
 
         let no_browser = r.real.outcome(&e, &meta, true, false);

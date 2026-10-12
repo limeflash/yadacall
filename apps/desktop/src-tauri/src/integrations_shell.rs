@@ -7,7 +7,7 @@
 //! the notification texts below list the actions and the tray popover — which shows the same "Следующая
 //! встреча" card with the real buttons — is where they are actually pressed.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -17,8 +17,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt as _;
 
 use yc_core::events::{EngineEvent, RecorderState};
-use yc_core::meeting::MeetingStatus;
-use yc_core::transcript::{SPEAKER_ME, SPEAKER_THEM};
 
 use crate::api::{Backend, RecorderStartOptions};
 use crate::integrations_api::*;
@@ -42,8 +40,6 @@ pub struct IntegrationShell {
     dirty: AtomicBool,
     /// "Звонок без записи" is shown until this instant.
     no_record_until: Mutex<Option<DateTime<Utc>>>,
-    /// Attendee names of recordings started from the calendar, by meeting id, applied once the transcript is ready.
-    hints: Mutex<HashMap<String, Vec<String>>>,
 }
 
 /// The sink handed to the [`Integrations`] implementation: forwards to every webview and reacts in the shell.
@@ -316,6 +312,7 @@ pub async fn apply_join(app: &AppHandle, backend: &Arc<dyn Backend>, out: &JoinO
         let opts = RecorderStartOptions {
             title: Some(out.title.clone()),
             expected_speakers: out.expected_speakers,
+            participant_hints: out.participants.clone(),
             ..Default::default()
         };
         match backend.recorder_start(opts).await {
@@ -325,79 +322,22 @@ pub async fn apply_join(app: &AppHandle, backend: &Arc<dyn Backend>, out: &JoinO
     }
 }
 
-/// Links the new meeting to its calendar event and remembers who was invited.
+/// Links the new meeting to its calendar event (the engine gets the invitees through the start options).
 fn note_started(app: &AppHandle, out: &JoinOutcome, meeting_id: Option<String>) {
     let Some(meeting_id) = meeting_id else { return };
     if let (Some(event_id), Some(real)) = (&out.event_id, app.try_state::<ConnectHandle>()) {
         real.0.note_meeting(event_id, &meeting_id);
     }
-    if !out.participants.is_empty()
-        && let Some(sh) = app.try_state::<IntegrationShell>()
-    {
-        sh.hints
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(meeting_id, out.participants.clone());
-    }
 }
 
 /// Engine events the integrations care about: the recorder state (call detection must ignore our own microphone
-/// use) and a finished transcript (the invited people can now be put on the speakers).
+/// use).
 pub fn on_engine_event(app: &AppHandle, e: &EngineEvent) {
-    match e {
-        EngineEvent::Recorder { state, .. } => {
-            let recording = matches!(state, RecorderState::Recording | RecorderState::Paused);
-            if let Some(real) = app.try_state::<ConnectHandle>() {
-                real.0.set_recording(recording);
-            }
+    if let EngineEvent::Recorder { state, .. } = e {
+        let recording = matches!(state, RecorderState::Recording | RecorderState::Paused);
+        if let Some(real) = app.try_state::<ConnectHandle>() {
+            real.0.set_recording(recording);
         }
-        EngineEvent::Status { meeting, status } => {
-            let id = meeting.to_string();
-            match status {
-                MeetingStatus::Ready => {
-                    let names = app
-                        .try_state::<IntegrationShell>()
-                        .and_then(|sh| sh.hints.lock().ok()?.remove(&id));
-                    if let Some(names) = names {
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let backend = app.state::<Arc<dyn Backend>>();
-                            name_speakers(backend.inner(), &id, &names).await;
-                        });
-                    }
-                }
-                MeetingStatus::Failed { .. } => {
-                    if let Some(sh) = app.try_state::<IntegrationShell>() {
-                        sh.hints
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .remove(&id);
-                    }
-                }
-                _ => {}
-            }
-        }
-        _ => {}
-    }
-}
-
-/// With exactly one invited person the remote side is that person; with several, the diarised voices cannot be
-/// matched to names, so they are left for the user to name.
-pub async fn name_speakers(backend: &Arc<dyn Backend>, meeting_id: &str, names: &[String]) {
-    let [name] = names else { return };
-    let Ok(detail) = backend.get_meeting(meeting_id).await else {
-        return;
-    };
-    let diarised = detail
-        .meeting
-        .participants
-        .iter()
-        .any(|p| p.key != SPEAKER_ME);
-    if diarised {
-        return; // the voice library already named someone, or several voices were told apart
-    }
-    if let Err(e) = backend.rename_speaker(meeting_id, SPEAKER_THEM, name).await {
-        tracing::warn!("could not name the remote speaker: {e}");
     }
 }
 

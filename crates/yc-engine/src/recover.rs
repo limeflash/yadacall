@@ -159,6 +159,7 @@ impl Engine {
             expected_speakers: opts.expected_speakers,
             source: Source::Import,
             bookmarks: Vec::new(),
+            participant_hints: Vec::new(),
         };
         let dir2 = dir.clone();
         self.blocking(move |_| {

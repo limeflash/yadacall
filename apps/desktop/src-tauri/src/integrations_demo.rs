@@ -259,7 +259,14 @@ fn outcome(st: &State, event_id: &str, record: bool, open_url: bool) -> Result<J
         ends_at: e.end,
         event_id: Some(e.id.clone()),
         expected_speakers: u8::try_from(e.attendees.len()).ok().filter(|n| *n > 0),
-        participants: e.attendees.clone(),
+        participants: e
+            .attendees
+            .iter()
+            .map(|name| yc_core::meeting::ParticipantHint {
+                name: name.clone(),
+                email: None,
+            })
+            .collect(),
     })
 }
 

@@ -101,7 +101,7 @@
               <span class="sub flex"><span style="flex: 1">{t(stageLabel[st.stage])}</span><span class="mg-mono yc-num pct">{Math.round(st.progress * 100)}%</span></span>
               <span aria-hidden="true" class="bar"><span style="width: {Math.round(st.progress * 100)}%"></span></span>
             {:else if st.state === "failed"}
-              <span class="sub warn">{st.message}</span>
+              <span class="sub warn">{t(st.message)}</span>
             {:else}
               <span class="yc-ellipsis sub">{m.status.state === "recording" ? t("Идёт запись — текст пишется на лету") : m.snippet ?? ""}</span>
             {/if}

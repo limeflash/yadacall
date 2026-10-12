@@ -36,6 +36,7 @@ fn meeting(title: &str) -> Meeting {
         duration_ms: 60_000,
         language: "ru".to_owned(),
         expected_speakers: None,
+        participant_hints: Vec::new(),
         tracks: vec![
             TrackInfo {
                 kind: TrackKind::Mic,

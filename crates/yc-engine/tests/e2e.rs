@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use common::*;
 use yc_core::events::EngineEvent;
-use yc_core::meeting::{MeetingStatus, Stage, TrackKind};
+use yc_core::meeting::{MeetingStatus, ParticipantHint, Stage, TrackKind};
 use yc_engine::ExportFormat;
 use yc_engine::testing::{FakeAsrFactory, SyntheticRecorder, TrackScript, silence, speech};
 use yc_store::SearchFilters;
@@ -151,7 +151,16 @@ async fn call_to_transcript_summary_and_tasks() {
 async fn naming_a_speaker_teaches_the_voice_for_the_next_meeting() {
     let env = Env::new(call_scripts());
     let engine = env.open().await;
-    let first = record_call(&env, &engine, "Первый").await;
+    let first = record_call_with_hints(
+        &env,
+        &engine,
+        "Первый",
+        vec![ParticipantHint {
+            name: "Анна".into(),
+            email: Some("anna@example.com".into()),
+        }],
+    )
+    .await;
     ready(&engine, first).await;
 
     engine
@@ -160,7 +169,19 @@ async fn naming_a_speaker_teaches_the_voice_for_the_next_meeting() {
         .expect("rename");
     let detail = engine.get_meeting(first).await.expect("meeting");
     assert_eq!(detail.meeting.participants[0].name, "Анна");
-    assert!(detail.meeting.participants[0].voice_id.is_some());
+    let voice_id = detail.meeting.participants[0]
+        .voice_id
+        .as_deref()
+        .expect("voice profile");
+    assert_eq!(
+        detail.meeting.participant_hints[0].email.as_deref(),
+        Some("anna@example.com")
+    );
+    let contacts: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(env.library().join("voice-emails.json")).expect("voice emails saved"),
+    )
+    .expect("voice emails are JSON");
+    assert_eq!(contacts[voice_id][0], "anna@example.com");
     assert!(
         engine
             .copy_for_claude(first)

@@ -121,9 +121,9 @@ pub struct JoinOutcome {
     /// How many remote people to expect; `None` when the attendee list is unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_speakers: Option<u8>,
-    /// Display names of the other attendees, used to name the speakers once the transcript is ready.
+    /// The other attendees (name and email), passed to the engine to name the speakers.
     #[serde(default)]
-    pub participants: Vec<String>,
+    pub participants: Vec<yc_core::meeting::ParticipantHint>,
 }
 
 // ---- connections catalog ------------------------------------------------------------------------------

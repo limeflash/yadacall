@@ -86,6 +86,20 @@ pub struct Participant {
     /// Known voice profile this participant was matched to, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_id: Option<String>,
+    /// Calendar invite names ranked as possible identities for this speaker.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<String>,
+}
+
+/// A person invited to the calendar event that started a meeting.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParticipantHint {
+    /// Display name from the calendar invite.
+    pub name: String,
+    /// Email address, when the calendar provider included it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 
 /// Where a meeting is in its life cycle. Mirrors the job pipeline, coarse enough for the UI.
@@ -137,8 +151,45 @@ pub struct Meeting {
     pub bookmarks: Vec<Bookmark>,
     #[serde(default)]
     pub participants: Vec<Participant>,
+    /// Calendar invitees supplied when recording started.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub participant_hints: Vec<ParticipantHint>,
     /// Catalog id of the ASR model that produced the transcript.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asr_model: Option<String>,
     pub status: MeetingStatus,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_meeting_defaults_participant_hints_and_suggestions() {
+        let mut meeting: Meeting = serde_json::from_value(serde_json::json!({
+            "id": "0190a000-0000-7000-8000-000000000001",
+            "title": "Синк",
+            "startedAt": "2026-10-12T10:00:00Z",
+            "durationMs": 1000,
+            "language": "ru",
+            "tracks": [],
+            "participants": [{ "key": "s1", "name": "Спикер 1" }],
+            "status": { "state": "ready" }
+        }))
+        .expect("legacy meeting loads");
+
+        assert!(meeting.participant_hints.is_empty());
+        assert!(meeting.participants[0].suggestions.is_empty());
+
+        meeting.participant_hints.push(ParticipantHint {
+            name: "Анна Ковалёва".into(),
+            email: Some("anna@example.com".into()),
+        });
+        meeting.participants[0]
+            .suggestions
+            .push("Анна Ковалёва".into());
+        let json = serde_json::to_value(&meeting).expect("meeting serializes");
+        assert_eq!(json["participantHints"][0]["email"], "anna@example.com");
+        assert_eq!(json["participants"][0]["suggestions"][0], "Анна Ковалёва");
+    }
 }

@@ -209,6 +209,18 @@ impl EngineBackend {
                     Ok(ev) => {
                         let Some(me) = weak.upgrade() else { break };
                         me.on_event(&ev);
+                        let ev = match ev {
+                            EngineEvent::Status { meeting, status } => {
+                                if let MeetingStatus::Failed { message, .. } = &status {
+                                    tracing::warn!("meeting {meeting} failed: {message}");
+                                }
+                                EngineEvent::Status {
+                                    meeting,
+                                    status: crate::commands::friendly_status(status),
+                                }
+                            }
+                            other => other,
+                        };
                         (me.events)(ev);
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -378,7 +390,7 @@ impl Backend for EngineBackend {
                     None
                 },
                 snippet,
-                status: row.status,
+                status: crate::commands::friendly_status(row.status),
             });
         }
         Ok(out)
@@ -387,10 +399,12 @@ impl Backend for EngineBackend {
     async fn get_meeting(&self, id: &str) -> Result<MeetingDetail> {
         let detail = self.engine.get_meeting(mid(id)?).await?;
         let audio_url = self.audio_url(&detail).await;
+        let mut meeting = detail.meeting;
+        meeting.status = crate::commands::friendly_status(meeting.status);
         Ok(MeetingDetail {
             has_audio: audio_url.is_some(),
             audio_url,
-            meeting: detail.meeting,
+            meeting,
             turns: detail.turns,
             summary: detail.summary,
         })
@@ -481,6 +495,7 @@ impl Backend for EngineBackend {
                 .map_or(MicChoice::Configured, MicChoice::Device),
             system_audio: true,
             language: None,
+            participant_hints: opts.participant_hints.clone(),
         };
         self.engine.start_recording(start).await?;
         let russian = self.engine.settings().russian();

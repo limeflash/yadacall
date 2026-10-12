@@ -18,6 +18,7 @@ fn meeting() -> Meeting {
         duration_ms: 3_661_000,
         language: "ru".to_owned(),
         expected_speakers: None,
+        participant_hints: Vec::new(),
         tracks: vec![
             TrackInfo {
                 kind: TrackKind::Mic,
@@ -170,6 +171,7 @@ fn renders_transcript_summary_and_claude_copy() {
         key: "them".to_owned(),
         name: "Аня".to_owned(),
         voice_id: None,
+        suggestions: Vec::new(),
     });
     meeting.bookmarks.push(Bookmark {
         at_ms: 12_400,

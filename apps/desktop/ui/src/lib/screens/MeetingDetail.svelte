@@ -214,8 +214,18 @@
         <h2>{t("Назвать спикеров")}</h2>
         <p>{t("Имена сохранятся во встрече и подставятся в итоги и задачи.")}</p>
         {#each Object.keys(nameDrafts) as k (k)}
-          <label class="nrow"><Avatar name={nameDrafts[k] || "?"} index={speakerIndex(k)} size={26} />
-            <input placeholder={t("Гость")} bind:value={nameDrafts[k]} /></label>
+          {@const picks = m?.participants.find((p) => p.key === k)?.suggestions ?? []}
+          <div class="ngroup">
+            {#if picks.length}
+              <div class="picks" role="group" aria-label={t("Подсказки из приглашения")}>
+                {#each picks as name (name)}
+                  <button type="button" class="pick" class:on={nameDrafts[k].trim() === name} aria-pressed={nameDrafts[k].trim() === name} onclick={() => (nameDrafts[k] = name)}>{name}</button>
+                {/each}
+              </div>
+            {/if}
+            <label class="nrow"><Avatar name={nameDrafts[k] || "?"} index={speakerIndex(k)} size={26} />
+              <input placeholder={t("Гость")} bind:value={nameDrafts[k]} /></label>
+          </div>
         {/each}
         <div class="nbtns"><Button size="md" variant="ghost" onclick={() => (namesOpen = false)}>{t("Отмена")}</Button><Button size="md" variant="primary" onclick={saveNames}>{t("Сохранить")}</Button></div>
       </div>
@@ -400,6 +410,11 @@
   .names { position: absolute; z-index: 7; left: 50%; top: 120px; transform: translateX(-50%); width: min(380px, calc(100% - 32px)); box-sizing: border-box; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 10px; transform-origin: top center; }
   .names h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
   .names p { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+  .ngroup { display: flex; flex-direction: column; gap: 6px; }
+  .picks { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 36px; }
+  .pick { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; }
+  .pick:hover { border-color: var(--accent-line); }
+  .pick.on { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
   .nrow { display: flex; align-items: center; gap: 10px; }
   .nrow input, .title-edit, .find input { flex: 1; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; }
   .nbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }

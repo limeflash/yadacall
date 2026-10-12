@@ -8,8 +8,10 @@ use std::time::{Duration, Instant};
 
 use yc_audio::writer::{PauseSpan, meta_path, read_meta};
 use yc_core::events::{EngineEvent, NoticeLevel};
-use yc_core::meeting::{Meeting, MeetingId, MeetingStatus, Stage, TrackInfo, TrackKind};
-use yc_core::transcript::{Segment, Transcript};
+use yc_core::meeting::{
+    Meeting, MeetingId, MeetingStatus, Participant, Stage, TrackInfo, TrackKind,
+};
+use yc_core::transcript::{SPEAKER_THEM, Segment, Transcript};
 use yc_core::{Error, Result, samples_to_ms};
 use yc_text::{
     EchoFilterConfig, HallucinationConfig, filter_echo_duplicates, filter_hallucinations,
@@ -101,6 +103,7 @@ impl Engine {
             tracks: tracks.clone(),
             bookmarks: meta.bookmarks.clone(),
             participants: Vec::new(),
+            participant_hints: meta.participant_hints.clone(),
             asr_model: read_asr_model(dir),
             status: MeetingStatus::Ready,
         };
@@ -114,6 +117,9 @@ impl Engine {
             &tracks,
             transcribe_error.is_some(),
         );
+        if has_system_speech && !plan.contains(&"diarize") {
+            meeting.participants = undiarised_participant(&meeting);
+        }
         meeting.status = match &transcribe_error {
             Some(e) => MeetingStatus::Failed {
                 stage: Stage::Transcribe,
@@ -311,6 +317,37 @@ impl Engine {
         }
         Ok(())
     }
+}
+
+fn undiarised_participant(meeting: &Meeting) -> Vec<Participant> {
+    let mut names = Vec::new();
+    for hint in &meeting.participant_hints {
+        let name = hint.name.trim();
+        if !name.is_empty() && !names.iter().any(|existing: &String| existing == name) {
+            names.push(name.to_owned());
+        }
+    }
+    if names.is_empty() {
+        return Vec::new();
+    }
+    let english = meeting
+        .language
+        .split('-')
+        .next()
+        .is_some_and(|language| language.eq_ignore_ascii_case("en"));
+    let single = names.len() == 1;
+    vec![Participant {
+        key: SPEAKER_THEM.to_owned(),
+        name: if single {
+            names.remove(0)
+        } else if english {
+            "Them".to_owned()
+        } else {
+            "Собеседник".to_owned()
+        },
+        voice_id: None,
+        suggestions: if single { Vec::new() } else { names },
+    }]
 }
 
 /// Sorts sample ranges per track and unions the overlapping ones, so no audio is transcribed twice.
