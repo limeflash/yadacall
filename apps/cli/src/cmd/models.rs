@@ -10,7 +10,7 @@ use yc_hub::{
     benchmark,
     calibration::Calibration,
     catalog,
-    downloader::{DownloadControl, Downloader, ProgressCallback},
+    downloader::{DownloadControl, DownloadOptions, Downloader, ProgressCallback},
     hw, predictor,
 };
 
@@ -35,6 +35,9 @@ pub enum ModelAction {
         /// Prefer the Hugging Face mirror before the primary host.
         #[arg(long, value_enum)]
         mirror: Option<Mirror>,
+        /// Maximum number of parallel download connections (1–16).
+        #[arg(long, value_parser = clap::value_parser!(u8).range(1..=16))]
+        connections: Option<u8>,
     },
     /// Verify installed file sizes and SHA-256 digests.
     Verify {
@@ -67,7 +70,11 @@ pub enum Mirror {
 pub async fn run(args: ModelsArgs) -> anyhow::Result<()> {
     match args.action {
         None => list_models(args.json).await,
-        Some(ModelAction::Pull { id, mirror }) => pull_model(&id, mirror).await,
+        Some(ModelAction::Pull {
+            id,
+            mirror,
+            connections,
+        }) => pull_model(&id, mirror, connections).await,
         Some(ModelAction::Verify { id }) => verify_model(&id).await,
         Some(ModelAction::Rm { id }) => remove_model(&id).await,
         Some(ModelAction::RefreshCatalog { output }) => refresh_catalog(&output).await,
@@ -125,7 +132,11 @@ async fn list_models(json: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn pull_model(id: &str, mirror: Option<Mirror>) -> anyhow::Result<()> {
+async fn pull_model(
+    id: &str,
+    mirror: Option<Mirror>,
+    connections: Option<u8>,
+) -> anyhow::Result<()> {
     let mut model = catalog::model(&catalog::embedded()?, id)?.clone();
     if matches!(mirror, Some(Mirror::HfMirror)) {
         for file in &mut model.files {
@@ -159,7 +170,11 @@ async fn pull_model(id: &str, mirror: Option<Mirror>) -> anyhow::Result<()> {
             }
         }
     });
-    let downloader = Downloader::with_progress(&data_dir, Some(progress))?;
+    let mut options = DownloadOptions::default();
+    if let Some(connections) = connections {
+        options.connections = usize::from(connections);
+    }
+    let downloader = Downloader::with_progress_and_options(&data_dir, Some(progress), options)?;
     let control = DownloadControl::default();
     let installed = downloader.download_model(&model, &control).await?;
     bar.finish_with_message(format!("{} installed and verified", model.id));
