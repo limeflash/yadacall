@@ -59,6 +59,8 @@ impl std::str::FromStr for Backend {
     }
 }
 
+// Only constructed on macOS, where the CoreML execution provider exists.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CoreMlUnits {
     All,
@@ -318,6 +320,7 @@ fn cuda_plan() -> Vec<(Backend, Option<CoreMlUnits>)> {
     }
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
 fn create_candidate(
     path: &Path,
     bytes: Option<&[u8]>,
