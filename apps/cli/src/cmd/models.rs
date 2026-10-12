@@ -203,7 +203,7 @@ async fn refresh_catalog(path: &std::path::Path) -> anyhow::Result<()> {
 }
 
 fn format_bytes(bytes: u64) -> String {
-    const UNITS: [&str; 4] = ["B", "KB", "GB", "TB"];
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut value = bytes as f64;
     let mut unit = 0usize;
     while value >= 1000.0 && unit + 1 < UNITS.len() {

@@ -127,13 +127,15 @@ pub fn predict(
                 .requires
                 .min_ram_bytes
                 .max(model.files.iter().map(|file| file.size).sum::<u64>() + 256 * MIB);
+            // Indexing runs in the background after the call, so tens of seconds per hour of
+            // meeting is perfectly fine; only minutes start to feel slow.
             verdict = if mem_needed > mem_available {
                 Verdict::WontRun
-            } else if seconds <= 5.0 {
+            } else if seconds <= 30.0 {
                 Verdict::Great
-            } else if seconds <= 20.0 {
+            } else if seconds <= 120.0 {
                 Verdict::Ok
-            } else if seconds <= 90.0 {
+            } else if seconds <= 600.0 {
                 Verdict::Slow
             } else {
                 Verdict::WontRun
@@ -366,6 +368,13 @@ fn headline(inputs: HeadlineInputs) -> String {
         total_ram,
         russian,
     } = inputs;
+    if verdict == Verdict::WontRun && memory <= available {
+        return if russian {
+            "Не потянет · слишком медленно на этом компьютере".to_owned()
+        } else {
+            "Too slow on this computer".to_owned()
+        };
+    }
     if verdict == Verdict::WontRun {
         return if russian {
             format!(

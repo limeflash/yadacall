@@ -313,7 +313,7 @@
       },
       "cost": {
         "params": 118000000,
-        "gflopPerPassage": 120.0,
+        "gflopPerPassage": 25.0,
         "efficiency": 0.65,
         "bytes": 135137323
       }
@@ -407,7 +407,7 @@
       },
       "cost": {
         "params": 300000000,
-        "gflopPerPassage": 307.0,
+        "gflopPerPassage": 110.0,
         "efficiency": 0.65,
         "bytes": 202286378
       }
@@ -457,7 +457,7 @@
       },
       "cost": {
         "params": 600000000,
-        "gflopPerPassage": 614.0,
+        "gflopPerPassage": 470.0,
         "efficiency": 0.65,
         "bytes": 624951244
       }
