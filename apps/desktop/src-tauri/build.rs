@@ -43,6 +43,23 @@ const COMMANDS: &[&str] = &[
     "popover_fit",
     "hide_popover",
     "quit_app",
+    "accounts",
+    "add_google_account",
+    "cancel_add_account",
+    "remove_account",
+    "reauth_account",
+    "set_account_policy",
+    "set_account_visible",
+    "agenda",
+    "set_event_recording",
+    "join_and_record",
+    "join_without_recording",
+    "connections",
+    "toggle_want",
+    "reminder_settings",
+    "set_reminder_settings",
+    "detected_call",
+    "resolve_detected_call",
 ];
 
 fn main() {

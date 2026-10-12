@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-connections"
+description = "Enables the connections command without any pre-configured scope."
+commands.allow = ["connections"]
+
+[[permission]]
+identifier = "deny-connections"
+description = "Denies the connections command without any pre-configured scope."
+commands.deny = ["connections"]

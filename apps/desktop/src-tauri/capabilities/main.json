@@ -51,6 +51,23 @@
     "allow-open-in-main",
     "allow-popover-fit",
     "allow-hide-popover",
-    "allow-quit-app"
+    "allow-quit-app",
+    "allow-accounts",
+    "allow-add-google-account",
+    "allow-cancel-add-account",
+    "allow-remove-account",
+    "allow-reauth-account",
+    "allow-set-account-policy",
+    "allow-set-account-visible",
+    "allow-agenda",
+    "allow-set-event-recording",
+    "allow-join-and-record",
+    "allow-join-without-recording",
+    "allow-connections",
+    "allow-toggle-want",
+    "allow-reminder-settings",
+    "allow-set-reminder-settings",
+    "allow-detected-call",
+    "allow-resolve-detected-call"
   ]
 }

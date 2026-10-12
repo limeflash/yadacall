@@ -22,6 +22,12 @@
     "allow-open-in-main",
     "allow-popover-fit",
     "allow-hide-popover",
-    "allow-quit-app"
+    "allow-quit-app",
+    "allow-agenda",
+    "allow-join-and-record",
+    "allow-join-without-recording",
+    "allow-detected-call",
+    "allow-resolve-detected-call",
+    "allow-reminder-settings"
   ]
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-account-policy"
+description = "Enables the set_account_policy command without any pre-configured scope."
+commands.allow = ["set_account_policy"]
+
+[[permission]]
+identifier = "deny-set-account-policy"
+description = "Denies the set_account_policy command without any pre-configured scope."
+commands.deny = ["set_account_policy"]

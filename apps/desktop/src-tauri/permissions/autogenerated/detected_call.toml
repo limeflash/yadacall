@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-detected-call"
+description = "Enables the detected_call command without any pre-configured scope."
+commands.allow = ["detected_call"]
+
+[[permission]]
+identifier = "deny-detected-call"
+description = "Denies the detected_call command without any pre-configured scope."
+commands.deny = ["detected_call"]

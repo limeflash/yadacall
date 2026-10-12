@@ -4,6 +4,10 @@
 pub mod api;
 pub mod commands;
 pub mod demo;
+pub mod integrations_api;
+pub mod integrations_commands;
+pub mod integrations_demo;
+pub mod integrations_shell;
 pub mod shell;
 
 use std::sync::{Arc, Mutex};
@@ -11,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 use api::Backend;
+use integrations_api::Integrations;
 
 /// Every command exposed to the webviews (also the ACL allow-list generated in `build.rs`).
 pub const COMMANDS: &[&str] = &[
@@ -54,6 +59,27 @@ pub const COMMANDS: &[&str] = &[
     "popover_fit",
     "hide_popover",
     "quit_app",
+];
+
+/// Commands of the integrations (`integrations_commands.rs`); same ACL rules as [`COMMANDS`].
+pub const INTEGRATION_COMMANDS: &[&str] = &[
+    "accounts",
+    "add_google_account",
+    "cancel_add_account",
+    "remove_account",
+    "reauth_account",
+    "set_account_policy",
+    "set_account_visible",
+    "agenda",
+    "set_event_recording",
+    "join_and_record",
+    "join_without_recording",
+    "connections",
+    "toggle_want",
+    "reminder_settings",
+    "set_reminder_settings",
+    "detected_call",
+    "resolve_detected_call",
 ];
 
 pub fn run() {
@@ -122,6 +148,23 @@ pub fn run() {
             commands::popover_fit,
             commands::hide_popover,
             commands::quit_app,
+            integrations_commands::accounts,
+            integrations_commands::add_google_account,
+            integrations_commands::cancel_add_account,
+            integrations_commands::remove_account,
+            integrations_commands::reauth_account,
+            integrations_commands::set_account_policy,
+            integrations_commands::set_account_visible,
+            integrations_commands::agenda,
+            integrations_commands::set_event_recording,
+            integrations_commands::join_and_record,
+            integrations_commands::join_without_recording,
+            integrations_commands::connections,
+            integrations_commands::toggle_want,
+            integrations_commands::reminder_settings,
+            integrations_commands::set_reminder_settings,
+            integrations_commands::detected_call,
+            integrations_commands::resolve_detected_call,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -138,6 +181,14 @@ pub fn run() {
             let backend: Arc<dyn Backend> = demo.clone();
             app.manage(backend);
             tauri::async_runtime::spawn(demo.run());
+
+            // Integrations live next to the backend, never inside it: the real `yc-connect` replaces this line.
+            let integrations =
+                integrations_demo::DemoIntegrations::new(integrations_shell::sink(&handle));
+            let i: Arc<dyn Integrations> = integrations.clone();
+            app.manage(i);
+            tauri::async_runtime::spawn(integrations.run());
+            integrations_shell::start(&handle);
 
             shell::create_popovers(&handle)?;
             shell::build_tray(&handle)?;

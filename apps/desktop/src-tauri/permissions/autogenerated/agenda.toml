@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agenda"
+description = "Enables the agenda command without any pre-configured scope."
+commands.allow = ["agenda"]
+
+[[permission]]
+identifier = "deny-agenda"
+description = "Denies the agenda command without any pre-configured scope."
+commands.deny = ["agenda"]
