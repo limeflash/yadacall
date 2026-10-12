@@ -3,6 +3,7 @@ import type { EngineEvent, IntegrationEvent, Level, RecorderSnapshot, Segment, S
 import { i18n, plural, t } from "./i18n/index.svelte";
 import { go } from "./router.svelte";
 import { toast } from "./toast.svelte";
+import { errText } from "./api/error";
 
 /** Global reactive app state. Components read from here; engine events and API calls write to it. */
 export const app = $state({
@@ -56,7 +57,7 @@ export async function saveSettings(patch: SettingsPatch) {
     app.settings = { ...app.settings, ...rest, summaries: { ...app.settings.summaries, ...(summaries ?? {}), apiKeySet: app.settings.summaries.apiKeySet || !!summaries?.apiKey } };
     if (patch.uiLanguage) i18n.lang = patch.uiLanguage;
   }
-  try { app.settings = await api.updateSettings(patch); } catch (e) { toast.error(String(e)); }
+  try { app.settings = await api.updateSettings(patch); } catch (e) { toast.error(e); }
 }
 
 const handlers: ((e: EngineEvent) => void)[] = [];
@@ -109,20 +110,20 @@ function onIntegration(e: IntegrationEvent) {
         const n = e.minutesBefore;
         toast(`${t("Через {n} {w}", { n, w: plural(n, ["минуту", "минуты", "минут"], ["minute", "minutes"]) })} · ${e.event.title}`, {
           actionLabel: t("Войти и записать"),
-          onAction: () => { integrations.joinAndRecord(e.event.id).then(() => go({ name: "record" })).catch((er) => toast.error(String(er))); },
+          onAction: () => { integrations.joinAndRecord(e.event.id).then(() => go({ name: "record" })).catch((er) => toast.error(er)); },
         });
         break;
       }
       case "callStarting":
         toast(`${t("Звонок начинается")} · ${e.event.title}`, {
           actionLabel: t("Войти и записать"),
-          onAction: () => { integrations.joinAndRecord(e.event.id).then(() => go({ name: "record" })).catch((er) => toast.error(String(er))); },
+          onAction: () => { integrations.joinAndRecord(e.event.id).then(() => go({ name: "record" })).catch((er) => toast.error(er)); },
         });
         break;
       case "callDetected":
         toast(t("Ты в звонке {p} — записать его?", { p: e.call.platform }), {
           actionLabel: t("Записать"),
-          onAction: () => { integrations.resolveDetectedCall(e.call.id, true).then(() => go({ name: "record" })).catch((er) => toast.error(String(er))); },
+          onAction: () => { integrations.resolveDetectedCall(e.call.id, true).then(() => go({ name: "record" })).catch((er) => toast.error(er)); },
         });
         break;
       case "authExpired":
@@ -137,11 +138,11 @@ export async function startRecording(opts: { title?: string; expectedSpeakers?: 
   try {
     setRecorder(await api.recorderStart(opts));
     app.rev++;
-  } catch (e) { toast.error(t("Не удалось начать запись") + ": " + String(e)); }
+  } catch (e) { toast.error(t("Не удалось начать запись") + ": " + errText(e)); }
 }
 export async function stopRecording(): Promise<string | undefined> {
   try { const id = await api.recorderStop(); setRecorder({ phase: "idle", elapsedMs: 0, bookmarks: [] }); app.rev++; return id; }
-  catch (e) { toast.error(String(e)); }
+  catch (e) { toast.error(e); }
 }
 export async function togglePause() {
   if (app.recorder.phase === "recording") { await api.recorderPause(); app.recorder = { ...app.recorder, phase: "paused", elapsedMs: elapsedMs() }; }

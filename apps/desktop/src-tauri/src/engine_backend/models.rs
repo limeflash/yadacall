@@ -171,6 +171,7 @@ impl EngineBackend {
                 } else {
                     pred.headline_en
                 },
+                benchmarkable: bench::benchmarkable(spec.kind),
                 download,
             });
         }
@@ -315,7 +316,11 @@ impl EngineBackend {
         let me = Arc::clone(self);
         let spec = spec.clone();
         tokio::spawn(async move {
+            if spec.kind == CatKind::Asr {
+                me.queue_default_embedder().await;
+            }
             if spec.kind == CatKind::Embed {
+                me.settle_embedder();
                 // Resets the engine's cached "no embedder" and indexes the meetings that exist.
                 let id = spec.id.clone();
                 let engine = me.engine();
@@ -340,6 +345,46 @@ impl EngineBackend {
                 tracing::info!("post-install benchmark of {} skipped: {e}", spec.id);
             }
         });
+    }
+
+    /// Remembers that the default embedding model needs no automatic download any more.
+    fn settle_embedder(&self) {
+        let mut g = self.lock();
+        if !g.app.embedder_settled {
+            g.app.embedder_settled = true;
+            let app = g.app.clone();
+            drop(g);
+            self.save_app_prefs(&app);
+        }
+    }
+
+    /// Downloads the default embedding model in the background once speech recognition is installed,
+    /// so semantic search works without a visit to Models. Progress goes to the global event stream.
+    /// Does nothing after the model was installed, removed or cancelled by the user.
+    pub(super) async fn queue_default_embedder(self: &Arc<Self>) {
+        let Ok(spec) = self.hub.spec(EMBED_E5_SMALL).cloned() else {
+            return;
+        };
+        let busy = {
+            let g = self.lock();
+            g.app.embedder_settled || g.downloads.contains_key(&spec.id)
+        };
+        if busy {
+            return;
+        }
+        if self.hub.is_installed(&spec) {
+            return self.settle_embedder();
+        }
+        if self.hub.installed_of(CatKind::Asr).is_empty() {
+            return;
+        }
+        tracing::info!("queueing the default search model {}", spec.id);
+        if let Err(e) = self
+            .start_download(&spec.id, Arc::clone(&self.events))
+            .await
+        {
+            tracing::warn!("could not queue {}: {e}", spec.id);
+        }
     }
 
     /// Runs the real benchmark of `spec` and stores the calibration. With `background` it yields to a
@@ -373,6 +418,9 @@ impl EngineBackend {
     }
 
     pub(super) fn cancel_download(&self, id: &str) {
+        if id == EMBED_E5_SMALL {
+            self.settle_embedder();
+        }
         let mut g = self.lock();
         if let Some(d) = g.downloads.remove(id) {
             d.control.cancel();

@@ -1,7 +1,11 @@
 /** `IntegrationsApi` over Tauri `invoke`. Command names are the snake_case twins of the method names. */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as rawInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { IntegrationEvent, IntegrationsApi } from "./types";
+import { toAppError } from "./error";
+
+/** `invoke` that rejects with an `AppError` (short message + raw detail). */
+const invoke = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => rawInvoke<T>(cmd, args).catch((e) => { throw toAppError(e); });
 
 export function createTauriIntegrations(): IntegrationsApi {
   return {

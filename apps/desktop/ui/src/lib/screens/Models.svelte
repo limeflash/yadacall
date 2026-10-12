@@ -49,10 +49,10 @@
   const pctOf = (m: ModelEntry) => (m.download ? Math.floor((m.download.doneBytes / Math.max(1, m.download.totalBytes)) * 100) : 0);
   function etaLabel(s?: number) { if (!s) return ""; return s > 60 ? "~" + Math.ceil(s / 60) + " " + t("мин") : "~" + Math.max(1, s) + " " + t("с"); }
 
-  async function act(fn: () => Promise<unknown>) { try { await fn(); await load(); } catch (e) { toast.error(String(e)); } }
+  async function act(fn: () => Promise<unknown>) { try { await fn(); await load(); } catch (e) { toast.error(e); } }
   async function bench(m: ModelEntry) {
     benching = m.id;
-    try { const r = await api.modelBenchmark(m.id); measured[m.id] = r.realtimeFactor; toast(t("{name}: измерено ≈ {x}× быстрее реального времени", { name: m.name, x: r.realtimeFactor })); } catch (e) { toast.error(String(e)); }
+    try { const r = await api.modelBenchmark(m.id); measured[m.id] = r.realtimeFactor; toast(t("{name}: измерено ≈ {x}× быстрее реального времени", { name: m.name, x: r.realtimeFactor })); } catch (e) { toast.error(e); }
     benching = null;
   }
   const hwLine = $derived(hardware ? `${hardware.label} · ${hardware.chip} · ${hardware.ramGb} ${t("ГБ")}` : "");
@@ -110,7 +110,7 @@
                   {#if m.installed && !m.active && (k.kind === "asr" || k.kind === "llm")}
                     <Button size="sm" onclick={() => act(() => api.modelSetActive(m.id))}>{t("Сделать основной")}</Button>
                     <IconButton variant="flat" aria-label={t("Удалить модель")} onclick={() => act(() => api.modelRemove(m.id))}><Icon name="trash" size={14} /></IconButton>
-                  {:else if m.installed && !d}
+                  {:else if m.installed && !d && m.benchmarkable !== false}
                     <Button size="sm" variant="ghost" disabled={benching === m.id} onclick={() => bench(m)}>{benching === m.id ? t("Меряю…") : t("Измерить")}</Button>
                   {:else if !m.installed && !d}
                     <Button size="sm" disabled={m.verdict === "wontRun"} onclick={() => act(() => api.modelDownload(m.id))}>

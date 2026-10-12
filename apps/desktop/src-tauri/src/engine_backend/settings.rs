@@ -27,6 +27,9 @@ pub struct AppPrefs {
     pub onboarded: bool,
     pub mini_player: bool,
     pub system_audio: SystemAudioKnown,
+    /// The default text-embedding model was installed, or the user removed or cancelled it: the app
+    /// does not queue it again by itself.
+    pub embedder_settled: bool,
 }
 
 impl Default for AppPrefs {
@@ -35,6 +38,7 @@ impl Default for AppPrefs {
             onboarded: false,
             mini_player: true,
             system_audio: SystemAudioKnown::Unknown,
+            embedder_settled: false,
         }
     }
 }

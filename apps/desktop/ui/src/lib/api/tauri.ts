@@ -1,8 +1,12 @@
 /** `Api` over Tauri `invoke`. Command names are the snake_case twins of the method names. */
-import { invoke, Channel } from "@tauri-apps/api/core";
+import { invoke as rawInvoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Api, AskEvent, EngineEvent } from "./types";
+import { toAppError } from "./error";
+
+/** `invoke` that rejects with an `AppError` (short message + raw detail). */
+const invoke = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => rawInvoke<T>(cmd, args).catch((e) => { throw toAppError(e); });
 
 export function createTauriApi(): Api {
   const local = new Set<(e: EngineEvent) => void>();

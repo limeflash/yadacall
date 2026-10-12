@@ -223,6 +223,10 @@ pub struct ModelDownload {
     pub eta_secs: Option<u64>,
 }
 
+fn yes() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelEntry {
@@ -237,6 +241,9 @@ pub struct ModelEntry {
     pub verdict: Verdict,
     /// One-line estimate: "≈ 40× faster than real time", "≈ 25 tok/s · 6.1 of 16 GB".
     pub estimate: String,
+    /// Whether "measure" makes sense for this model (not for VAD or runtime bundles).
+    #[serde(default = "yes")]
+    pub benchmarkable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download: Option<ModelDownload>,
 }
