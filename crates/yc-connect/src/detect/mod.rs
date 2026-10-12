@@ -168,6 +168,7 @@ fn system_sources() -> Box<dyn CallSources> {
 }
 
 /// Names of running processes via `sysinfo` (cheap: no CPU/memory sampling).
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 pub(crate) fn process_names() -> Vec<String> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
     let mut sys = System::new();

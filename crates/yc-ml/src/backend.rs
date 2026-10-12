@@ -262,24 +262,11 @@ fn auto_plan() -> Vec<(Backend, Option<CoreMlUnits>)> {
     // Parakeet v3 at 22× realtime, CoreML at ~5× after a ~9 s first-load compile. The encoders'
     // dynamic shapes defeat CoreML, so Auto stays on CPU and avoids holding two sessions in memory.
     // CoreML remains available as an explicit choice.
-    #[cfg(target_os = "macos")]
-    {
-        vec![(Backend::Cpu, None)]
-    }
-    #[cfg(target_os = "windows")]
-    {
-        return vec![(Backend::DirectMl, None), (Backend::Cpu, None)];
-    }
-    #[cfg(all(not(target_os = "macos"), not(target_os = "windows"), feature = "cuda"))]
-    {
-        return vec![(Backend::Cuda, None), (Backend::Cpu, None)];
-    }
-    #[cfg(all(
-        not(target_os = "macos"),
-        not(target_os = "windows"),
-        not(feature = "cuda")
-    ))]
-    {
+    if cfg!(target_os = "windows") {
+        vec![(Backend::DirectMl, None), (Backend::Cpu, None)]
+    } else if cfg!(all(not(target_os = "macos"), feature = "cuda")) {
+        vec![(Backend::Cuda, None), (Backend::Cpu, None)]
+    } else {
         vec![(Backend::Cpu, None)]
     }
 }
