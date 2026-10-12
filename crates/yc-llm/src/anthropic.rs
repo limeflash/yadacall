@@ -384,6 +384,7 @@ fn truncate(text: &str, limit: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{AnthropicProvider, parse_anthropic_event, parse_message, strict_schema};
+    use crate::ChatRequest;
     use serde_json::json;
     use yc_core::Error;
 
@@ -440,12 +441,9 @@ mod tests {
 
     #[test]
     fn short_answer_payload_uses_low_effort() {
-        let provider = AnthropicProvider::with_base_url(
-            "redacted",
-            "claude-haiku-5-5",
-            "http://localhost",
-        )
-        .expect("provider");
+        let provider =
+            AnthropicProvider::with_base_url("redacted", "claude-haiku-5-5", "http://localhost")
+                .expect("provider");
         let payload = provider.payload(&ChatRequest::new("system", Vec::new(), 1_200), true);
         assert_eq!(payload["output_config"]["effort"], "low");
         assert!(payload.get("fallbacks").is_none());

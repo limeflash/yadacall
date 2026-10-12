@@ -183,7 +183,8 @@ async fn anthropic_structured_output_uses_strict_schema_and_medium_effort() {
         ]
     }));
     let (base, server) = mock_server_with_replies(vec![response]).await;
-    let provider = AnthropicProvider::with_base_url("secret-test", "claude-opus-5-5", &base).expect("provider");
+    let provider = AnthropicProvider::with_base_url("secret-test", "claude-opus-5-5", &base)
+        .expect("provider");
     let request = ChatRequest {
         system: "system".into(),
         messages: vec![ChatMessage::user("summarize")],
@@ -202,12 +203,26 @@ async fn anthropic_structured_output_uses_strict_schema_and_medium_effort() {
     let body = &requests[0].body;
     assert_eq!(body["output_config"]["effort"], "medium");
     assert_eq!(body["output_config"]["format"]["type"], "json_schema");
-    assert_eq!(body["output_config"]["format"]["schema"]["additionalProperties"], false);
-    assert_eq!(body["output_config"]["format"]["schema"]["required"], json!(["answer"]));
+    assert_eq!(
+        body["output_config"]["format"]["schema"]["additionalProperties"],
+        false
+    );
+    assert_eq!(
+        body["output_config"]["format"]["schema"]["required"],
+        json!(["answer"])
+    );
     for forbidden in ["temperature", "top_p", "thinking", "budget_tokens"] {
-        assert!(body.get(forbidden).is_none(), "unexpected body field `{forbidden}`");
+        assert!(
+            body.get(forbidden).is_none(),
+            "unexpected body field `{forbidden}`"
+        );
     }
-    assert!(requests[0].headers.to_ascii_lowercase().contains("anthropic-beta: server-side-fallback-2026-07-01"));
+    assert!(
+        requests[0]
+            .headers
+            .to_ascii_lowercase()
+            .contains("anthropic-beta: server-side-fallback-2026-07-01")
+    );
     assert_eq!(body["fallbacks"], "default");
 }
 
