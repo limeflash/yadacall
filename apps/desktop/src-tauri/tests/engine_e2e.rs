@@ -7,6 +7,9 @@
 //!
 //! Run: `YC_MODELS_DIR=~/.cache/yadacall-dev/models cargo test -p yadacall-desktop --test engine_e2e -- --ignored --nocapture`
 
+// Needs macOS TTS (`say`, `afconvert`) and unix symlinks.
+#![cfg(target_os = "macos")]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
