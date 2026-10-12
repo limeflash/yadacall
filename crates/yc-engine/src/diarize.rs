@@ -235,6 +235,8 @@ fn fold_tiny(labels: &mut [usize], embeddings: &[Vec<f32>], durations: &[f32], m
 pub struct KnownVoice {
     pub id: String,
     pub name: String,
+    /// Email addresses learned from calendar-backed speaker renames.
+    pub emails: Vec<String>,
     pub centroid: Vec<f32>,
 }
 
@@ -429,11 +431,13 @@ mod tests {
             KnownVoice {
                 id: "a".into(),
                 name: "Anna".into(),
+                emails: Vec::new(),
                 centroid: vec![1.0, 0.0],
             },
             KnownVoice {
                 id: "b".into(),
                 name: "Boris".into(),
+                emails: Vec::new(),
                 centroid: vec![0.0, 1.0],
             },
         ];

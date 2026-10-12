@@ -15,15 +15,15 @@ use yc_store::Job;
 use yc_text::{build_turns, chunk_turns};
 
 use crate::audio::{TrackAudio, write_s16};
-use crate::diarize::{
-    ClusterConfig, KnownVoice, assign_unlabelled, centroid, cluster, from_bytes, match_voices,
-};
+use crate::diarize::{ClusterConfig, KnownVoice, assign_unlabelled, centroid, cluster, from_bytes};
 use crate::engine::Engine;
 use crate::finalize::{FinalizeOpts, audio_dir};
 use crate::jobs::JobPayload;
 use crate::meta::{SessionMeta, Source};
+use crate::participants::resolve_speakers;
 use crate::ports::SummaryInput;
 use crate::timeline::track_to_file_time;
+use crate::voices::VoiceEmailIndex;
 
 /// Longest stretch of one utterance fed to the speaker model.
 const MAX_EMBED_MS: u64 = 15_000;
@@ -197,11 +197,13 @@ impl Engine {
                 )
             })
             .collect();
+        let contacts = VoiceEmailIndex::read(&self.library_root());
         let known: Vec<KnownVoice> = if settings.recognise_voices {
             self.store
                 .list_voices()?
                 .into_iter()
                 .map(|v| KnownVoice {
+                    emails: contacts.emails(&v.id),
                     id: v.id,
                     name: v.name,
                     centroid: from_bytes(&v.centroid),
@@ -210,7 +212,12 @@ impl Engine {
         } else {
             Vec::new()
         };
-        let matches = match_voices(&centroids, &known, settings.voice_match_threshold);
+        let resolutions = resolve_speakers(
+            &centroids,
+            &known,
+            &rec.meeting.participant_hints,
+            settings.voice_match_threshold,
+        );
 
         let english = rec.meeting.language.to_ascii_lowercase().starts_with("en");
         let mut participants: Vec<Participant> = rec
@@ -220,18 +227,27 @@ impl Engine {
             .filter(|p| !is_diarised_key(&p.key))
             .cloned()
             .collect();
-        for (c, matched) in matches.iter().enumerate() {
-            let voice = matched.map(|v| &known[v]);
-            if k == 1 && voice.is_none() {
+        for (c, resolution) in resolutions.iter().enumerate() {
+            let voice = resolution.voice_index.map(|v| &known[v]);
+            let hint = resolution
+                .hint_index
+                .map(|hint_index| &rec.meeting.participant_hints[hint_index]);
+            if k == 1 && voice.is_none() && hint.is_none() && resolution.suggestions.is_empty() {
                 continue; // a single unnamed remote speaker stays plain "them"
             }
             participants.push(Participant {
                 key: key_of(c),
-                name: voice.map_or_else(
-                    || format!("{} {}", if english { "Speaker" } else { "Спикер" }, c + 1),
-                    |v| v.name.clone(),
+                name: hint.map_or_else(
+                    || {
+                        voice.map_or_else(
+                            || format!("{} {}", if english { "Speaker" } else { "Спикер" }, c + 1),
+                            |v| v.name.clone(),
+                        )
+                    },
+                    |hint| hint.name.clone(),
                 ),
                 voice_id: voice.map(|v| v.id.clone()),
+                suggestions: resolution.suggestions.clone(),
             });
         }
 
@@ -281,6 +297,13 @@ impl Engine {
         let participants = speaker_names(&rec.meeting)
             .into_iter()
             .map(|(key, name)| Participant {
+                suggestions: rec
+                    .meeting
+                    .participants
+                    .iter()
+                    .find(|p| p.key == key)
+                    .map(|p| p.suggestions.clone())
+                    .unwrap_or_default(),
                 voice_id: rec
                     .meeting
                     .participants
@@ -475,6 +498,7 @@ impl Engine {
             expected_speakers: rec.meeting.expected_speakers,
             source: Source::Retranscribe,
             bookmarks: rec.meeting.bookmarks.clone(),
+            participant_hints: rec.meeting.participant_hints.clone(),
         }
         .write(&dir)?;
         let language = rec.meeting.language.clone();

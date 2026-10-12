@@ -12,7 +12,7 @@ use tokio::sync::broadcast;
 use yc_audio::writer::{PauseSpan, meta_path, read_meta};
 use yc_audio::{AudioFrame, DeviceSel, RecorderConfig, RecorderEvent};
 use yc_core::events::{EngineEvent, Level, NoticeLevel, RecorderState};
-use yc_core::meeting::{Bookmark, MeetingId, MeetingStatus, Stage, TrackKind};
+use yc_core::meeting::{Bookmark, MeetingId, MeetingStatus, ParticipantHint, Stage, TrackKind};
 use yc_core::ports::ModelInfo;
 use yc_core::transcript::Segment;
 use yc_core::{Error, Result, samples_to_ms};
@@ -44,6 +44,8 @@ pub struct StartOptions {
     pub title: Option<String>,
     /// How many remote people to expect (`Some(1)` skips diarisation).
     pub expected_speakers: Option<u8>,
+    /// Calendar invitees that may correspond to the remote speakers.
+    pub participant_hints: Vec<ParticipantHint>,
     pub mic: MicChoice,
     /// Record the system audio ("them").
     pub system_audio: bool,
@@ -56,6 +58,7 @@ impl Default for StartOptions {
         Self {
             title: None,
             expected_speakers: None,
+            participant_hints: Vec::new(),
             mic: MicChoice::Configured,
             system_audio: true,
             language: None,
@@ -220,6 +223,21 @@ impl Engine {
             Some(t) if !t.is_empty() => (t.to_owned(), false),
             _ => (default_title(started_at, settings.russian()), true),
         };
+        let participant_hints = opts
+            .participant_hints
+            .into_iter()
+            .filter_map(|mut hint| {
+                hint.name = hint.name.trim().to_owned();
+                if hint.name.is_empty() {
+                    return None;
+                }
+                hint.email = hint
+                    .email
+                    .map(|email| email.trim().to_owned())
+                    .filter(|email| !email.is_empty());
+                Some(hint)
+            })
+            .collect();
         let meta = SessionMeta {
             id,
             title,
@@ -229,6 +247,7 @@ impl Engine {
             expected_speakers: opts.expected_speakers,
             source: Source::Recording,
             bookmarks: Vec::new(),
+            participant_hints,
         };
         meta.write(&dir)?;
 
