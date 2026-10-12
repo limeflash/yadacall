@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use yc_core::meeting::{Bookmark, MeetingId};
+use yc_core::meeting::{Bookmark, MeetingId, ParticipantHint};
 use yc_core::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,6 +32,8 @@ pub struct SessionMeta {
     pub source: Source,
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub participant_hints: Vec<ParticipantHint>,
 }
 
 pub const SESSION_FILE: &str = "session.json";

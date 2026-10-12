@@ -158,11 +158,31 @@ pub async fn record_call(env: &Env, engine: &Arc<Engine>, title: &str) -> Meetin
     engine.stop_recording().await.expect("stop")
 }
 
+pub async fn record_call_with_hints(
+    env: &Env,
+    engine: &Arc<Engine>,
+    title: &str,
+    participant_hints: Vec<yc_core::meeting::ParticipantHint>,
+) -> MeetingId {
+    start_call_with_hints(env, engine, title, participant_hints).await;
+    engine.stop_recording().await.expect("stop")
+}
+
 /// Starts the standard call and waits until all scripted audio reached the disk.
 pub async fn start_call(env: &Env, engine: &Arc<Engine>, title: &str) -> MeetingId {
+    start_call_with_hints(env, engine, title, Vec::new()).await
+}
+
+pub async fn start_call_with_hints(
+    env: &Env,
+    engine: &Arc<Engine>,
+    title: &str,
+    participant_hints: Vec<yc_core::meeting::ParticipantHint>,
+) -> MeetingId {
     let id = engine
         .start_recording(yc_engine::StartOptions {
             title: Some(title.to_owned()),
+            participant_hints,
             ..Default::default()
         })
         .await
