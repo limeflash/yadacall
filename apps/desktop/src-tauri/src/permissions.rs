@@ -195,3 +195,18 @@ mod mac {
         rx.await.unwrap_or(false)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn microphone_status_query_works_without_prompting() {
+        let state = microphone_state();
+        eprintln!("microphone permission: {state:?}");
+        assert!(matches!(
+            state,
+            PermissionState::Granted | PermissionState::Denied | PermissionState::NotDetermined
+        ));
+    }
+}

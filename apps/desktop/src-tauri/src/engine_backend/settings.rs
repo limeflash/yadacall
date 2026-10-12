@@ -125,6 +125,17 @@ pub fn to_api(
 
 /// Applies the plain (non-summary) fields of a patch to the engine settings and the app prefs.
 pub fn apply_patch(s: &mut es::Settings, app: &mut AppPrefs, p: &SettingsPatch) {
+    // During onboarding the language picked there also decides which recogniser gets downloaded
+    // (GigaAM for Russian, Parakeet otherwise), unless the meeting language is set explicitly.
+    if !app.onboarded
+        && p.meeting_language.is_none()
+        && let Some(lang) = p.ui_language
+    {
+        s.meeting_language = match lang {
+            UiLanguage::Ru => es::MeetingLanguage::Ru,
+            UiLanguage::En => es::MeetingLanguage::Auto,
+        };
+    }
     if let Some(v) = p.theme {
         s.theme = match v {
             ThemeChoice::System => es::Theme::System,
@@ -241,6 +252,30 @@ mod tests {
             Some("gemma-4-e4b-q8-0")
         );
         assert_eq!(local_model_choice(&ids, "llama").as_deref(), None);
+    }
+
+    #[test]
+    fn onboarding_language_picks_the_meeting_language() {
+        let mut s = es::Settings::default();
+        let mut app = AppPrefs::default();
+        let patch = SettingsPatch {
+            ui_language: Some(UiLanguage::En),
+            ..Default::default()
+        };
+        apply_patch(&mut s, &mut app, &patch);
+        assert_eq!(s.ui_language, "en");
+        assert_eq!(s.meeting_language, es::MeetingLanguage::Auto);
+        // After onboarding the meeting language is left alone.
+        app.onboarded = true;
+        apply_patch(
+            &mut s,
+            &mut app,
+            &SettingsPatch {
+                ui_language: Some(UiLanguage::Ru),
+                ..Default::default()
+            },
+        );
+        assert_eq!(s.meeting_language, es::MeetingLanguage::Auto);
     }
 
     #[test]

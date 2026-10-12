@@ -333,3 +333,52 @@ impl Insights {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn install(hub: &ModelHub, id: &str) {
+        let spec = hub.spec(id).unwrap();
+        let dir = hub.dir(spec).unwrap();
+        for f in spec.files.iter().filter(|f| !f.optional) {
+            let path = dir.join(&f.path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let file = std::fs::File::create(path).unwrap();
+            file.set_len(f.size).unwrap();
+        }
+    }
+
+    #[test]
+    fn asr_choice_follows_language_choice_and_what_is_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let hub = ModelHub::new(tmp.path()).unwrap();
+        assert!(hub.pick_asr("ru", None).is_err());
+        install(&hub, ASR_PARAKEET);
+        // Nothing better installed: Russian falls back to Parakeet.
+        assert_eq!(hub.pick_asr("ru", None).unwrap().id, ASR_PARAKEET);
+        install(&hub, ASR_GIGAAM);
+        assert_eq!(hub.pick_asr("ru", None).unwrap().id, ASR_GIGAAM);
+        assert_eq!(hub.pick_asr("en", None).unwrap().id, ASR_PARAKEET);
+        assert_eq!(hub.pick_asr("auto", None).unwrap().id, ASR_PARAKEET);
+        // An explicit choice wins when installed.
+        assert_eq!(
+            hub.pick_asr("ru", Some(ASR_PARAKEET)).unwrap().id,
+            ASR_PARAKEET
+        );
+        // A choice that is not installed is ignored.
+        assert_eq!(
+            hub.pick_asr("ru", Some(ASR_GIGAAM_CTC)).unwrap().id,
+            ASR_GIGAAM
+        );
+    }
+
+    #[test]
+    fn only_runnable_models_are_offered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let hub = ModelHub::new(tmp.path()).unwrap();
+        let ids: Vec<_> = hub.offered().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&EMBED_E5_SMALL) && ids.contains(&"gemma-4-e2b-q4-0"));
+        assert!(!ids.contains(&"silero-vad-v5") && !ids.contains(&"qwen3-embedding-0.6b-int8"));
+    }
+}

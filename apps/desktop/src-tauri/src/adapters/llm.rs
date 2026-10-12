@@ -398,6 +398,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn summary_input_uses_participant_names_and_fallbacks() {
+        use yc_core::meeting::{MeetingId, Participant};
+        use yc_core::transcript::Turn;
+        let input = EngineSummaryInput {
+            meeting_id: MeetingId::new(),
+            title: "Синк".into(),
+            started_at: chrono::Utc::now(),
+            language: "ru".into(),
+            duration_ms: 60_000,
+            turns: vec![
+                Turn {
+                    speaker: "me".into(),
+                    start_ms: 0,
+                    end_ms: 1000,
+                    text: "Привет".into(),
+                },
+                Turn {
+                    speaker: "s1".into(),
+                    start_ms: 1000,
+                    end_ms: 2000,
+                    text: "Здравствуй".into(),
+                },
+                Turn {
+                    speaker: "them".into(),
+                    start_ms: 2000,
+                    end_ms: 3000,
+                    text: "Ок".into(),
+                },
+            ],
+            participants: vec![Participant {
+                key: "s1".into(),
+                name: "Иван".into(),
+                voice_id: None,
+            }],
+            bookmarks: vec![],
+        };
+        let out = to_llm_input(&input);
+        let names: Vec<_> = out.turns.iter().map(|t| t.speaker.as_str()).collect();
+        assert_eq!(names, ["Я", "Иван", "Собеседник"]);
+        assert_eq!(out.meeting_language, "ru");
+    }
+
+    #[test]
     fn urls_are_normalised() {
         assert_eq!(
             with_v1("http://localhost:11434"),
