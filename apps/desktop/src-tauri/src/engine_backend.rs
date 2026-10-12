@@ -158,6 +158,9 @@ impl EngineBackend {
         }
         backend.sync_prefs();
         backend.spawn_event_pump();
+        // Existing installs that predate the automatic search-model download.
+        let me = Arc::clone(&backend);
+        tokio::spawn(async move { me.queue_default_embedder().await });
         Ok(backend)
     }
 

@@ -213,4 +213,6 @@ export const en: Record<string, string> = {
   "Сейчас это действие недоступно.": "This action is not available right now.",
   "Ошибка чтения или записи файла.": "File read or write error.",
   "Не удалось получить ответ. Попробуй ещё раз.": "Could not get an answer. Try again.",
+  "Скачиваю модель смыслового поиска: {p}%. Пока ищу только по словам.": "Downloading the semantic search model: {p}%. Matching words only for now.",
+  "Смысловой поиск выключен: модель не скачана, ищу только по словам.": "Semantic search is off: the model is not downloaded, matching words only.",
 };

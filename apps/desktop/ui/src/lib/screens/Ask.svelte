@@ -3,12 +3,13 @@
   import Icon from "../kit/Icon.svelte";
   import CopyButton from "../kit/CopyButton.svelte";
   import { api } from "../api";
-  import type { Citation, SentNote } from "../api";
+  import type { Citation, ModelEntry, SentNote } from "../api";
   import { t, plural } from "../i18n/index.svelte";
   import { clock, shortDate } from "../format";
   import { go, back, href } from "../router.svelte";
   import { speakerName } from "../speakers";
   import { errText } from "../api/error";
+  import { onEngineEvent } from "../state.svelte";
 
   let { q }: { q?: string } = $props();
 
@@ -32,6 +33,19 @@
     qa.busy = false;
   }
   onMount(() => { if (q) ask(q); });
+
+  // The search model is fetched in the background after setup; until it is there, search matches words only.
+  let embed = $state<ModelEntry | null>(null);
+  async function loadEmbed() { try { embed = (await api.modelsOverview()).models.find((m) => m.kind === "embed" && m.active) ?? null; } catch { embed = null; } }
+  onMount(() => {
+    loadEmbed();
+    return onEngineEvent((e) => {
+      if (e.type !== "download" || !embed || e.item !== embed.id) return;
+      if (e.state.state === "done") loadEmbed();
+      else embed.download = { state: e.state, doneBytes: e.doneBytes, totalBytes: e.totalBytes, bytesPerSec: e.bytesPerSec };
+    });
+  });
+  const embedPct = $derived(embed?.download ? Math.floor((embed.download.doneBytes / Math.max(1, embed.download.totalBytes)) * 100) : null);
 
   function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -57,6 +71,16 @@
   <div class="yc-scroll" style="flex: 1; min-height: 0" bind:this={scroller}>
     <div class="yc-in col">
       <button type="button" class="backlink" onclick={() => back()}><Icon name="back" size={14} />{t("Встречи")}</button>
+
+      {#if embed && !embed.installed}
+        <p class="hint" role="status">
+          <Icon name="search" size={14} />
+          <span>
+            {#if embed.download && ["queued", "running", "verifying"].includes(embed.download.state.state)}{t("Скачиваю модель смыслового поиска: {p}%. Пока ищу только по словам.", { p: embedPct ?? 0 })}
+            {:else}{t("Смысловой поиск выключен: модель не скачана, ищу только по словам.")} <a href={href({ name: "models" })}>{t("Скачать")}</a>{/if}
+          </span>
+        </p>
+      {/if}
 
       {#each thread as qa, qi (qi)}
         <div style="display: flex; justify-content: flex-end; padding-left: 64px">
@@ -118,6 +142,8 @@
   main { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; min-height: 0; position: relative; }
   .col { max-width: 640px; box-sizing: border-box; margin: 0 auto; padding: 22px 28px 130px; display: flex; flex-direction: column; gap: 20px; }
   .backlink { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; font-size: 13px; color: var(--muted); }
+  .hint { margin: 0; display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 12px; line-height: 1.5; color: var(--muted); }
+  .hint a { color: var(--accent-text); }
   .ubub { padding: 10px 14px; border-radius: 18px 18px 6px 18px; background: var(--accent-soft); font-size: 15px; line-height: 1.5; }
   article { display: flex; flex-direction: column; gap: 14px; }
   .ans { margin: 0; font-size: 15px; line-height: 1.7; }
