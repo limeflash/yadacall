@@ -262,11 +262,27 @@ pub struct HardwareProfile {
     pub models_bytes: u64,
 }
 
+/// The llama.cpp runtime the local LLM runs on. It has no card of its own: it is installed on demand
+/// and shown discreetly under the LLM section. `id` goes to `model_download` to reinstall it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeInfo {
+    pub id: String,
+    /// "llama.cpp b8639".
+    pub name: String,
+    pub size_bytes: u64,
+    pub installed: bool,
+    /// An install or repair is running; its progress arrives as `download` events with `item == id`.
+    pub busy: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelsOverview {
     pub hardware: HardwareProfile,
     pub models: Vec<ModelEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

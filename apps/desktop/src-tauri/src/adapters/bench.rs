@@ -12,6 +12,7 @@ use yc_ml::{AsrEngine, Backend, CampPlusEmbedder};
 
 use super::hub::{Insights, ModelHub, runtime_backend};
 use super::ml::{asr_kind, load_text_embedder};
+use super::runtime_keeper::RuntimeKeeper;
 
 /// 12 s of Russian speech (the same clip `yadacall bench-asr` uses).
 const SAMPLE: &[u8] = include_bytes!("../../assets/bench_sample.m4a");
@@ -33,11 +34,16 @@ pub struct Measured {
 }
 
 /// Benchmarks `spec` (which must be installed) and stores the calibration.
-pub async fn run(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<Measured> {
+pub async fn run(
+    hub: &ModelHub,
+    insights: &Insights,
+    keeper: &RuntimeKeeper,
+    spec: &ModelSpec,
+) -> Result<Measured> {
     match spec.kind {
         ModelKind::Asr => asr(hub, insights, spec).await,
         ModelKind::Embed => embed(hub, insights, spec).await,
-        ModelKind::Llm => llm(hub, insights, spec).await,
+        ModelKind::Llm => llm(hub, insights, keeper, spec).await,
         ModelKind::Speaker => speaker(hub, insights, spec).await,
         _ => Err(Error::Invalid(format!(
             "`{}` cannot be benchmarked",
@@ -136,11 +142,14 @@ async fn embed(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<
     Ok(Measured { value: passages })
 }
 
-async fn llm(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<Measured> {
+async fn llm(
+    hub: &ModelHub,
+    insights: &Insights,
+    keeper: &RuntimeKeeper,
+    spec: &ModelSpec,
+) -> Result<Measured> {
     let hardware = insights.hardware().await?;
-    let (_, _, exe) = hub
-        .installed_runtime(Some(hardware))
-        .ok_or_else(|| Error::ModelMissing("llama.cpp runtime".to_owned()))?;
+    let exe = keeper.ensure().await?.exe;
     let backend = match runtime_backend(Some(hardware)) {
         runtime::RuntimeBackend::Metal => "metal",
         runtime::RuntimeBackend::Vulkan => "vulkan",
@@ -187,6 +196,8 @@ async fn speaker(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Resul
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     #[test]
@@ -210,7 +221,12 @@ mod tests {
         std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
         std::os::unix::fs::symlink(std::path::Path::new(&models).join(&spec.id), &dir).unwrap();
         let insights = Insights::new(tmp.path());
-        let m = run(&hub, &insights, &spec).await.unwrap();
+        let keeper = RuntimeKeeper::new(
+            Arc::new(ModelHub::new(tmp.path()).unwrap()),
+            Arc::clone(&insights),
+            Arc::new(|_| {}),
+        );
+        let m = run(&hub, &insights, &keeper, &spec).await.unwrap();
         eprintln!("campplus: {:.1}x real time", m.value);
         assert!(m.value > 1.0);
     }

@@ -21,6 +21,7 @@ use yc_llm::{
 };
 
 use super::hub::{Insights, ModelHub};
+use super::runtime_keeper::RuntimeKeeper;
 use super::{SharedPrefs, read_prefs};
 use crate::api::SummaryProvider;
 
@@ -40,16 +41,23 @@ struct ServerSlot {
 pub struct Llm {
     hub: Arc<ModelHub>,
     insights: Arc<Insights>,
+    keeper: Arc<RuntimeKeeper>,
     prefs: SharedPrefs,
     server: tokio::sync::Mutex<Option<ServerSlot>>,
     keys: Mutex<HashMap<String, bool>>,
 }
 
 impl Llm {
-    pub fn new(hub: Arc<ModelHub>, insights: Arc<Insights>, prefs: SharedPrefs) -> Arc<Self> {
+    pub fn new(
+        hub: Arc<ModelHub>,
+        insights: Arc<Insights>,
+        keeper: Arc<RuntimeKeeper>,
+        prefs: SharedPrefs,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             insights,
+            keeper,
             prefs,
             server: tokio::sync::Mutex::new(None),
             keys: Mutex::new(HashMap::new()),
@@ -91,10 +99,8 @@ impl Llm {
     pub fn configured(&self) -> bool {
         let cfg = read_prefs(&self.prefs).summary;
         match cfg.provider {
-            SummaryProvider::Local => {
-                self.hub.installed_runtime(None).is_some()
-                    && !self.hub.installed_of(ModelKind::Llm).is_empty()
-            }
+            // The runtime is installed on first use, so only the model has to be there.
+            SummaryProvider::Local => !self.hub.installed_of(ModelKind::Llm).is_empty(),
             SummaryProvider::Claude => self.key_present(KEY_ANTHROPIC),
             SummaryProvider::Openai => cfg.current().base_url.is_some_and(|u| !u.trim().is_empty()),
             SummaryProvider::Ollama => true,
@@ -161,11 +167,9 @@ impl Llm {
 
     async fn local_provider(&self) -> Result<Box<dyn ChatProvider>> {
         let spec = self.pick_llm().await?;
-        let hardware = self.insights.hardware().await.ok();
-        let (_, runtime_dir, _) = self
-            .hub
-            .installed_runtime(hardware)
-            .ok_or_else(|| Error::ModelMissing("llama.cpp runtime".to_owned()))?;
+        // Installs or repairs the llama.cpp runtime first when it is missing or broken.
+        let ready = self.keeper.ensure().await?;
+        let runtime_dir = self.hub.runtime_dir(&ready.pack);
         let gguf = self.hub.gguf_path(&spec)?;
         let mut slot = self.server.lock().await;
         if let Some(s) = slot.as_ref()

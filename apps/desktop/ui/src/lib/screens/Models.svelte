@@ -7,7 +7,7 @@
   import Toast from "../kit/Toast.svelte";
   import SectionLabel from "../kit/SectionLabel.svelte";
   import { api } from "../api";
-  import type { HardwareProfile, ModelEntry, ModelKind, Verdict } from "../api";
+  import type { HardwareProfile, ModelEntry, ModelKind, RuntimeInfo, Verdict } from "../api";
   import { t } from "../i18n/index.svelte";
   import { back, go } from "../router.svelte";
   import { bytes, mbps } from "../format";
@@ -21,11 +21,20 @@
   let benching = $state<string | null>(null);
   let measured = $state<Record<string, number>>({});
 
-  async function load() { const o = await api.modelsOverview(); hardware = o.hardware; models = o.models; }
+  let runtime = $state<RuntimeInfo | null>(null);
+  /** Progress of a runtime install or repair (events with `item === runtime.id`). */
+  let rtPct = $state<number | null>(null);
+  async function load() { const o = await api.modelsOverview(); hardware = o.hardware; models = o.models; runtime = o.runtime ?? null; if (runtime?.busy && rtPct === null) rtPct = 0; }
   onMount(() => {
     load();
     return onEngineEvent((e) => {
       if (e.type !== "download") return;
+      if (runtime && e.item === runtime.id) {
+        if (e.state.state === "done") { rtPct = null; load(); }
+        else if (e.state.state === "failed") { rtPct = null; toast.error(t("Не удалось установить рантайм llama.cpp. Проверь интернет и повтори.")); load(); }
+        else rtPct = Math.floor((e.doneBytes / Math.max(1, e.totalBytes)) * 100);
+        return;
+      }
       const m = models.find((x) => x.id === e.item);
       if (!m) return;
       if (e.state.state === "done") { load(); toastModel = m.name; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastModel = null), 5000); return; }
@@ -158,6 +167,16 @@
                 {/if}
               </div>
             {/each}
+            {#if k.kind === "llm" && runtime}
+              <div class="rt">
+                <span class="yc-ellipsis" style="flex: 1; min-width: 0">
+                  {#if rtPct !== null}{t("Ставлю рантайм {name} · {size}… {p}%", { name: runtime.name, size: bytes(runtime.sizeBytes), p: rtPct })}
+                  {:else if runtime.installed}{t("Рантайм")} {runtime.name} · {bytes(runtime.sizeBytes)} · {t("установлен")}
+                  {:else}{t("Рантайм")} {runtime.name} · {bytes(runtime.sizeBytes)} · {t("поставится при первом запуске")}{/if}
+                </span>
+                <button type="button" class="rt-btn" disabled={rtPct !== null} onclick={() => act(() => api.modelDownload(runtime!.id))}>{t("Переустановить")}</button>
+              </div>
+            {/if}
           </div>
         {/if}
       {/each}
@@ -191,5 +210,9 @@
   .edot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
   .pbar { position: relative; display: block; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
   .pbar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width 0.2s; }
+  .rt { display: flex; align-items: center; gap: 10px; padding: 2px 6px 0; font-size: 11px; color: var(--muted); }
+  .rt-btn { flex: none; padding: 2px 6px; border: 0; background: none; font-size: 11px; color: var(--muted); text-decoration: underline; }
+  .rt-btn:hover:not(:disabled) { color: var(--text); }
+  .rt-btn:disabled { opacity: 0.5; }
   .note { display: flex; align-items: center; gap: 7px; padding: 2px 2px 0; font-size: 12px; color: var(--muted); }
 </style>

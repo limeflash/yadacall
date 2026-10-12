@@ -158,7 +158,9 @@ export interface HardwareProfile {
   diskFreeBytes: number;
   modelsBytes: number;
 }
-export interface ModelsOverview { hardware: HardwareProfile; models: ModelEntry[] }
+/** The llama.cpp runtime under the LLM section; `id` goes to `modelDownload` to reinstall it. */
+export interface RuntimeInfo { id: string; name: string; sizeBytes: number; installed: boolean; busy: boolean }
+export interface ModelsOverview { hardware: HardwareProfile; models: ModelEntry[]; runtime?: RuntimeInfo }
 export interface BenchmarkResult { modelId: string; realtimeFactor: number }
 
 // ---- settings ------------------------------------------------------------------------------------

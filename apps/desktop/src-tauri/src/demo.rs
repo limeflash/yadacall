@@ -1243,10 +1243,20 @@ impl Backend for DemoBackend {
         Ok(ModelsOverview {
             hardware,
             models: g.models.clone(),
+            runtime: Some(crate::api::RuntimeInfo {
+                id: "llama-demo".into(),
+                name: "llama.cpp b8639".into(),
+                size_bytes: 40_000_000,
+                installed: true,
+                busy: false,
+            }),
         })
     }
 
     async fn model_download(&self, id: &str, progress: EventSink) -> Result<()> {
+        if id == "llama-demo" {
+            return Ok(()); // the runtime row's "reinstall": nothing to do in the demo
+        }
         let mut g = self.lock();
         let m = g
             .models

@@ -7,6 +7,7 @@ pub mod bench;
 pub mod hub;
 pub mod llm;
 pub mod ml;
+pub mod runtime_keeper;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
