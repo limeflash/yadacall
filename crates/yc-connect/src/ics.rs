@@ -44,7 +44,10 @@ impl IcsClient {
         if !status.is_success() {
             return Err(ConnectError::Network(format!("ICS feed: HTTP {status}")));
         }
-        if response.content_length().is_some_and(|n| n as usize > MAX_FEED_BYTES) {
+        if response
+            .content_length()
+            .is_some_and(|n| n as usize > MAX_FEED_BYTES)
+        {
             return Err(ConnectError::Protocol("ICS feed is too large".into()));
         }
         let bytes = response.bytes().await?;
@@ -171,7 +174,11 @@ impl Ctx<'_> {
         len: chrono::Duration,
     ) -> Option<AgendaEvent> {
         let uid_text = uid.map(str::to_string).unwrap_or_else(|| {
-            format!("{}@{}", text_of(c, "SUMMARY").unwrap_or_default(), start.timestamp())
+            format!(
+                "{}@{}",
+                text_of(c, "SUMMARY").unwrap_or_default(),
+                start.timestamp()
+            )
         });
         let description = text_of(c, "DESCRIPTION").unwrap_or_default();
         let location = text_of(c, "LOCATION").unwrap_or_default();
@@ -186,7 +193,11 @@ impl Ctx<'_> {
             }
         };
         for name in ["X-GOOGLE-CONFERENCE", "CONFERENCE", "URL"] {
-            for p in c.properties.iter().filter(|p| p.name.as_str().eq_ignore_ascii_case(name)) {
+            for p in c
+                .properties
+                .iter()
+                .filter(|p| p.name.as_str().eq_ignore_ascii_case(name))
+            {
                 let value = p.val.as_str().trim();
                 let link = link_from_url(value);
                 if link.provider != VideoProvider::Other {
@@ -297,7 +308,10 @@ fn expand(
         let mut has_tzid = false;
         for param in &p.params {
             let key = param.key.as_str().to_ascii_uppercase();
-            let val = param.val.as_ref().map(|v| v.as_str().trim_matches('"').to_string());
+            let val = param
+                .val
+                .as_ref()
+                .map(|v| v.as_str().trim_matches('"').to_string());
             if key == "TZID" {
                 let tz = val.as_deref().and_then(resolve_tz).or(default_tz);
                 if let Some(tz) = tz {
@@ -352,7 +366,9 @@ fn parse_dt(p: &Property, default_tz: Option<Tz>) -> Option<Dt> {
             .map(|v| v.as_str().trim_matches('"').to_string())
     };
     if param("VALUE").is_some_and(|v| v.eq_ignore_ascii_case("DATE")) || value.len() == 8 {
-        return NaiveDate::parse_from_str(value, "%Y%m%d").ok().map(|_| Dt::Date);
+        return NaiveDate::parse_from_str(value, "%Y%m%d")
+            .ok()
+            .map(|_| Dt::Date);
     }
     if let Some(utc) = value.strip_suffix(['Z', 'z']) {
         let naive = NaiveDateTime::parse_from_str(utc, "%Y%m%dT%H%M%S").ok()?;
@@ -370,7 +386,9 @@ fn parse_dt(p: &Property, default_tz: Option<Tz>) -> Option<Dt> {
     // `earliest` picks the first of two ambiguous local times; a gap falls through to UTC.
     let local = tz.from_local_datetime(&naive).earliest();
     Some(Dt::Instant(
-        local.map(|d| d.with_timezone(&Utc)).unwrap_or_else(|| Utc.from_utc_datetime(&naive)),
+        local
+            .map(|d| d.with_timezone(&Utc))
+            .unwrap_or_else(|| Utc.from_utc_datetime(&naive)),
     ))
 }
 
@@ -543,11 +561,16 @@ END:VCALENDAR\r\n";
                 ("One-off", "2026-10-16T12:00:00+00:00".to_string()),
             ]
             .into_iter()
-            .map(|(a, b)| (a, b))
             .collect::<Vec<_>>()
         );
-        assert_eq!(events[0].end - events[0].start, chrono::Duration::minutes(30));
-        assert_eq!(events[1].end - events[1].start, chrono::Duration::minutes(90));
+        assert_eq!(
+            events[0].end - events[0].start,
+            chrono::Duration::minutes(30)
+        );
+        assert_eq!(
+            events[1].end - events[1].start,
+            chrono::Duration::minutes(90)
+        );
     }
 
     #[test]
@@ -560,7 +583,10 @@ END:VCALENDAR\r\n";
         let e = &events[0];
         assert_eq!(e.title, "Planning");
         assert_eq!(e.end - e.start, chrono::Duration::minutes(45));
-        assert_eq!(e.meet_url.as_deref(), Some("https://meet.google.com/abc-defg-hij"));
+        assert_eq!(
+            e.meet_url.as_deref(),
+            Some("https://meet.google.com/abc-defg-hij")
+        );
         assert_eq!(e.other_links[0].provider, VideoProvider::Zoom);
         assert_eq!(e.calendar_title.as_deref(), Some("Work"));
         assert_eq!(e.attendees[0].email.as_deref(), Some("anna@x.com"));
@@ -572,7 +598,11 @@ END:VCALENDAR\r\n";
     #[test]
     fn skips_all_day_and_cancelled_and_reads_teams_location() {
         let events = parse_ics(WEEKLY, "ics:1", window()).unwrap();
-        assert!(events.iter().all(|e| e.title != "Holiday" && e.title != "Dropped"));
+        assert!(
+            events
+                .iter()
+                .all(|e| e.title != "Holiday" && e.title != "Dropped")
+        );
         let once = events.iter().find(|e| e.title == "One-off").unwrap();
         assert_eq!(once.other_links[0].provider, VideoProvider::Teams);
     }
@@ -583,11 +613,17 @@ END:VCALENDAR\r\n";
         let ics = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:d@x\r\nSUMMARY:Daily\r\n\
 DTSTART;TZID=W. Europe Standard Time:20261022T100000\r\nDTEND;TZID=W. Europe Standard Time:20261022T101500\r\n\
 RRULE:FREQ=DAILY;COUNT=6\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        let events = parse_ics(ics, "a", (utc(2026, 10, 22, 0, 0), utc(2026, 10, 29, 0, 0))).unwrap();
-        let hours: Vec<_> = events.iter().map(|e| e.start.format("%d %H:%M").to_string()).collect();
+        let events =
+            parse_ics(ics, "a", (utc(2026, 10, 22, 0, 0), utc(2026, 10, 29, 0, 0))).unwrap();
+        let hours: Vec<_> = events
+            .iter()
+            .map(|e| e.start.format("%d %H:%M").to_string())
+            .collect();
         assert_eq!(
             hours,
-            ["22 08:00", "23 08:00", "24 08:00", "25 09:00", "26 09:00", "27 09:00"]
+            [
+                "22 08:00", "23 08:00", "24 08:00", "25 09:00", "26 09:00", "27 09:00"
+            ]
         );
     }
 
@@ -602,7 +638,10 @@ SUMMARY:Float\r\nDTSTART:20261014T100000\r\nDTEND:20261014T110000\r\nEND:VEVENT\
 
     #[test]
     fn durations() {
-        assert_eq!(parse_duration("PT1H30M"), Some(chrono::Duration::minutes(90)));
+        assert_eq!(
+            parse_duration("PT1H30M"),
+            Some(chrono::Duration::minutes(90))
+        );
         assert_eq!(parse_duration("P1DT2H"), Some(chrono::Duration::hours(26)));
         assert_eq!(parse_duration("P1W"), Some(chrono::Duration::weeks(1)));
         assert_eq!(parse_duration("garbage"), None);

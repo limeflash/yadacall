@@ -61,7 +61,10 @@ mod tests {
             ("ms-teams.exe", DetectedApp::Teams),
             ("Microsoft Teams", DetectedApp::Teams),
             ("Telegram", DetectedApp::Telegram),
-            ("C:#Users#me#AppData#Roaming#Telegram Desktop#Telegram.exe", DetectedApp::Telegram),
+            (
+                "C:#Users#me#AppData#Roaming#Telegram Desktop#Telegram.exe",
+                DetectedApp::Telegram,
+            ),
         ] {
             assert_eq!(classify_process(n), Some(app), "{n}");
         }
@@ -74,7 +77,11 @@ mod tests {
     fn consent_store_in_use_means_started_not_stopped() {
         let entries = vec![
             ("Microsoft.WindowsCamera_8wekyb3d8bbwe".to_string(), 10, 20),
-            ("C:#Program Files#Zoom#bin#Zoom.exe".to_string(), 133_000_000, 0),
+            (
+                "C:#Program Files#Zoom#bin#Zoom.exe".to_string(),
+                133_000_000,
+                0,
+            ),
             ("C:#Program Files#Zoom#bin#Zoom.exe".to_string(), 5, 0),
             ("never_used".to_string(), 0, 0),
         ];

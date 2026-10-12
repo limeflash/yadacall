@@ -147,15 +147,18 @@ impl Scheduler {
     pub fn poll(&mut self, now: DateTime<Utc>) -> Vec<ConnectEvent> {
         self.fired
             .retain(|(_, start, _)| *start > (now - Duration::days(2)).timestamp());
-        if self.recording.as_ref().is_some_and(|(_, until)| *until <= now) {
+        if self
+            .recording
+            .as_ref()
+            .is_some_and(|(_, until)| *until <= now)
+        {
             self.recording = None;
         }
         let lead = Duration::minutes(i64::from(self.settings.lead_minutes));
         let mut out = Vec::new();
         let agenda = self.agenda.clone();
         for event in &agenda {
-            if (!event.has_call_link() && !self.settings.include_without_link) || now >= event.end
-            {
+            if (!event.has_call_link() && !self.settings.include_without_link) || now >= event.end {
                 continue;
             }
             let action = self.action(event);
@@ -304,7 +307,10 @@ mod tests {
         let due = s.poll(clock.now());
         assert!(matches!(
             due.as_slice(),
-            [ConnectEvent::ReminderDue { lead_minutes: 2, .. }]
+            [ConnectEvent::ReminderDue {
+                lead_minutes: 2,
+                ..
+            }]
         ));
         assert!(s.poll(clock.now()).is_empty(), "no duplicate reminder");
         clock.advance(Duration::minutes(2));
@@ -323,7 +329,10 @@ mod tests {
         let due = s.poll(t0() + Duration::minutes(55));
         assert!(matches!(
             due.as_slice(),
-            [ConnectEvent::ReminderDue { lead_minutes: 5, .. }]
+            [ConnectEvent::ReminderDue {
+                lead_minutes: 5,
+                ..
+            }]
         ));
     }
 
@@ -340,7 +349,10 @@ mod tests {
         let mut s = sched(vec![ev("a", "work", 10, 30), ev("b", "spam", 10, 30)]);
         s.set_policy("work", AccountPolicy::Always);
         s.set_policy("spam", AccountPolicy::Never);
-        assert!(s.poll(t0() + Duration::minutes(8)).is_empty(), "no reminder for Always");
+        assert!(
+            s.poll(t0() + Duration::minutes(8)).is_empty(),
+            "no reminder for Always"
+        );
         let out = s.poll(t0() + Duration::minutes(10));
         assert!(matches!(out.as_slice(), [ConnectEvent::AutoRecord { event }] if event.id == "a"));
         assert!(s.poll(t0() + Duration::minutes(11)).is_empty());
@@ -393,7 +405,10 @@ mod tests {
     fn moved_event_fires_again_and_agenda_change_is_reported() {
         let mut s = sched(vec![ev("a", "x", 0, 30)]);
         assert_eq!(kinds(&s.poll(t0())), ["starting"]);
-        assert!(s.set_agenda(vec![ev("a", "x", 0, 30)]).is_none(), "same agenda");
+        assert!(
+            s.set_agenda(vec![ev("a", "x", 0, 30)]).is_none(),
+            "same agenda"
+        );
         let changed = s.set_agenda(vec![ev("a", "x", 120, 30)]);
         assert_eq!(changed, Some(ConnectEvent::AgendaChanged));
         assert_eq!(kinds(&s.poll(t0() + Duration::minutes(120))), ["starting"]);

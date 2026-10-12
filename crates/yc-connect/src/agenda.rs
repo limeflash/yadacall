@@ -122,6 +122,9 @@ mod tests {
             provider: VideoProvider::Zoom,
             url: "https://zoom.us/j/1".into(),
         }];
-        assert_eq!(join_url(&e, Some("a@x.com")).unwrap(), "https://zoom.us/j/1");
+        assert_eq!(
+            join_url(&e, Some("a@x.com")).unwrap(),
+            "https://zoom.us/j/1"
+        );
     }
 }

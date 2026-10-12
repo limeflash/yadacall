@@ -65,7 +65,9 @@ impl GoogleConfig {
             override_credentials,
             (
                 std::env::var("YADACALL_GOOGLE_CLIENT_ID").ok().as_deref(),
-                std::env::var("YADACALL_GOOGLE_CLIENT_SECRET").ok().as_deref(),
+                std::env::var("YADACALL_GOOGLE_CLIENT_SECRET")
+                    .ok()
+                    .as_deref(),
             ),
             (COMPILED_CLIENT_ID, COMPILED_CLIENT_SECRET),
         )
@@ -131,7 +133,8 @@ mod tests {
 
     #[test]
     fn nothing_configured_is_a_clean_error() {
-        let err = GoogleConfig::resolve_from(None, (None, Some("x")), (Some(" "), None)).unwrap_err();
+        let err =
+            GoogleConfig::resolve_from(None, (None, Some("x")), (Some(" "), None)).unwrap_err();
         assert!(matches!(err, ConnectError::NotConfigured));
         assert!(err.to_string().contains("GOOGLE_OAUTH.md"));
     }

@@ -183,7 +183,10 @@ impl AccountManager {
     where
         F: Fn(&str) + Send + Sync,
     {
-        let authorized = self.oauth()?.authorize(None, open_url, cancel, timeout).await?;
+        let authorized = self
+            .oauth()?
+            .authorize(None, open_url, cancel, timeout)
+            .await?;
         self.finish_login(authorized, None).await
     }
 
@@ -284,7 +287,9 @@ impl AccountManager {
     /// `invalid_grant` flips the account to `AuthExpired` and publishes the event.
     pub async fn access_token(&self, id: &str) -> ConnectResult<String> {
         let id = normalize_id(id);
-        let meta = self.get(&id).ok_or_else(|| ConnectError::NotFound(id.clone()))?;
+        let meta = self
+            .get(&id)
+            .ok_or_else(|| ConnectError::NotFound(id.clone()))?;
         if meta.state == AccountState::AuthExpired {
             return Err(ConnectError::AuthExpired(id));
         }
@@ -345,14 +350,18 @@ impl AccountManager {
             changed
         };
         if changed {
-            let _ = self.events.send(ConnectEvent::AccountAuthExpired { account: id });
+            let _ = self
+                .events
+                .send(ConnectEvent::AccountAuthExpired { account: id });
         }
     }
 
     /// Revokes the token at Google (best effort), deletes the secret and the account.
     pub async fn remove_account(&self, id: &str) -> ConnectResult<RemoveOutcome> {
         let id = normalize_id(id);
-        let meta = self.get(&id).ok_or_else(|| ConnectError::NotFound(id.clone()))?;
+        let meta = self
+            .get(&id)
+            .ok_or_else(|| ConnectError::NotFound(id.clone()))?;
         let mut revoked = false;
         if meta.kind == AccountKind::Google {
             let key = google_key(&id);
@@ -378,7 +387,9 @@ impl AccountManager {
         let url = normalize_ics_url(url)?;
         let id = format!("ics:{}", short_hash(&url));
         if self.get(&id).is_some() {
-            return Err(ConnectError::Invalid("this calendar is already added".into()));
+            return Err(ConnectError::Invalid(
+                "this calendar is already added".into(),
+            ));
         }
         self.store.set(&id, &url)?;
         let mut accounts = self.lock();
@@ -432,7 +443,9 @@ pub fn normalize_ics_url(url: &str) -> ConnectResult<String> {
     let parsed =
         url::Url::parse(&rewritten).map_err(|e| ConnectError::Invalid(format!("bad URL: {e}")))?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(ConnectError::Invalid("ICS URL must be http(s) or webcal".into()));
+        return Err(ConnectError::Invalid(
+            "ICS URL must be http(s) or webcal".into(),
+        ));
     }
     Ok(rewritten)
 }

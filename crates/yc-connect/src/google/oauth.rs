@@ -121,7 +121,9 @@ impl GoogleOAuth {
         let url = self.authorization_url(&redirect_uri, &pkce, &state, login_hint)?;
         open_url(url.as_str());
         let code = server.wait_for_code(&state, cancel, timeout).await?;
-        let tokens = self.exchange_code(&code, &pkce.verifier, &redirect_uri).await?;
+        let tokens = self
+            .exchange_code(&code, &pkce.verifier, &redirect_uri)
+            .await?;
         let granted = tokens.scope.as_deref().unwrap_or_default();
         if !granted.split_whitespace().any(|s| s == CALENDAR_SCOPE) {
             return Err(ConnectError::Denied(
@@ -165,7 +167,11 @@ impl GoogleOAuth {
 
     /// Uses a refresh token to mint a new access token. `invalid_grant` becomes
     /// [`ConnectError::AuthExpired`] carrying `account`.
-    pub async fn refresh(&self, refresh_token: &str, account: &str) -> ConnectResult<TokenResponse> {
+    pub async fn refresh(
+        &self,
+        refresh_token: &str,
+        account: &str,
+    ) -> ConnectResult<TokenResponse> {
         let mut form = vec![
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh_token),
@@ -189,7 +195,9 @@ impl GoogleOAuth {
             return Err(ConnectError::AuthExpired(account.to_string()));
         }
         if status.is_server_error() || status.as_u16() == 429 {
-            return Err(ConnectError::Network(format!("token endpoint: HTTP {status}")));
+            return Err(ConnectError::Network(format!(
+                "token endpoint: HTTP {status}"
+            )));
         }
         Err(ConnectError::Protocol(format!(
             "token refresh failed: {}",
@@ -273,7 +281,12 @@ mod tests {
     use crate::google::config::Endpoints;
 
     fn oauth() -> GoogleOAuth {
-        GoogleOAuth::new(GoogleConfig::with_endpoints("cid", None, Endpoints::default())).unwrap()
+        GoogleOAuth::new(GoogleConfig::with_endpoints(
+            "cid",
+            None,
+            Endpoints::default(),
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -312,7 +325,9 @@ mod tests {
     #[test]
     fn error_body_parsing() {
         assert_eq!(
-            oauth_error(r#"{"error":"invalid_grant","error_description":"Token has been expired or revoked."}"#),
+            oauth_error(
+                r#"{"error":"invalid_grant","error_description":"Token has been expired or revoked."}"#
+            ),
             "invalid_grant: Token has been expired or revoked."
         );
     }

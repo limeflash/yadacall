@@ -45,6 +45,15 @@ pub enum EventChange {
     Remove(String),
 }
 
+/// Non-error outcomes of an authorised GET other than a body.
+enum Fetched {
+    Body(Value),
+    /// HTTP 410: the sync token is no longer valid.
+    Gone,
+    /// HTTP 403: e.g. the granted scopes do not cover this endpoint.
+    Forbidden,
+}
+
 /// Thin Calendar API client; authentication goes through the [`AccountManager`].
 #[derive(Debug, Clone)]
 pub struct CalendarClient {
@@ -75,14 +84,14 @@ impl CalendarClient {
         Ok(url)
     }
 
-    /// Authorised GET. `Ok(None)` means HTTP 410 (sync token no longer valid).
+    /// Authorised GET with one transparent token refresh on 401.
     async fn get_json(
         &self,
         accounts: &AccountManager,
         account: &str,
         url: Url,
         query: &[(&str, String)],
-    ) -> ConnectResult<Option<Value>> {
+    ) -> ConnectResult<Fetched> {
         for attempt in 0..2 {
             let token = accounts.access_token(account).await?;
             let response = self
@@ -94,7 +103,7 @@ impl CalendarClient {
                 .await?;
             let status = response.status();
             match status.as_u16() {
-                200..=299 => return Ok(Some(response.json().await?)),
+                200..=299 => return Ok(Fetched::Body(response.json().await?)),
                 401 if attempt == 0 => {
                     accounts.invalidate_access_token(account).await;
                 }
@@ -102,9 +111,12 @@ impl CalendarClient {
                     accounts.mark_expired(account);
                     return Err(ConnectError::AuthExpired(account.to_string()));
                 }
-                410 => return Ok(None),
+                410 => return Ok(Fetched::Gone),
+                403 => return Ok(Fetched::Forbidden),
                 429 | 500..=599 => {
-                    return Err(ConnectError::Network(format!("calendar API: HTTP {status}")));
+                    return Err(ConnectError::Network(format!(
+                        "calendar API: HTTP {status}"
+                    )));
                 }
                 _ => {
                     let body = response.text().await.unwrap_or_default();
@@ -131,10 +143,32 @@ impl CalendarClient {
             if let Some(p) = &page {
                 query.push(("pageToken", p.clone()));
             }
-            let body = self
-                .get_json(accounts, account, self.url(&["users", "me", "calendarList"])?, &query)
+            let body = match self
+                .get_json(
+                    accounts,
+                    account,
+                    self.url(&["users", "me", "calendarList"])?,
+                    &query,
+                )
                 .await?
-                .ok_or_else(|| ConnectError::Protocol("calendarList: HTTP 410".into()))?;
+            {
+                Fetched::Body(body) => body,
+                // `events.readonly` alone does not cover calendarList: stay within the minimal
+                // scope and read the primary calendar only.
+                Fetched::Forbidden => {
+                    tracing::info!(
+                        "calendarList not permitted for {account}; using the primary calendar"
+                    );
+                    return Ok(vec![CalendarInfo {
+                        id: "primary".into(),
+                        title: account.to_string(),
+                        primary: true,
+                    }]);
+                }
+                Fetched::Gone => {
+                    return Err(ConnectError::Protocol("calendarList: HTTP 410".into()));
+                }
+            };
             for item in body["items"].as_array().into_iter().flatten() {
                 let primary = item["primary"].as_bool().unwrap_or(false);
                 let selected = item["selected"].as_bool().unwrap_or(false);
@@ -230,8 +264,18 @@ impl CalendarClient {
             if let Some(p) = &page {
                 query.push(("pageToken", p.clone()));
             }
-            let Some(body) = self.get_json(accounts, account, url.clone(), &query).await? else {
-                return Ok(SyncOutcome::TokenExpired);
+            let body = match self
+                .get_json(accounts, account, url.clone(), &query)
+                .await?
+            {
+                Fetched::Body(body) => body,
+                Fetched::Gone => return Ok(SyncOutcome::TokenExpired),
+                Fetched::Forbidden => {
+                    return Err(ConnectError::Protocol(format!(
+                        "calendar {}: access forbidden (is the Calendar API enabled and the scope granted?)",
+                        calendar.id
+                    )));
+                }
             };
             for item in body["items"].as_array().into_iter().flatten() {
                 if let Some(change) = parse_event(account, calendar, item) {
@@ -352,7 +396,11 @@ pub fn parse_event(account: &str, calendar: &CalendarInfo, item: &Value) -> Opti
             other_links.push(link);
         }
     };
-    for entry in item["conferenceData"]["entryPoints"].as_array().into_iter().flatten() {
+    for entry in item["conferenceData"]["entryPoints"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
         if entry["entryPointType"].as_str() == Some("video")
             && let Some(uri) = entry["uri"].as_str()
         {
@@ -374,13 +422,18 @@ pub fn parse_event(account: &str, calendar: &CalendarInfo, item: &Value) -> Opti
         account: account.to_string(),
         calendar: calendar.id.clone(),
         calendar_title: Some(calendar.title.clone()),
-        title: item["summary"].as_str().unwrap_or("(без названия)").to_string(),
+        title: item["summary"]
+            .as_str()
+            .unwrap_or("(без названия)")
+            .to_string(),
         start: start.with_timezone(&Utc),
         end: end.with_timezone(&Utc),
         meet_url,
         other_links,
         attendees,
-        organizer: item["organizer"].is_object().then(|| attendee_of(&item["organizer"])),
+        organizer: item["organizer"]
+            .is_object()
+            .then(|| attendee_of(&item["organizer"])),
         ical_uid: item["iCalUID"].as_str().map(str::to_string),
         overlaps: Vec::new(),
         also_in: Vec::new(),
@@ -439,7 +492,10 @@ mod tests {
             "attendees": [{"email": "a@x.com", "self": true, "responseStatus": "accepted"}],
             "iCalUID": "uid1@google.com",
         })));
-        assert_eq!(e.meet_url.as_deref(), Some("https://meet.google.com/abc-defg-hij"));
+        assert_eq!(
+            e.meet_url.as_deref(),
+            Some("https://meet.google.com/abc-defg-hij")
+        );
         assert_eq!(e.start.to_rfc3339(), "2026-10-12T07:00:00+00:00");
         assert_eq!(e.id, "a@x.com|primary@x.com|e1");
         assert_eq!(e.organizer.unwrap().name.as_deref(), Some("Boss"));
@@ -468,7 +524,9 @@ mod tests {
             )
         };
         assert!(removed(event(json!({"status": "cancelled"}))));
-        assert!(removed(json!({"id": "d", "start": {"date": "2026-10-12"}, "end": {"date": "2026-10-13"}})));
+        assert!(removed(
+            json!({"id": "d", "start": {"date": "2026-10-12"}, "end": {"date": "2026-10-13"}})
+        ));
         assert!(removed(event(json!({"attendees": [
             {"email": "a@x.com", "self": true, "responseStatus": "declined"}]}))));
         assert!(removed(event(json!({"eventType": "outOfOffice"}))));

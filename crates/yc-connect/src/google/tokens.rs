@@ -56,7 +56,8 @@ pub struct KeychainTokenStore;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 impl KeychainTokenStore {
     fn entry(key: &str) -> ConnectResult<keyring::Entry> {
-        keyring::Entry::new(KEYCHAIN_SERVICE, key).map_err(|e| ConnectError::Keychain(e.to_string()))
+        keyring::Entry::new(KEYCHAIN_SERVICE, key)
+            .map_err(|e| ConnectError::Keychain(e.to_string()))
     }
 }
 

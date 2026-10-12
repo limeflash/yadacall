@@ -19,7 +19,9 @@ const MIC_KEY: &str =
 /// `(key name, LastUsedTimeStart, LastUsedTimeStop)` of every app under the microphone key,
 /// including the `NonPackaged` desktop apps.
 fn consent_entries() -> Option<Vec<(String, u64, u64)>> {
-    let root = RegKey::predef(HKEY_CURRENT_USER).open_subkey(MIC_KEY).ok()?;
+    let root = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(MIC_KEY)
+        .ok()?;
     let mut out = Vec::new();
     let mut read = |key: &RegKey, name: String| {
         let start: u64 = key.get_value("LastUsedTimeStart").unwrap_or(0);

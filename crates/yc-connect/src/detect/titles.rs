@@ -74,7 +74,8 @@ mod tests {
         let w = parse_meet_title("Meet \u{2013} abc-defg-hij - Google Chrome").unwrap();
         assert_eq!(w.code.as_deref(), Some("abc-defg-hij"));
         assert_eq!(w.browser.as_deref(), Some("Chrome"));
-        let w = parse_meet_title("Meet - abc-defg-hij - Personal - Microsoft\u{200b} Edge").unwrap();
+        let w =
+            parse_meet_title("Meet - abc-defg-hij - Personal - Microsoft\u{200b} Edge").unwrap();
         assert_eq!(w.browser.as_deref(), Some("Edge"));
         let pwa = parse_meet_title("Meet \u{2014} xyz-abcd-efg").unwrap();
         assert_eq!(pwa.code.as_deref(), Some("xyz-abcd-efg"));

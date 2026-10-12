@@ -69,6 +69,11 @@ impl<S: CallSources> Detector<S> {
         self.inspect_browsers = on;
     }
 
+    /// The microphone gate alone (for diagnostics).
+    pub fn mic_state(&self) -> MicState {
+        self.sources.mic_state()
+    }
+
     /// One blocking detection pass.
     pub fn detect(&self) -> Option<DetectedCall> {
         if self.sources.mic_state() != MicState::InUse {
@@ -82,9 +87,7 @@ impl<S: CallSources> Detector<S> {
                 .as_ref()
                 .map(|c| format!("https://meet.google.com/{c}"))
                 .or(tab.url);
-            let meet_code = tab
-                .code
-                .or_else(|| url.as_deref().and_then(meet_code_of));
+            let meet_code = tab.code.or_else(|| url.as_deref().and_then(meet_code_of));
             return Some(DetectedCall {
                 app: DetectedApp::GoogleMeet,
                 meet_code,
@@ -168,11 +171,7 @@ fn system_sources() -> Box<dyn CallSources> {
 pub(crate) fn process_names() -> Vec<String> {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
     let mut sys = System::new();
-    sys.refresh_processes_specifics(
-        ProcessesToUpdate::All,
-        true,
-        ProcessRefreshKind::nothing(),
-    );
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     sys.processes()
         .values()
         .map(|p| p.name().to_string_lossy().into_owned())
@@ -221,7 +220,11 @@ mod tests {
     #[test]
     fn idle_or_unknown_mic_short_circuits() {
         assert!(Detector::new(fake(MicState::Idle), true).detect().is_none());
-        assert!(Detector::new(fake(MicState::Unknown), true).detect().is_none());
+        assert!(
+            Detector::new(fake(MicState::Unknown), true)
+                .detect()
+                .is_none()
+        );
     }
 
     #[test]
@@ -229,13 +232,18 @@ mod tests {
         let call = Detector::new(fake(MicState::InUse), true).detect().unwrap();
         assert_eq!(call.app, DetectedApp::GoogleMeet);
         assert_eq!(call.meet_code.as_deref(), Some("abc-defg-hij"));
-        assert_eq!(call.url.as_deref(), Some("https://meet.google.com/abc-defg-hij"));
+        assert_eq!(
+            call.url.as_deref(),
+            Some("https://meet.google.com/abc-defg-hij")
+        );
         assert!(call.certain);
     }
 
     #[test]
     fn tabs_are_not_inspected_unless_enabled() {
-        let call = Detector::new(fake(MicState::InUse), false).detect().unwrap();
+        let call = Detector::new(fake(MicState::InUse), false)
+            .detect()
+            .unwrap();
         assert_eq!(call.app, DetectedApp::Zoom);
         assert!(!call.certain, "mic in use + app running is only likely");
     }

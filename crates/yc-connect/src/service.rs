@@ -227,7 +227,10 @@ impl ConnectService {
     pub async fn add_ics(&self, url: &str, label: &str) -> ConnectResult<AccountMeta> {
         let url = crate::google::accounts::normalize_ics_url(url)?;
         let (from, to) = self.window();
-        self.inner.ics.fetch_agenda(&url, "ics:probe", (from, to)).await?;
+        self.inner
+            .ics
+            .fetch_agenda(&url, "ics:probe", (from, to))
+            .await?;
         let meta = self.inner.accounts.add_ics(&url, label)?;
         self.wake();
         Ok(meta)

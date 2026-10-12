@@ -63,7 +63,9 @@ pub fn find_video_links(text: &str) -> Vec<VideoLink> {
     let decoded = text.replace("&amp;", "&");
     let mut found: Vec<VideoLink> = Vec::new();
     for m in URL_RE.find_iter(&decoded) {
-        let raw = m.as_str().trim_end_matches(['.', ',', ';', ')', ']', '>', '\\']);
+        let raw = m
+            .as_str()
+            .trim_end_matches(['.', ',', ';', ')', ']', '>', '\\']);
         let Some(provider) = classify(raw) else {
             continue;
         };
@@ -116,7 +118,11 @@ mod tests {
             ]
         );
         assert_eq!(links[0].url, "https://meet.google.com/abc-defg-hij");
-        assert!(links[1].url.starts_with("https://us02web.zoom.us/j/123456789"));
+        assert!(
+            links[1]
+                .url
+                .starts_with("https://us02web.zoom.us/j/123456789")
+        );
     }
 
     #[test]

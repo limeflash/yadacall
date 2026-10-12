@@ -12,6 +12,7 @@
 //! - [`service`]: the async runner that glues refresh, scheduling and events together.
 
 pub mod agenda;
+pub mod browser;
 pub mod clock;
 pub mod detect;
 pub mod error;

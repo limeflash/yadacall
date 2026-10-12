@@ -77,7 +77,12 @@ async fn handle(mut stream: TcpStream, expected_state: &str) -> Option<ConnectRe
     let head = tokio::time::timeout(Duration::from_secs(5), read_head(&mut stream))
         .await
         .ok()??;
-    let target = head.lines().next()?.strip_prefix("GET ")?.split(' ').next()?;
+    let target = head
+        .lines()
+        .next()?
+        .strip_prefix("GET ")?
+        .split(' ')
+        .next()?;
     let url = Url::parse(&format!("http://127.0.0.1{target}")).ok()?;
     if url.path() != "/callback" {
         respond(&mut stream, 404, "text/plain; charset=utf-8", "not found").await;
@@ -156,12 +161,20 @@ mod tests {
                 .wait_for_code("good", &cancel, Duration::from_secs(5))
                 .await
         });
-        assert!(get(&format!("{base}?code=evil&state=bad")).await.contains("Вход не выполнен"));
+        assert!(
+            get(&format!("{base}?code=evil&state=bad"))
+                .await
+                .contains("Вход не выполнен")
+        );
         assert_eq!(
             get(&base.replace("/callback", "/favicon.ico")).await,
             "not found"
         );
-        assert!(get(&format!("{base}?code=abc%2F1&state=good")).await.contains("Готово"));
+        assert!(
+            get(&format!("{base}?code=abc%2F1&state=good"))
+                .await
+                .contains("Готово")
+        );
         assert_eq!(waiter.await.unwrap().unwrap(), "abc/1");
     }
 
@@ -171,9 +184,10 @@ mod tests {
         let base = server.redirect_uri();
         let cancel = CancellationToken::new();
         let c2 = cancel.clone();
-        let waiter = tokio::spawn(async move {
-            server.wait_for_code("s", &c2, Duration::from_secs(5)).await
-        });
+        let waiter =
+            tokio::spawn(
+                async move { server.wait_for_code("s", &c2, Duration::from_secs(5)).await },
+            );
         get(&format!("{base}?error=access_denied&state=s")).await;
         assert!(matches!(
             waiter.await.unwrap(),
@@ -188,7 +202,9 @@ mod tests {
 
         let server = CallbackServer::bind().await.unwrap();
         cancel.cancel();
-        let r = server.wait_for_code("s", &cancel, Duration::from_secs(5)).await;
+        let r = server
+            .wait_for_code("s", &cancel, Duration::from_secs(5))
+            .await;
         assert!(matches!(r, Err(ConnectError::Cancelled)));
     }
 }
