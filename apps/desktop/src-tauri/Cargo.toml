@@ -20,6 +20,12 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 yc-core.workspace = true
+yc-audio.workspace = true
+yc-engine.workspace = true
+yc-hub.workspace = true
+yc-llm.workspace = true
+yc-ml.workspace = true
+yc-store.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -29,6 +35,8 @@ uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
 async-trait = "0.1"
+sys-locale = "0.3"
+fs2 = "0.4"
 tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api", "protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
@@ -40,3 +48,11 @@ tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSObject"] }
+
+[dev-dependencies]
+tempfile = "3"
