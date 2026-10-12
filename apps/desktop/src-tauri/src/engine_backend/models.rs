@@ -171,6 +171,7 @@ impl EngineBackend {
                 } else {
                     pred.headline_en
                 },
+                benchmarkable: bench::benchmarkable(spec.kind),
                 download,
             });
         }

@@ -138,6 +138,8 @@ export interface ModelEntry {
   verdict: Verdict;
   /** One-line estimate: "≈ 40× быстрее реального времени". */
   estimate: string;
+  /** False for models that cannot be measured (voice-activity detection); absent means true. */
+  benchmarkable?: boolean;
   /** Present while a download is queued / running / paused / failed. */
   download?: ModelDownload;
 }

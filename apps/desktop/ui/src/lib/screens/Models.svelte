@@ -110,7 +110,7 @@
                   {#if m.installed && !m.active && (k.kind === "asr" || k.kind === "llm")}
                     <Button size="sm" onclick={() => act(() => api.modelSetActive(m.id))}>{t("Сделать основной")}</Button>
                     <IconButton variant="flat" aria-label={t("Удалить модель")} onclick={() => act(() => api.modelRemove(m.id))}><Icon name="trash" size={14} /></IconButton>
-                  {:else if m.installed && !d}
+                  {:else if m.installed && !d && m.benchmarkable !== false}
                     <Button size="sm" variant="ghost" disabled={benching === m.id} onclick={() => bench(m)}>{benching === m.id ? t("Меряю…") : t("Измерить")}</Button>
                   {:else if !m.installed && !d}
                     <Button size="sm" disabled={m.verdict === "wontRun"} onclick={() => act(() => api.modelDownload(m.id))}>
