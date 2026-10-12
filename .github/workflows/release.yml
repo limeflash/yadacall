@@ -23,7 +23,8 @@ jobs:
             os: windows-latest
             args: --bundles nsis,msi
           - name: Linux x64
-            os: ubuntu-22.04
+            # 24.04: the prebuilt ONNX Runtime needs glibc 2.38+ and GCC 13 libstdc++.
+            os: ubuntu-24.04
             args: --bundles appimage,deb
 
     steps:
