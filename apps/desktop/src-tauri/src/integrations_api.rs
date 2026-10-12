@@ -115,6 +115,15 @@ pub struct JoinOutcome {
     pub record: bool,
     /// When the call is expected to end (for the "звонок без записи" menu-bar state).
     pub ends_at: DateTime<Utc>,
+    /// Calendar event the call belongs to (links the recorded meeting back to the agenda).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
+    /// How many remote people to expect; `None` when the attendee list is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_speakers: Option<u8>,
+    /// Display names of the other attendees, used to name the speakers once the transcript is ready.
+    #[serde(default)]
+    pub participants: Vec<String>,
 }
 
 // ---- connections catalog ------------------------------------------------------------------------------
@@ -124,6 +133,8 @@ pub struct JoinOutcome {
 pub enum ConnectionState {
     Connected,
     Soon,
+    /// The service exists but this build has no credentials for it (see `Connection::docs_url`).
+    Unconfigured,
 }
 
 /// One service card of the catalog.
@@ -142,12 +153,15 @@ pub struct Connection {
     /// "Хочу такое": a purely local flag, never sent anywhere.
     #[serde(default)]
     pub want: bool,
+    /// Setup instructions for an [`ConnectionState::Unconfigured`] service.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docs_url: Option<String>,
 }
 
 // ---- reminders ----------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct ReminderSettings {
     /// How many minutes before the start to remind: 1, 2 or 5.
     pub remind_minutes: u8,
@@ -155,6 +169,9 @@ pub struct ReminderSettings {
     pub open_in_account: bool,
     /// Notice calls that are not on any calendar and offer to record them.
     pub detect_unscheduled: bool,
+    /// The user pressed "Разрешить": detection may read the browsers' tabs (macOS asks for Automation
+    /// access the first time). Off: mic-in-use plus window titles and running processes only.
+    pub browser_access: bool,
 }
 
 impl Default for ReminderSettings {
@@ -163,6 +180,7 @@ impl Default for ReminderSettings {
             remind_minutes: 2,
             open_in_account: true,
             detect_unscheduled: true,
+            browser_access: false,
         }
     }
 }
@@ -191,6 +209,13 @@ pub enum IntegrationEvent {
         account_label: String,
         account_email: String,
         minutes_before: u8,
+    },
+    /// A calendar call is starting right now (or the app was opened late) and nothing has been decided.
+    #[serde(rename_all = "camelCase")]
+    CallStarting {
+        event: AgendaEvent,
+        account_label: String,
+        account_email: String,
     },
     /// The user joined a Meet call that is not on any calendar.
     CallDetected { call: DetectedCall },

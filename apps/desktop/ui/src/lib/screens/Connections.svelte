@@ -18,7 +18,7 @@
   onMount(() => { load(); return onIntegrationEvent((e) => { if (e.type === "agendaChanged") load(); }); });
 
   const options = $derived<{ value: Filter; label: string }[]>([{ value: "all", label: t("Все") }, { value: "on", label: t("Подключено") }, { value: "soon", label: t("Скоро") }]);
-  const list = $derived(items.filter((c) => filter === "all" || (filter === "on" ? c.state === "connected" : c.state === "soon")));
+  const list = $derived(items.filter((c) => filter === "all" || (filter === "on" ? c.state === "connected" : c.state !== "connected")));
   const wanted = $derived(items.filter((c) => c.want).map((c) => c.name));
 
   /** "Хочу такое" is a local flag: nothing is sent anywhere. */
@@ -44,20 +44,23 @@
       <div class="grid">
         {#each list as c (c.id)}
           {@const on = c.state === "connected"}
-          <div class="yc-in card" style="border-color: {on ? 'var(--accent-line)' : 'var(--border)'}; background: {on ? 'var(--surface)' : 'transparent'}">
+          {@const unconf = c.state === "unconfigured"}
+          <div class="yc-in card" style="border-color: {on ? 'var(--accent-line)' : unconf ? 'var(--warning-line)' : 'var(--border)'}; background: {on ? 'var(--surface)' : 'transparent'}">
             <div style="display: flex; align-items: center; gap: 10px">
               <span aria-hidden="true" class="tile" style="background: {on ? 'var(--accent-soft)' : 'var(--surface-2)'}; color: {on ? 'var(--accent-text)' : 'var(--muted)'}">{c.mono}</span>
               <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
                 <span class="yc-ellipsis name" style="color: {on ? 'var(--text)' : 'var(--muted)'}">{c.name}</span>
                 <span class="state" style="color: {on ? 'var(--muted)' : 'var(--faint)'}">
                   {#if on}<StatusDot kind="ok" />{/if}
-                  {on ? `${t("Подключено")} · ${accounts(c.accounts)}` : t("Скоро")}
+                  {on ? `${t("Подключено")} · ${accounts(c.accounts)}` : unconf ? t("не настроено") : t("Скоро")}
                 </span>
               </span>
             </div>
             <span class="yc-pretty desc">{t(c.description)}</span>
             {#if on}
               <a href={href({ name: "google" })} class="yc-press act primary">{t("Аккаунты")}<Icon name="chevronRight" size={12} /></a>
+            {:else if unconf}
+              <a href={c.docsUrl} target="_blank" rel="noopener noreferrer" class="yc-press act">{t("Как настроить")}<Icon name="chevronRight" size={12} /></a>
             {:else}
               <button type="button" class="yc-press act" class:want={c.want} aria-pressed={c.want} onclick={() => toggle(c)}>
                 <Icon name={c.want ? "check" : "bell"} size={12} />{c.want ? t("Жду") : t("Хочу такое")}

@@ -7642,6 +7642,7 @@ dependencies = [
  "tracing",
  "uuid",
  "yc-audio",
+ "yc-connect",
  "yc-core",
  "yc-engine",
  "yc-hub",

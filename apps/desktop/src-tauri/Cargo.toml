@@ -24,6 +24,7 @@ yc-audio.workspace = true
 yc-engine.workspace = true
 yc-hub.workspace = true
 yc-llm.workspace = true
+yc-connect = { path = "../../../crates/yc-connect" }
 yc-ml.workspace = true
 yc-store.workspace = true
 serde.workspace = true

@@ -257,6 +257,9 @@ fn outcome(st: &State, event_id: &str, record: bool, open_url: bool) -> Result<J
         account_email: a.email.clone(),
         record,
         ends_at: e.end,
+        event_id: Some(e.id.clone()),
+        expected_speakers: u8::try_from(e.attendees.len()).ok().filter(|n| *n > 0),
+        participants: e.attendees.clone(),
     })
 }
 
@@ -468,6 +471,9 @@ impl Integrations for DemoIntegrations {
             account_email: String::new(),
             record: true,
             ends_at: Utc::now() + ChronoDuration::hours(1),
+            event_id: None,
+            expected_speakers: None,
+            participants: Vec::new(),
         }))
     }
 }
