@@ -309,6 +309,18 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// Checks the configured release endpoint for a newer application version.
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> R<crate::updates::UpdateStatus> {
+    Ok(crate::updates::check(&app).await?)
+}
+
+/// Installs an available update after confirming that no recording is active.
+#[tauri::command]
+pub async fn install_update(app: AppHandle, b: B<'_>) -> R<()> {
+    Ok(crate::updates::install(&app, b.inner().as_ref()).await?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

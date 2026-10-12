@@ -39,6 +39,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "category": "Productivity",
     "shortDescription": "Local call recorder and transcriber",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
@@ -46,6 +47,14 @@
       "minimumSystemVersion": "14.2",
       "entitlements": "Entitlements.plist",
       "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcyMEYyRkE1QjQ4QjNCMUUKUldRZU80dTBwUzhQY3YxT0szTlVBVDVkT2FuKzVXcmhtcFl2Q1c5ZmVYbGJ1S0dkQ2g0b0hraWcK",
+      "endpoints": [
+        "https://github.com/limeflash/yadacall/releases/latest/download/latest.json"
+      ]
     }
   }
 }

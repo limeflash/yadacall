@@ -13,6 +13,7 @@
     "core:window:allow-set-focus",
     "dialog:allow-open",
     "opener:default",
+    "process:default",
     "allow-list-meetings",
     "allow-get-meeting",
     "allow-rename-meeting",
@@ -69,6 +70,8 @@
     "allow-reminder-settings",
     "allow-set-reminder-settings",
     "allow-detected-call",
-    "allow-resolve-detected-call"
+    "allow-resolve-detected-call",
+    "allow-check-update",
+    "allow-install-update"
   ]
 }
