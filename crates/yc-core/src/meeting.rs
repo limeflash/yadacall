@@ -94,9 +94,16 @@ pub struct Participant {
 pub enum MeetingStatus {
     Recording,
     /// Post-call processing. `progress` is 0.0..=1.0 across all remaining stages.
-    Processing { stage: Stage, progress: f32 },
+    Processing {
+        stage: Stage,
+        progress: f32,
+    },
     Ready,
-    Failed { stage: Stage, message: String, retryable: bool },
+    Failed {
+        stage: Stage,
+        message: String,
+        retryable: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -1,8 +1,8 @@
 //! Port traits implemented by adapter crates. Kept synchronous and `Send`: inference runs on
 //! dedicated blocking threads owned by `yc-engine`, never on the async runtime.
 
-use crate::transcript::Recognized;
 use crate::Result;
+use crate::transcript::Recognized;
 
 /// Static facts about a loaded model, shown in the UI and stored with results.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

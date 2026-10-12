@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::meeting::TrackKind;
 use crate::Ms;
+use crate::meeting::TrackKind;
 
 /// Well-known speaker keys. Diarised remote speakers use `s1`, `s2`, …
 pub const SPEAKER_ME: &str = "me";

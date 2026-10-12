@@ -36,7 +36,10 @@ pub enum Error {
 impl Error {
     /// Whether retrying the same operation later can reasonably succeed.
     pub fn is_retryable(&self) -> bool {
-        matches!(self, Error::Network(_) | Error::Device(_) | Error::Io(_) | Error::Llm(_))
+        matches!(
+            self,
+            Error::Network(_) | Error::Device(_) | Error::Io(_) | Error::Llm(_)
+        )
     }
 }
 
