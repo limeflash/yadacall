@@ -15,6 +15,7 @@ pub mod integrations_shell;
 pub mod paths;
 pub mod permissions;
 pub mod shell;
+pub mod updates;
 
 use std::sync::{Arc, Mutex};
 
@@ -69,6 +70,8 @@ pub const COMMANDS: &[&str] = &[
     "popover_fit",
     "hide_popover",
     "quit_app",
+    "check_update",
+    "install_update",
 ];
 
 /// Commands of the integrations (`integrations_commands.rs`); same ACL rules as [`COMMANDS`].
@@ -116,6 +119,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage::<shell::Shared>(Arc::new(Mutex::new(shell::ShellState::default())))
         .invoke_handler(tauri::generate_handler![
             commands::list_meetings,
@@ -158,6 +163,8 @@ pub fn run() {
             commands::popover_fit,
             commands::hide_popover,
             commands::quit_app,
+            commands::check_update,
+            commands::install_update,
             integrations_commands::accounts,
             integrations_commands::add_google_account,
             integrations_commands::cancel_add_account,
@@ -253,6 +260,7 @@ pub fn run() {
 
             shell::create_popovers(&handle)?;
             shell::build_tray(&handle)?;
+            updates::start_background_check(handle.clone());
             let h2 = handle.clone();
             tauri::async_runtime::spawn(async move {
                 let backend = h2.state::<Arc<dyn Backend>>();

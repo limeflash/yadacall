@@ -60,6 +60,8 @@ const COMMANDS: &[&str] = &[
     "set_reminder_settings",
     "detected_call",
     "resolve_detected_call",
+    "check_update",
+    "install_update",
 ];
 
 fn main() {
