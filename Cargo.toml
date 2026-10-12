@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/cli"]
+default-members = ["crates/*", "apps/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/limeflash/yadacall"
+authors = ["YadaCall contributors"]
+
+[workspace.dependencies]
+yc-core = { path = "crates/yc-core" }
+yc-text = { path = "crates/yc-text" }
+yc-audio = { path = "crates/yc-audio" }
+yc-ml = { path = "crates/yc-ml" }
+yc-store = { path = "crates/yc-store" }
+yc-hub = { path = "crates/yc-hub" }
+yc-llm = { path = "crates/yc-llm" }
+yc-engine = { path = "crates/yc-engine" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v7", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "unwind"
+
+[profile.dev.package."*"]
+opt-level = 2
