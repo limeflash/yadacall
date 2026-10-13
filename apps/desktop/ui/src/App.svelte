@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import { app, initApp, theme } from "./lib/state.svelte";
   import { nav, replace } from "./lib/router.svelte";
-  import { i18n } from "./lib/i18n/index.svelte";
+  import { i18n, t } from "./lib/i18n/index.svelte";
+  import Button from "./lib/kit/Button.svelte";
   import Sidebar from "./lib/Sidebar.svelte";
   import Toasts from "./lib/kit/Toasts.svelte";
   import Meetings from "./lib/screens/Meetings.svelte";
@@ -54,6 +55,7 @@
       <div class="yc-app">
         <Sidebar />
         {#key route.name === "meeting" ? "meeting" : route.name}
+          <svelte:boundary onerror={(e) => console.error("screen failed", e)}>
           {#if route.name === "meetings"}<Meetings />
           {:else if route.name === "meeting"}<MeetingDetail id={route.id} tab={route.tab} at={route.at} />
           {:else if route.name === "record"}<Record />
@@ -66,9 +68,34 @@
           {:else if route.name === "connections"}<Connections />
           {:else if route.name === "google"}<GoogleAccounts />
           {/if}
+          {#snippet failed(error, reset)}
+            <main class="crash" role="alert">
+              <h1>{t("Не получилось показать этот экран")}</h1>
+              <p>{t("Данные в порядке — сбой только в отображении. Попробуй открыть экран ещё раз.")}</p>
+              <div class="crash-btns">
+                <Button size="md" variant="primary" onclick={reset}>{t("Повторить")}</Button>
+                <Button size="md" variant="ghost" onclick={() => replace({ name: "meetings" })}>{t("К встречам")}</Button>
+              </div>
+              <details>
+                <summary>{t("Подробнее")}</summary>
+                <pre>{String((error as Error)?.stack ?? error)}</pre>
+              </details>
+            </main>
+          {/snippet}
+          </svelte:boundary>
         {/key}
       </div>
     {/if}
   {/if}
   <Toasts />
 {/if}
+
+<style>
+  .crash { flex: 1 1 520px; min-width: 0; box-sizing: border-box; padding: 56px 40px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; overflow: auto; }
+  .crash h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
+  .crash p { margin: 0; max-width: 420px; font-size: 14px; color: var(--muted); }
+  .crash-btns { display: flex; gap: 8px; margin-top: 4px; }
+  .crash details { max-width: 100%; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .crash summary { cursor: pointer; }
+  .crash pre { margin: 8px 0 0; padding: 10px 12px; max-width: 100%; overflow: auto; border-radius: 12px; background: var(--surface); font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+</style>

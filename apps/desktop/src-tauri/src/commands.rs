@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use yc_core::events::EngineEvent;
 use yc_core::meeting::MeetingStatus;
 use yc_core::summary::Summary;
@@ -306,9 +306,7 @@ pub fn popover_fit(app: AppHandle, label: String, height: f64) {
 
 #[tauri::command]
 pub fn hide_popover(app: AppHandle, label: String) {
-    if let Some(w) = app.get_webview_window(&label) {
-        let _ = w.hide();
-    }
+    shell::hide_popover_window(&app, &label);
 }
 
 #[tauri::command]

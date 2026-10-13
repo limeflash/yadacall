@@ -17,6 +17,7 @@ export function createTauriApi(): Api {
     getMeeting: (id) => invoke("get_meeting", { id }),
     renameMeeting: (id, title) => invoke("rename_meeting", { id, title }),
     deleteMeeting: (id) => invoke("delete_meeting", { id }),
+    retranscribeMeeting: (id) => invoke("meeting_retranscribe", { id }),
     renameSpeaker: (id, key, name) => invoke("rename_speaker", { id, key, name }),
     setTaskDone: (id, index, done) => invoke("set_task_done", { id, index, done }),
     regenerateSummary: (id) => invoke("regenerate_summary", { id }),

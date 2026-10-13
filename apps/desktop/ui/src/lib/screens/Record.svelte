@@ -14,6 +14,7 @@
   import { toast } from "../toast.svelte";
   import { Visualizer, type VisState } from "../visualizer";
   import { prettyAccel } from "../platform";
+  import { visibleInterval } from "../visibility";
 
   const PLACEHOLDERS = ["Как назовём встречу?", "Синк по онбордингу", "Интервью с кандидатом", "Один на один с Аней", "Звонок с подрядчиком"];
   const SPK = ["авто", "1", "2", "3+"];
@@ -48,7 +49,7 @@
     api.listInputDevices().then((d) => { devices = d; mic = d.find((x) => x.isDefault)?.id ?? d[0]?.id ?? ""; });
     vis = new Visualizer(orbCanvas, bgCanvas, () => ({ phase, paused, job, hover }), () => ({ acc: /^#[0-9a-f]{6}$/i.test(theme.accent) ? theme.accent : "#7dd3a0", dark: theme.resolved === "dark" }));
     vis.start();
-    const iv = setInterval(() => {
+    const iv = visibleInterval(() => {
       const live = recording && !paused;
       meBars = barsFor(live && micOn ? levels.mic.peak : 0);
       themBars = barsFor(live && sysOn ? levels.system.peak : 0);
@@ -60,7 +61,7 @@
         if (e.status.state === "ready") { job = 100; if (!done) { done = true; vis?.burst(); } }
       }
     });
-    return () => { clearInterval(iv); clearInterval(phIv); off(); };
+    return () => { iv(); clearInterval(phIv); off(); };
   });
   onDestroy(() => vis?.stop());
 
@@ -261,7 +262,7 @@
 <style>
   main { position: relative; flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .glow { position: absolute; left: 50%; top: -170px; width: 720px; height: 520px; margin-left: -360px; pointer-events: none; }
-  .bg { position: absolute; left: 0; top: 0; width: 100%; height: 520px; pointer-events: none; -webkit-mask-image: linear-gradient(#000 45%, transparent 80%); mask-image: linear-gradient(#000 45%, transparent 80%); }
+  .bg { position: absolute; left: 0; top: 0; width: 100%; height: 520px; pointer-events: none; }
   .col { max-width: 440px; box-sizing: border-box; margin: 0 auto; padding: 12px 24px 20px; display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
   .orb { position: relative; width: 250px; height: 250px; align-self: center; flex: none; margin: -25px 0; transform: scale(0.8); }
   .orb-btn { position: absolute; left: 50%; top: 50%; width: 132px; height: 132px; margin: -66px 0 0 -66px; padding: 0; border: 0; border-radius: 50%; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--ink-on-accent); }

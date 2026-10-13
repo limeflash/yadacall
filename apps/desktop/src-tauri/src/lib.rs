@@ -260,7 +260,6 @@ pub fn run() {
             }
             integrations_shell::start(&handle, demo);
 
-            shell::create_popovers(&handle)?;
             shell::build_tray(&handle)?;
             updates::start_background_check(handle.clone());
             let h2 = handle.clone();

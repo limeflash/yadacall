@@ -113,6 +113,7 @@ export function createMockApi(): Api {
     },
     async renameMeeting(id, title) { const m = find(id); m.meeting.title = title; m.list.title = title; },
     async deleteMeeting(id) { const i = meetings.findIndex((m) => m.meeting.id === id); if (i >= 0) meetings.splice(i, 1); },
+    async retranscribeMeeting() { await sleep(600); },
     async renameSpeaker(id, key, name) {
       const m = find(id); const p = m.meeting.participants.find((x) => x.key === key);
       if (p) p.name = name; else m.meeting.participants.push({ key, name });

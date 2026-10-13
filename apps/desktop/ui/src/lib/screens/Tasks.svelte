@@ -5,7 +5,7 @@
   import type { TaskItem } from "../api";
   import { app, refreshTasks } from "../state.svelte";
   import { t, plural } from "../i18n/index.svelte";
-  import { clock, shortDate } from "../format";
+  import { clock, dueLabel, shortDate } from "../format";
   import { go } from "../router.svelte";
   import Switch from "../kit/Switch.svelte";
 
@@ -35,7 +35,6 @@
     await api.setTaskDone(x.meetingId, x.index, x.done);
     refreshTasks();
   }
-  function due(d?: string) { return d ? shortDate(d + "T12:00:00") : ""; }
 </script>
 
 <main>
@@ -64,7 +63,7 @@
               <label class="task">
                 <input type="checkbox" class="yc-check" checked={x.done} onchange={() => toggle(x)} />
                 <span class={x.done ? "yc-task-done" : ""} style="flex: 1; min-width: 0; font-size: 15px">{x.text}</span>
-                <span class="meta">{x.owner === "me" || !x.owner ? t("вы") : x.owner}{x.due ? " · " + due(x.due) : ""}</span>
+                <span class="meta">{x.owner === "me" || !x.owner ? t("вы") : x.owner}{x.due ? " · " + dueLabel(x.due) : ""}</span>
                 {#if x.atMs != null}
                   <button type="button" class="yc-tc mg-mono ts" aria-label={t("Перейти к моменту в расшифровке")} onclick={(e) => { e.preventDefault(); go({ name: "meeting", id: x.meetingId, tab: "transcript", at: x.atMs }); }}>▸ {clock(x.atMs)}</button>
                 {/if}

@@ -11,7 +11,7 @@
   import type { MeetingDetail, Turn } from "../api";
   import { t, plural } from "../i18n/index.svelte";
   import { app } from "../state.svelte";
-  import { clock, minutes, timeRange } from "../format";
+  import { clock, dueLabel, minutes, timeRange } from "../format";
   import { go, replace } from "../router.svelte";
   import { Player } from "../player.svelte";
   import { isNamed, speakerIndex, speakerName } from "../speakers";
@@ -29,6 +29,9 @@
   let confirmDelete = $state(false);
   let namesOpen = $state(false);
   let nameDrafts = $state<Record<string, string>>({});
+  /** The voice an invitee chip is assigned to: the focused row, else the first one without a name. */
+  let activeKey = $state("");
+  let inviteQuery = $state("");
   let searchOpen = $state(false);
   let query = $state("");
   let hitIndex = $state(0);
@@ -140,6 +143,10 @@
   }
   function openSearch() { menuOpen = false; if (tab !== "transcript") setTab("transcript"); searchOpen = true; tick().then(() => document.getElementById("find")?.focus()); }
   function closeSearch() { searchOpen = false; query = ""; }
+  async function retranscribe() {
+    menuOpen = false;
+    try { await api.retranscribeMeeting(id); toast(t("Распознаю заново — это займёт несколько минут")); app.rev++; } catch (e) { toast.error(e); }
+  }
   async function regenerate() {
     menuOpen = false; busy = true;
     try { const s = await api.regenerateSummary(id); if (detail) detail.summary = s; toast(t("Итоги пересобраны")); } catch (e) { toast.error(e); }
@@ -159,7 +166,17 @@
     await api.deleteMeeting(id); app.rev++; go({ name: "meetings" });
     toast(t("Встреча удалена"));
   }
-  function openNames() { menuOpen = false; nameDrafts = Object.fromEntries(speakers.filter((s) => s.key !== "me").map((s) => [s.key, s.named ? s.name : ""])); namesOpen = true; }
+  const invitees = $derived((m?.participantHints ?? []).filter((h) => h.name?.trim()));
+  const shownInvitees = $derived.by(() => { const q = inviteQuery.trim().toLowerCase(); return q ? invitees.filter((h) => (h.name + " " + (h.email ?? "")).toLowerCase().includes(q)) : invitees; });
+  const usedNames = $derived(new Set(Object.values(nameDrafts).map((v) => v.trim())));
+  function assign(name: string) {
+    const keys = Object.keys(nameDrafts);
+    const k = activeKey && keys.includes(activeKey) ? activeKey : (keys.find((x) => !nameDrafts[x].trim()) ?? keys[0]);
+    if (!k) return;
+    nameDrafts[k] = name;
+    activeKey = keys.find((x) => x !== k && !nameDrafts[x].trim()) ?? k; // move on to the next unnamed voice
+  }
+  function openNames() { menuOpen = false; inviteQuery = ""; activeKey = ""; nameDrafts = Object.fromEntries(speakers.filter((s) => s.key !== "me").map((s) => [s.key, s.named ? s.name : ""])); namesOpen = true; }
   async function saveNames() {
     for (const [k, v] of Object.entries(nameDrafts)) if (v.trim() && v.trim() !== (m ? speakerName(m, k) : "")) await api.renameSpeaker(id, k, v.trim());
     namesOpen = false; await load();
@@ -175,10 +192,6 @@
   }
 
   const tasksDone = (n: string | undefined) => (n && n !== "me" ? (m ? speakerName(m, n) : n) : t("вы"));
-  function dueLabel(due?: string) {
-    if (!due) return "";
-    return new Intl.DateTimeFormat(app.settings?.uiLanguage === "en" ? "en-GB" : "ru-RU", { day: "numeric", month: "short" }).format(new Date(due + "T12:00:00")).replace(".", "");
-  }
 </script>
 
 <svelte:window onkeydown={onKey} onclick={onDocClick} />
@@ -191,6 +204,7 @@
       <div class="yc-pop menu" role="menu" aria-label={t("Действия со встречей")}>
         <button type="button" role="menuitem" class="yc-mi mi" onclick={startRename}><span class="mi-ic"><Icon name="text" size={16} /></span><span class="grow">{t("Переименовать")}</span></button>
         <button type="button" role="menuitem" class="yc-mi mi" onclick={openSearch}><span class="mi-ic"><Icon name="search" size={16} /></span><span class="grow">{t("Найти в расшифровке")}</span><span class="mg-mono dim">{isMac ? "⌘F" : "Ctrl+F"}</span></button>
+        {#if detail?.hasAudio}<button type="button" role="menuitem" class="yc-mi mi" onclick={retranscribe}><span class="mi-ic"><Icon name="mic" size={16} /></span><span class="grow">{t("Распознать заново")}</span></button>{/if}
         <button type="button" role="menuitem" class="yc-mi mi" onclick={regenerate}><span class="mi-ic"><Icon name="refresh" size={16} /></span><span class="grow">{t("Пересобрать итоги")}</span></button>
         <span aria-hidden="true" class="sep"></span>
         <button type="button" role="menuitem" class="yc-mi mi" onclick={openNames}><span class="mi-ic"><Icon name="people" size={16} /></span><span class="grow">{t("Назвать спикеров")}</span>{#if unnamed.length}<span class="new">{t("{n} новый", { n: unnamed.length })}</span>{/if}</button>
@@ -213,20 +227,34 @@
       <div class="yc-pop names" role="dialog" aria-label={t("Назвать спикеров")}>
         <h2>{t("Назвать спикеров")}</h2>
         <p>{t("Имена сохранятся во встрече и подставятся в итоги и задачи.")}</p>
+        {#if invitees.length}
+          <div class="invites">
+            <div class="ihead"><span>{t("Приглашены")} · {invitees.length}</span>
+              {#if invitees.length > 8}<input class="isearch" type="search" placeholder={t("Найти")} bind:value={inviteQuery} />{/if}</div>
+            <div class="picks" style="padding-left: 0" role="group" aria-label={t("Приглашённые на встречу")}>
+              {#each shownInvitees as inv (inv.name + (inv.email ?? ""))}
+                <button type="button" class="pick" class:used={usedNames.has(inv.name)} title={inv.email} onclick={() => assign(inv.name)}>{inv.name}</button>
+              {:else}<span class="sub">{t("Никого не нашла")}</span>{/each}
+            </div>
+            <span class="sub">{t("Выбери голос ниже и нажми на имя.")}</span>
+          </div>
+        {/if}
+        <div class="nlist">
         {#each Object.keys(nameDrafts) as k (k)}
-          {@const picks = m?.participants.find((p) => p.key === k)?.suggestions ?? []}
-          <div class="ngroup">
+          {@const picks = (m?.participants.find((p) => p.key === k)?.suggestions ?? []).slice(0, 5)}
+          <div class="ngroup" class:active={activeKey === k}>
             {#if picks.length}
               <div class="picks" role="group" aria-label={t("Подсказки из приглашения")}>
                 {#each picks as name (name)}
-                  <button type="button" class="pick" class:on={nameDrafts[k].trim() === name} aria-pressed={nameDrafts[k].trim() === name} onclick={() => (nameDrafts[k] = name)}>{name}</button>
+                  <button type="button" class="pick" class:on={nameDrafts[k].trim() === name} aria-pressed={nameDrafts[k].trim() === name} onclick={() => { nameDrafts[k] = name; activeKey = k; }}>{name}</button>
                 {/each}
               </div>
             {/if}
             <label class="nrow"><Avatar name={nameDrafts[k] || "?"} index={speakerIndex(k)} size={26} />
-              <input placeholder={t("Гость")} bind:value={nameDrafts[k]} /></label>
+              <input placeholder={t("Гость")} bind:value={nameDrafts[k]} onfocus={() => (activeKey = k)} /></label>
           </div>
         {/each}
+        </div>
         <div class="nbtns"><Button size="md" variant="ghost" onclick={() => (namesOpen = false)}>{t("Отмена")}</Button><Button size="md" variant="primary" onclick={saveNames}>{t("Сохранить")}</Button></div>
       </div>
     {/if}
@@ -385,7 +413,7 @@
       {/if}
       <form class="askbar" onsubmit={askAbout}>
         <label style="flex: 1; min-width: 0; display: flex"><span class="mg-sr">{t("Вопрос о встрече")}</span>
-          <input type="text" bind:value={question} placeholder={t("Что обещал Борис?")} /></label>
+          <input type="text" bind:value={question} placeholder={t("Спросить про эту встречу…")} /></label>
         <button type="submit" aria-label={t("Спросить о встрече")} class="yc-press send"><Icon name="arrowUp" size={16} /></button>
       </form>
     </div>
@@ -407,9 +435,16 @@
   .new { font-size: 12px; color: var(--accent-text); }
   .sep { flex: none; height: 1px; margin: 5px 4px; background: var(--border); }
   .veil { position: absolute; inset: 0; z-index: 6; background: var(--backdrop); }
-  .names { position: absolute; z-index: 7; left: 50%; top: 120px; transform: translateX(-50%); width: min(380px, calc(100% - 32px)); box-sizing: border-box; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 10px; transform-origin: top center; }
+  .names { position: absolute; z-index: 7; left: 50%; top: 72px; max-height: calc(100% - 96px); overflow-y: auto; transform: translateX(-50%); width: min(380px, calc(100% - 32px)); box-sizing: border-box; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 10px; transform-origin: top center; }
   .names h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
   .names p { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+  .invites { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--bg); }
+  .ihead { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; }
+  .isearch { width: 120px; height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; }
+  .nlist { display: flex; flex-direction: column; gap: 10px; max-height: 38vh; overflow-y: auto; padding-right: 2px; }
+  .pick.used { opacity: 0.45; }
+  .invites .picks { max-height: 96px; overflow-y: auto; }
+  .ngroup.active .nrow input { border-color: var(--accent-line); }
   .ngroup { display: flex; flex-direction: column; gap: 6px; }
   .picks { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 36px; }
   .pick { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; }
