@@ -118,6 +118,7 @@ pub fn to_api(
         recording_reminder: s.recording_reminder,
         recognize_voices: s.recognise_voices,
         mini_player: app.mini_player,
+        terms: s.terms.clone(),
         summaries: SummarySettings {
             mode: mode.clone(),
             keys_set,
@@ -191,6 +192,9 @@ pub fn apply_patch(s: &mut es::Settings, app: &mut AppPrefs, p: &SettingsPatch) 
     if let Some(v) = p.recognize_voices {
         s.recognise_voices = v;
     }
+    if let Some(v) = &p.terms {
+        s.terms = clean_terms(v);
+    }
     if let Some(v) = p.mini_player {
         app.mini_player = v;
     }
@@ -243,6 +247,22 @@ pub fn local_model_choice(ids: &[&str], value: &str) -> Option<String> {
 /// Location of the app prefs file.
 pub fn prefs_path(data_dir: &Path) -> PathBuf {
     data_dir.join("app-prefs.json")
+}
+
+/// Trims the user's terms, drops empty and duplicate ones (case-insensitively) and caps the list.
+fn clean_terms(raw: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for term in raw {
+        let term = term.trim();
+        if term.is_empty() || out.iter().any(|t| t.eq_ignore_ascii_case(term)) {
+            continue;
+        }
+        out.push(term.chars().take(60).collect());
+        if out.len() >= 200 {
+            break;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -322,6 +342,20 @@ mod tests {
                 model: "gpt-4o".into(),
                 base_url: None
             }
+        );
+    }
+
+    #[test]
+    fn user_terms_are_trimmed_and_deduplicated() {
+        let raw = vec![
+            " Kafka ".to_owned(),
+            "kafka".to_owned(),
+            "".to_owned(),
+            "SLA".to_owned(),
+        ];
+        assert_eq!(
+            clean_terms(&raw),
+            vec!["Kafka".to_owned(), "SLA".to_owned()]
         );
     }
 }
