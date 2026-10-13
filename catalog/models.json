@@ -11,7 +11,7 @@
       "languages": [
         "ru"
       ],
-      "license": "Apache-2.0",
+      "license": "MIT",
       "homepage": "https://huggingface.co/istupakov/gigaam-v3-onnx",
       "defaultTiers": [
         "ru"
@@ -84,7 +84,7 @@
       "languages": [
         "ru"
       ],
-      "license": "Apache-2.0",
+      "license": "MIT",
       "homepage": "https://huggingface.co/istupakov/gigaam-v3-onnx",
       "defaultTiers": [],
       "files": [
@@ -133,7 +133,7 @@
       "languages": [
         "multilingual"
       ],
-      "license": "Apache-2.0",
+      "license": "CC-BY-4.0",
       "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
       "defaultTiers": [
         "multilingual"
