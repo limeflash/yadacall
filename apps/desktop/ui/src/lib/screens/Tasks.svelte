@@ -13,7 +13,12 @@
   let showDone = $state(false);
   let loaded = $state(false);
 
-  async function load() { tasks = await api.listTasks(true); loaded = true; }
+  async function load() {
+    tasks = await api.listTasks(true);
+    loaded = true;
+    // Keep the sidebar badge in step with what this screen shows.
+    app.openTasks = tasks.filter((x) => !x.done).length;
+  }
   onMount(load);
   let lastRev = app.rev;
   $effect(() => { const r = app.rev; if (r !== lastRev) { lastRev = r; load(); } });

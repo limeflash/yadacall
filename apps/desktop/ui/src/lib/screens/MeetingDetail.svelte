@@ -10,7 +10,7 @@
   import { api } from "../api";
   import type { MeetingDetail, Turn } from "../api";
   import { t, plural } from "../i18n/index.svelte";
-  import { app } from "../state.svelte";
+  import { app, refreshTasks } from "../state.svelte";
   import { clock, dueLabel, minutes, timeRange } from "../format";
   import { go, replace } from "../router.svelte";
   import { Player } from "../player.svelte";
@@ -164,7 +164,7 @@
   async function del() {
     if (!confirmDelete) { confirmDelete = true; return; }
     menuOpen = false; confirmDelete = false;
-    await api.deleteMeeting(id); app.rev++; go({ name: "meetings" });
+    await api.deleteMeeting(id); app.rev++; refreshTasks(); go({ name: "meetings" });
     toast(t("Встреча удалена"));
   }
   const invitees = $derived((m?.participantHints ?? []).filter((h) => h.name?.trim()));
