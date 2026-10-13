@@ -1,0 +1,128 @@
+/* YadaCall tokens (Mistgate, dark theme only) and the few app helper classes the landing uses.
+   Values copied from the Claude Design export (yadacall.css). */
+
+:root {
+  color-scheme: dark;
+  --bg: #0c0c0e;
+  --surface: #141417;
+  --surface-2: #1d1d22;
+  --border: #25252b;
+  --text: #f3f3f5;
+  --muted: #8b8b94;
+  --faint: #4a4a52;
+  --them: #d4d4dc;
+  --dock: rgba(24, 24, 28, 0.78);
+  --backdrop: rgba(0, 0, 0, 0.5);
+  --ink-on-accent: #0c0c0e;
+  --accent: #7dd3a0;
+  --accent-soft: color-mix(in oklch, #7dd3a0 14%, #0c0c0e);
+  --accent-line: color-mix(in oklch, #7dd3a0 50%, #25252b);
+  --accent-text: #7dd3a0;
+  --accent-fill: #6e50c0;
+  --accent-fill-hover: #6040af;
+  --focus: #7dd3a0;
+  --accent-mint: #7dd3a0;
+  --accent-lavender: #b8acf2;
+  --accent-sky: #8ec8ea;
+  --accent-sand: #dcc68c;
+  --accent-rose: #e6a6b0;
+  --accent-sage: #b0cc90;
+  --ok: #7dd3a0;
+  --busy: #8ec8ea;
+  --blip: #89a5b5;
+  --warning: #febc2e;
+  --warning-soft: rgba(254, 188, 46, 0.12);
+  --warning-line: rgba(254, 188, 46, 0.35);
+  --warning-text: #febc2e;
+  --danger: #ff5a5f;
+  --danger-soft: rgba(255, 90, 95, 0.14);
+  --danger-line: #853f3e;
+  --danger-text: #ff5a5f;
+  --tone-lavender: #b8acf2;
+  --tone-lavender-bg: #2d2b38;
+  --tone-sky: #8ec8ea;
+  --tone-sky-bg: #263037;
+  --tone-sand: #dcc68c;
+  --tone-sand-bg: #332f25;
+  --tone-sage: #b0cc90;
+  --tone-sage-bg: #2c3126;
+  --tone-mint: #7dd3a0;
+  --tone-mint-bg: #243229;
+  --tone-rose: #e6a6b0;
+  --tone-rose-bg: #362a2c;
+  --chart-line: #7dd3a0;
+  --avatar-7: #c9b8e8;
+  --avatar-8: #9fd6cf;
+  --avatar-9: #e8b98f;
+
+  --font-sans: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-10: 40px;
+
+  --radius-id-chip: 7px;
+  --radius-inner: 9px;
+  --radius-chip: 11px;
+  --radius-ctl: 11px;
+  --radius-field: 14px;
+  --radius-card: 16px;
+  --radius-card-lg: 18px;
+  --radius-dock: 20px;
+  --radius-sheet: 22px;
+
+  --shadow-dock: 0 12px 30px -12px rgba(0, 0, 0, 0.5);
+  --shadow-toast: 0 14px 30px -10px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 14px 30px -10px rgba(0, 0, 0, 0.5);
+
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.3, 1.5, 0.5, 1);
+  --ease-spring-strong: cubic-bezier(0.3, 1.6, 0.5, 1);
+  --ease-segment: cubic-bezier(0.3, 1.4, 0.5, 1);
+  --opacity-disabled: 0.35;
+}
+
+/* запись: точка мигает раз в секунду, живые столбики дышат */
+.yc-rec { animation: yc-blink 1s steps(1) infinite; }
+@keyframes yc-blink { 50% { opacity: 0.25; } }
+.yc-live { transform-origin: center; animation: yc-live 0.9s ease-in-out infinite alternate; }
+@keyframes yc-live { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
+.yc-caret::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -2px; border-radius: 1px; background: var(--accent); animation: yc-blink 1s steps(1) infinite; }
+.yc-spin { animation: yc-spin 1s linear infinite; }
+@keyframes yc-spin { to { transform: rotate(360deg); } }
+
+/* ---------- иконки, которых нет в наборе: сетка 24, обводка 2.2, скругления ---------- */
+.yc-ic { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.yc-icf { fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; flex: none; }
+
+/* ---------- маскот: моргает, оглядывается, наушники покачиваются ---------- */
+@keyframes ycmBlink { 0%, 90%, 100% { transform: scaleY(1); } 93% { transform: scaleY(0.08); } 96% { transform: scaleY(1); } }
+@keyframes ycmLook { 0%, 18% { transform: translate(0, 0); } 24%, 40% { transform: translate(2.6%, -1%); } 46%, 62% { transform: translate(-2.2%, 0.6%); } 68%, 80% { transform: translate(0.8%, 1.4%); } 86%, 100% { transform: translate(0, 0); } }
+@keyframes ycmCup { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2%); } }
+@keyframes ycmBand { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-1.5deg); } }
+@keyframes ycFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes ycPopIn { 0% { opacity: 0; transform: scale(0.6); } 60% { transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes ycEq { 0%, 100% { height: 3px; } 50% { height: 10px; } }
+@keyframes ycShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.yc-float { animation: ycFloat 3.4s ease-in-out infinite; }
+.yc-popin { animation: ycPopIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+/* ---------- текст ---------- */
+.yc-pretty { text-wrap: pretty; }
+.yc-balance { text-wrap: balance; }
+.yc-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yc-num { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .yc-in, .yc-in-2, .yc-in-3, .yc-rec, .yc-live, .yc-spin, .yc-pop, .yc-sheet, .yc-float, .yc-popin, .yc-caret::after, .ycm-anim, .ycm-anim * { animation: none !important; }
+  .yc-lift:hover { transform: none; }
+}

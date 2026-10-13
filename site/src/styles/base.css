@@ -1,0 +1,35 @@
+/* Mistgate base + the bits of the kit the site uses (language toggle, icon). Copied from the design's bundle.css. */
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); }
+a { color: inherit; }
+
+.mg {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  transition: background-color 0.5s, color 0.5s;
+}
+.mg *, .mg *::before, .mg *::after { box-sizing: border-box; }
+.mg :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mg ::placeholder { color: inherit; opacity: 0.4; }
+.mg-mono { font-family: var(--font-mono); }
+.mg-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.mg-icon { display: block; flex: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mg *, .mg ::before, .mg ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* RU/EN pill (Mistgate LangToggle, "lang" variant of Segmented). On the site the two items are links. */
+.mg-seg { box-sizing: border-box; }
+.mg-seg__item { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; border: 0; background: none; padding: 0 12px; font-size: 12px; font-weight: 700; color: var(--muted); text-decoration: none; cursor: pointer; }
+.mg-seg--lang { display: flex; height: 28px; gap: 2px; padding: 2px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.mg-seg--lang .mg-seg__item { height: 22px; padding: 0 8px; border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 11px; }
+.mg-seg--lang .mg-seg__item[aria-current="true"] { background: var(--accent); color: var(--ink-on-accent); cursor: default; }
+
+.mg-skip { position: absolute; left: 16px; top: -64px; z-index: 100; height: 38px; padding: 0 16px; display: inline-flex; align-items: center; border-radius: 12px; background: var(--accent); color: var(--ink-on-accent); font-size: 14px; font-weight: 800; text-decoration: none; }
+.mg-skip:focus { top: 12px; }

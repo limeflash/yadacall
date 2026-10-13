@@ -1,0 +1,37 @@
+/* Landing styles: the <helmet><style> block of the design, verbatim. */
+.yl section[id]{scroll-margin-top:84px}
+.yl a.yl-link{color:var(--muted);text-decoration:none;transition:color .2s}
+.yl a.yl-link:hover{color:var(--text)}
+.yl-btn{position:relative;overflow:hidden;transition:transform .3s var(--ease-spring),filter .2s,box-shadow .3s}
+.yl-btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.yl-btn:active{transform:scale(.97)}
+.yl-shine::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%);transform:translateX(-120%);animation:yl-shine 4.2s ease-in-out 1.6s infinite}
+@keyframes yl-shine{0%,62%{transform:translateX(-120%)}82%,100%{transform:translateX(120%)}}
+.yl-card{transition:border-color .3s,transform .4s var(--ease-out-soft)}
+.yl-card:hover{border-color:var(--faint);transform:translateY(-3px)}
+.yl-spot{background-image:radial-gradient(320px circle at var(--mx,-999px) var(--my,-999px),color-mix(in srgb,var(--accent) 11%,transparent),transparent 62%)}
+.yl-hw{display:inline-block;margin:-.06em .115em -.16em;padding:.06em 0 .16em;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:yl-word .9s var(--ease-out-soft) both}
+.yl-hw1{background-image:linear-gradient(180deg,var(--text) 38%,color-mix(in srgb,var(--text) 60%,var(--bg)))}
+.yl-hw2{background-image:linear-gradient(100deg,var(--accent-text) 0 41%,color-mix(in srgb,var(--accent-text) 30%,var(--text)) 50%,var(--accent-text) 59% 100%);background-size:260% 100%;background-position:100% 0;animation:yl-word .9s var(--ease-out-soft) both,yl-sheen 7s ease-in-out infinite}
+@keyframes yl-sheen{0%,62%{background-position:100% 0}100%{background-position:0 0}}
+.yl-stage{--sh:clamp(232px,21vw,300px)}
+.yl-aura{animation:yl-breathe 7s ease-in-out infinite}
+@keyframes yl-breathe{0%,100%{opacity:.75;transform:scale(.94)}50%{opacity:1;transform:scale(1.04)}}
+.yl-pill{transition:border-color .25s,color .25s}.yl-pill:hover{border-color:var(--faint);color:var(--text)}
+@keyframes yl-word{from{opacity:0;transform:translateY(.45em) rotate(3deg);filter:blur(10px)}to{opacity:1;transform:none;filter:none}}
+.yl-up{animation:yl-up .9s var(--ease-out-soft) both}
+@keyframes yl-up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.yl-js .yl-rv{opacity:0;transform:translateY(34px) scale(.985);filter:blur(6px);transition:opacity 1s var(--ease-out-soft),transform 1s var(--ease-out-soft),filter 1s var(--ease-out-soft)}
+.yl-js .yl-rv.yl-on{opacity:1;transform:none;filter:none}
+.yl-marq{display:flex;gap:56px;width:max-content;animation:yl-marq 30s linear infinite}
+.yl-marqbox:hover .yl-marq{animation-play-state:paused}
+@keyframes yl-marq{to{transform:translateX(-50%)}}
+.yl-g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:1024px){.yl-g4,.yl-g4s,.yl-g3s{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media (max-width:700px){.yl-chip-t{display:none}.yl-chip{padding:0 11px!important}}
+@media (max-width:900px){.yl-g2{grid-template-columns:minmax(0,1fr)!important}.yl-first{order:-1}.yl-float{display:none!important}}
+@media (max-width:860px){.yl-g3d{grid-template-columns:minmax(0,1fr)!important}}
+@media (max-width:760px){.yl-navlinks{display:none!important}.yl-priv{grid-template-columns:minmax(0,1fr)!important}}
+@media (max-width:600px){.yl-g4,.yl-g3s{grid-template-columns:minmax(0,1fr)!important}}
+@media (max-width:480px){.yl-gh{display:none!important}}
+@media (prefers-reduced-motion:reduce){.yl-hw,.yl-aura,.yl-up,.yl-marq,.yl-shine::after{animation:none!important}.yl-js .yl-rv{opacity:1;transform:none;filter:none;transition:none}.yl-btn,.yl-card{transition:none}}
