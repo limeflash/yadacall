@@ -1,7 +1,7 @@
 {
   "name": "yadacall-desktop",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "YadaCall desktop app: Tauri 2 shell (src-tauri) + Svelte 5 UI (ui)",
   "scripts": {
     "dev": "tauri dev",
