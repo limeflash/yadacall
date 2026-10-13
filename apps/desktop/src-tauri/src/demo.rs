@@ -1132,6 +1132,7 @@ impl Backend for DemoBackend {
     }
 
     async fn ask(&self, _question: &str, sink: AskSink) -> Result<()> {
+        let generated;
         let (answer, citations, excerpts, provider) = {
             let g = self.lock();
             let cites: Vec<Citation> = g
@@ -1151,15 +1152,17 @@ impl Backend for DemoBackend {
                     })
                 })
                 .collect();
-            let provider = if g.settings.summaries.provider == SummaryProvider::Local {
-                "local"
-            } else {
-                "Claude"
+            let provider = match &g.settings.summaries.mode {
+                SummaryMode::Off | SummaryMode::Local { .. } => "local",
+                SummaryMode::Ollama { .. } => "Ollama Cloud",
+                SummaryMode::Api { .. } => "Claude",
             };
+            generated = g.settings.summaries.mode != SummaryMode::Off;
             (g.ask.answer.clone(), cites, g.ask.excerpts, provider)
         };
         tokio::time::sleep(Duration::from_millis(500)).await;
         // stream word by word, keeping the trailing space with each token
+        let answer = if generated { answer } else { String::new() };
         let mut start = 0;
         for (i, c) in answer.char_indices() {
             if c == ' ' {
@@ -1182,6 +1185,7 @@ impl Backend for DemoBackend {
                 provider: provider.into(),
                 audio: false,
             },
+            generated,
         });
         Ok(())
     }
@@ -1348,6 +1352,41 @@ impl Backend for DemoBackend {
         })
     }
 
+    async fn ollama_status(&self, base: OllamaBase) -> Result<OllamaStatus> {
+        let cloud = |name: &str| yc_llm::OllamaModel {
+            name: name.into(),
+            size_bytes: 338,
+            cloud: true,
+        };
+        Ok(OllamaStatus {
+            running: true,
+            version: Some("0.40.3".into()),
+            signed_in: true,
+            models: match base {
+                OllamaBase::Local => vec![
+                    cloud("glm-5.2:cloud"),
+                    yc_llm::OllamaModel {
+                        name: "gemma4:e4b".into(),
+                        size_bytes: 5_000_000_000,
+                        cloud: false,
+                    },
+                ],
+                OllamaBase::Cloud => vec![cloud("gpt-oss:120b"), cloud("glm-5.2")],
+            },
+            error: None,
+        })
+    }
+
+    async fn test_summary_provider(&self, _mode: Option<SummaryMode>) -> Result<ProviderTest> {
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        Ok(ProviderTest {
+            ok: true,
+            latency_ms: 700,
+            reply: Some("Да, я на связи.".into()),
+            error: None,
+        })
+    }
+
     async fn get_settings(&self) -> Result<Settings> {
         Ok(self.lock().settings.clone())
     }
@@ -1452,5 +1491,39 @@ mod tests {
         let log = log.lock().unwrap();
         assert_eq!(log.last().map(String::as_str), Some("d"));
         assert!(log.iter().any(|t| t == "c"));
+    }
+
+    #[tokio::test]
+    async fn ask_with_summaries_off_returns_sources_without_text() {
+        let b = backend();
+        b.update_settings(SettingsPatch {
+            summaries: Some(SummaryPatch {
+                mode: Some(SummaryMode::Off),
+                key: None,
+            }),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let log = Arc::new(Mutex::new(Vec::<String>::new()));
+        let l2 = log.clone();
+        b.ask(
+            "q",
+            Arc::new(move |e| {
+                let tag = match e {
+                    AskEvent::Token { .. } => "t",
+                    AskEvent::Citations { .. } => "c",
+                    AskEvent::Done {
+                        generated: false, ..
+                    } => "d",
+                    AskEvent::Done { .. } => "D",
+                    AskEvent::Error { .. } => "e",
+                };
+                l2.lock().unwrap().push(tag.into());
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(*log.lock().unwrap(), ["c", "d"]);
     }
 }

@@ -45,6 +45,8 @@
     "allow-model-remove",
     "allow-model-set-active",
     "allow-model-benchmark",
+    "allow-ollama-status",
+    "allow-test-summary-provider",
     "allow-get-settings",
     "allow-update-settings",
     "allow-permissions",

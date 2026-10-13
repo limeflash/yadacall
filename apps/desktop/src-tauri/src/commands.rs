@@ -261,6 +261,16 @@ pub async fn model_benchmark(b: B<'_>, id: String) -> R<BenchmarkResult> {
 // ---- settings / permissions ---------------------------------------------------------------------------
 
 #[tauri::command]
+pub async fn ollama_status(b: B<'_>, base: OllamaBase) -> R<OllamaStatus> {
+    Ok(b.ollama_status(base).await?)
+}
+
+#[tauri::command]
+pub async fn test_summary_provider(b: B<'_>, mode: Option<SummaryMode>) -> R<ProviderTest> {
+    Ok(b.test_summary_provider(mode).await?)
+}
+
+#[tauri::command]
 pub async fn get_settings(b: B<'_>) -> R<Settings> {
     Ok(b.get_settings().await?)
 }

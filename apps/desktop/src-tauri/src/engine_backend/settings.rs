@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use yc_engine::settings as es;
 
-use crate::adapters::SummaryConfig;
-use crate::api::{KeepAudio, Settings, SettingsPatch, SummarySettings, ThemeChoice, UiLanguage};
+use crate::api::{
+    KeepAudio, KeysSet, Settings, SettingsPatch, SummaryMode, SummarySettings, ThemeChoice,
+    UiLanguage,
+};
 use crate::paths;
 
 /// What we learned about the system-audio permission (macOS has no query API).
@@ -79,7 +81,7 @@ pub fn first_run(s: &mut es::Settings, library: &Path, russian: bool) {
     s.hotkeys.bookmark = "Alt+Shift+M".to_owned();
     s.library_dir = Some(library.to_path_buf());
     s.summary_provider =
-        serde_json::to_value(SummaryConfig::default()).unwrap_or(serde_json::Value::Null);
+        serde_json::to_value(SummaryMode::default()).unwrap_or(serde_json::Value::Null);
 }
 
 /// Engine settings -> UI settings.
@@ -87,10 +89,9 @@ pub fn to_api(
     s: &es::Settings,
     effective_library: &Path,
     app: &AppPrefs,
-    cfg: &SummaryConfig,
-    api_key_set: bool,
+    mode: &SummaryMode,
+    keys_set: KeysSet,
 ) -> Settings {
-    let entry = cfg.current();
     Settings {
         theme: match s.theme {
             es::Theme::System => ThemeChoice::System,
@@ -118,10 +119,8 @@ pub fn to_api(
         recognize_voices: s.recognise_voices,
         mini_player: app.mini_player,
         summaries: SummarySettings {
-            provider: cfg.provider,
-            model: entry.model,
-            base_url: entry.base_url,
-            api_key_set,
+            mode: mode.clone(),
+            keys_set,
         },
         onboarded: app.onboarded,
     }
@@ -200,23 +199,30 @@ pub fn apply_patch(s: &mut es::Settings, app: &mut AppPrefs, p: &SettingsPatch) 
     }
 }
 
-/// Applies the summary part of a patch. Returns the new config; the key (if any) is for the caller to
-/// store in the keychain (it is never kept here).
-pub fn apply_summary_patch(cfg: &mut SummaryConfig, p: &crate::api::SummaryPatch) {
-    if let Some(provider) = p.provider {
-        cfg.provider = provider;
-    }
-    let provider = cfg.provider;
-    let entry = cfg
-        .entries
-        .entry(SummaryConfig::key(provider).to_owned())
-        .or_default();
-    if let Some(m) = &p.model {
-        entry.model = m.trim().to_owned();
-    }
-    if let Some(u) = &p.base_url {
-        let u = u.trim();
-        entry.base_url = (!u.is_empty()).then(|| u.to_owned());
+/// Normalises a mode coming from the UI (trims names and URLs).
+pub fn clean_mode(mode: &SummaryMode) -> SummaryMode {
+    match mode {
+        SummaryMode::Off => SummaryMode::Off,
+        SummaryMode::Local { model } => SummaryMode::Local {
+            model: model.trim().to_owned(),
+        },
+        SummaryMode::Ollama { base, model } => SummaryMode::Ollama {
+            base: *base,
+            model: model.trim().to_owned(),
+        },
+        SummaryMode::Api {
+            provider,
+            model,
+            base_url,
+        } => SummaryMode::Api {
+            provider: *provider,
+            model: model.trim().to_owned(),
+            base_url: base_url
+                .as_deref()
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .map(str::to_owned),
+        },
     }
 }
 
@@ -242,7 +248,6 @@ pub fn prefs_path(data_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::SummaryProvider;
 
     #[test]
     fn local_choice_matches_catalog_ids() {
@@ -286,11 +291,37 @@ mod tests {
     fn first_run_and_back() {
         let mut s = es::Settings::default();
         first_run(&mut s, Path::new("/tmp/lib"), false);
-        let cfg = SummaryConfig::from_value(&s.summary_provider).unwrap();
-        let api = to_api(&s, Path::new("/tmp/lib"), &AppPrefs::default(), &cfg, false);
+        let mode = crate::adapters::parse_summary_mode(&s.summary_provider).unwrap();
+        let api = to_api(
+            &s,
+            Path::new("/tmp/lib"),
+            &AppPrefs::default(),
+            &mode,
+            KeysSet::default(),
+        );
         assert_eq!(api.ui_language, UiLanguage::En);
         assert_eq!(api.meeting_language, "auto");
-        assert_eq!(api.summaries.provider, SummaryProvider::Local);
+        assert_eq!(api.summaries.mode, SummaryMode::default());
         assert!(!api.onboarded);
+        let json = serde_json::to_value(&api.summaries).unwrap();
+        assert_eq!(json["mode"], "local");
+        assert_eq!(json["keysSet"]["ollamaCloud"], false);
+    }
+
+    #[test]
+    fn ui_modes_are_trimmed() {
+        let m = clean_mode(&SummaryMode::Api {
+            provider: crate::api::ApiProvider::OpenAiCompatible,
+            model: " gpt-4o ".into(),
+            base_url: Some("  ".into()),
+        });
+        assert_eq!(
+            m,
+            SummaryMode::Api {
+                provider: crate::api::ApiProvider::OpenAiCompatible,
+                model: "gpt-4o".into(),
+                base_url: None
+            }
+        );
     }
 }

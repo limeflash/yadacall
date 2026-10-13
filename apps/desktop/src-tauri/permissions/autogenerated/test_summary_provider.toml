@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-test-summary-provider"
+description = "Enables the test_summary_provider command without any pre-configured scope."
+commands.allow = ["test_summary_provider"]
+
+[[permission]]
+identifier = "deny-test-summary-provider"
+description = "Denies the test_summary_provider command without any pre-configured scope."
+commands.deny = ["test_summary_provider"]
