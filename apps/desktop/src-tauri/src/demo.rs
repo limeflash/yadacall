@@ -285,6 +285,7 @@ impl DemoBackend {
             .turns
             .iter()
             .map(|(who, s, e, text)| Turn {
+                corrections: Vec::new(),
                 speaker: who.clone(),
                 start_ms: ms(*s),
                 end_ms: ms(*e),
@@ -464,6 +465,7 @@ impl DemoBackend {
                             corrections: Vec::new(),
                         };
                         r.turns.push(Turn {
+                            corrections: Vec::new(),
                             speaker: who.into(),
                             start_ms: el,
                             end_ms: el + 4000,
@@ -537,6 +539,7 @@ impl DemoBackend {
                 for (job, name) in finished {
                     let id = MeetingId::new();
                     let turns = vec![Turn {
+                        corrections: Vec::new(),
                         speaker: "them".into(),
                         start_ms: 2000,
                         end_ms: 9000,

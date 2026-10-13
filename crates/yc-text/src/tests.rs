@@ -270,6 +270,7 @@ fn chunking_uses_speaker_names_and_one_turn_overlap() {
     let speaker_b = "them".to_owned();
     let turns = (0..8)
         .map(|index| Turn {
+            corrections: Vec::new(),
             speaker: if index % 2 == 0 {
                 speaker_a.clone()
             } else {

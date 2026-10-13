@@ -75,6 +75,8 @@
     "allow-detected-call",
     "allow-resolve-detected-call",
     "allow-check-update",
-    "allow-install-update"
+    "allow-install-update",
+    "allow-reveal-logs",
+    "allow-open-automation-settings"
   ]
 }

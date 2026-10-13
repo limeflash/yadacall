@@ -618,18 +618,21 @@ mod tests {
             duration_ms: 60_000,
             turns: vec![
                 Turn {
+                    corrections: Vec::new(),
                     speaker: "me".into(),
                     start_ms: 0,
                     end_ms: 1000,
                     text: "Привет".into(),
                 },
                 Turn {
+                    corrections: Vec::new(),
                     speaker: "s1".into(),
                     start_ms: 1000,
                     end_ms: 2000,
                     text: "Здравствуй".into(),
                 },
                 Turn {
+                    corrections: Vec::new(),
                     speaker: "them".into(),
                     start_ms: 2000,
                     end_ms: 3000,
