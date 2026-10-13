@@ -47,9 +47,17 @@ async fn mock_server_with_replies(
                     .await
                     .expect("read HTTP request"),
             );
-            send_reply(&mut stream, reply)
-                .await
-                .expect("write HTTP response");
+            // A client may hang up once it has what it needs (e.g. a status-only probe drops the
+            // body); that is not a server failure.
+            if let Err(error) = send_reply(&mut stream, reply).await {
+                assert!(
+                    matches!(
+                        error.kind(),
+                        io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+                    ),
+                    "write HTTP response: {error}"
+                );
+            }
         }
         requests
     });
@@ -465,12 +473,14 @@ async fn ollama_probe_reports_version_models_and_sign_in() {
         json_reply(json!({ "name": "someone" })),
     ])
     .await;
-    let probe = OllamaProvider::probe(&base).await;
+    // Generous timeout: the workspace test run shares the CPU with heavy audio/ML tests.
+    let probe = OllamaProvider::probe_with_timeout(&base, std::time::Duration::from_secs(30)).await;
     assert!(probe.running && probe.signed_in);
     assert_eq!(probe.version.as_deref(), Some("0.40.3"));
     assert_eq!(probe.models.len(), 2);
     assert!(probe.models[1].cloud && !probe.models[0].cloud);
     let _ = server.await.expect("mock server task");
-    // Nothing listens any more.
-    assert!(!OllamaProvider::probe(&base).await.running);
+    // A daemon that is not running: port 1 is reserved and never listens. (Re-probing the mock's
+    // freed port would race with other tests' mock servers that the OS hands the same port to.)
+    assert!(!OllamaProvider::probe("http://127.0.0.1:1").await.running);
 }

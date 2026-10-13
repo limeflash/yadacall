@@ -112,14 +112,22 @@ impl OllamaProvider {
     /// Look at a daemon: reachable, version, signed in, models. Never fails; an unreachable daemon is
     /// reported as `running: false`.
     pub async fn probe(base_url: &str) -> OllamaProbe {
+        Self::probe_with_timeout(base_url, std::time::Duration::from_secs(3)).await
+    }
+
+    /// [`Self::probe`] with an explicit per-request timeout.
+    pub async fn probe_with_timeout(base_url: &str, timeout: std::time::Duration) -> OllamaProbe {
         let down = OllamaProbe {
             running: false,
             version: None,
             signed_in: false,
             models: Vec::new(),
         };
+        // Fresh connections per request: the probe is rare, and reusing a pooled connection the
+        // daemon has just closed (restart, sleep) would report a running daemon as down.
         let Ok(client) = Client::builder()
-            .timeout(std::time::Duration::from_secs(3))
+            .timeout(timeout)
+            .pool_max_idle_per_host(0)
             .build()
         else {
             return down;
