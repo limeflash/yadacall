@@ -1,215 +1,344 @@
-//! macOS call-detection sources: Core Audio for the microphone gate, `osascript` for browser
-//! tabs.
-//!
-//! Reading the browser's tabs needs the user's *Automation* permission for each browser (the
-//! first `osascript` call per browser shows the system prompt). Therefore: only running browsers
-//! are asked, a browser that errors (typically `-1743`, not authorised) is left alone for a
-//! while, and every failure is just "unknown".
+//! macOS call detection through Core Audio process objects and targeted AppleScript tab reads.
 
 use std::collections::HashMap;
-use std::ffi::c_void;
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::titles::meet_rooms_from_urls;
-use super::{CallSources, MeetTab, MicState, process_names};
+use cidre::core_audio as ca;
 
-/// Browsers that expose their tabs through AppleScript: `(process name, script kind)`.
-const BROWSERS: [(&str, &str); 5] = [
-    ("Google Chrome", "Google Chrome"),
-    ("Arc", "Arc"),
-    ("Brave Browser", "Brave Browser"),
-    ("Microsoft Edge", "Microsoft Edge"),
-    ("Safari", "Safari"),
-];
+use super::procs::{self, BrowserApp};
+use super::titles::call_tabs_from_output;
+use super::{CallSources, MicProbe, MicUser, TabAccessError};
 
-/// A browser that failed is not asked again for this long (so a denied permission never nags).
-const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(10 * 60);
+/// A browser whose tabs could not be read (no scripting support, timeout) is retried after this.
+const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(60);
+const RETRY_AFTER_PERMISSION_DENIAL: Duration = Duration::from_secs(20);
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(4);
 
-#[repr(C)]
-struct PropertyAddress {
-    selector: u32,
-    scope: u32,
-    element: u32,
+/// AppleScript runner seam used to test Automation errors without opening permission prompts.
+trait AppleScriptRunner: Send + Sync {
+    fn run(&self, browser: BrowserApp, script: &str) -> Result<String, ScriptFailure>;
 }
 
-#[link(name = "CoreAudio", kind = "framework")]
-unsafe extern "C" {
-    fn AudioObjectGetPropertyData(
-        object: u32,
-        address: *const PropertyAddress,
-        qualifier_size: u32,
-        qualifier: *const c_void,
-        data_size: *mut u32,
-        data: *mut c_void,
-    ) -> i32;
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ScriptFailure {
+    Exit(String),
+    Timeout,
+    Launch,
 }
 
-const SYSTEM_OBJECT: u32 = 1;
-const SCOPE_GLOBAL: u32 = u32::from_be_bytes(*b"glob");
-const DEFAULT_INPUT_DEVICE: u32 = u32::from_be_bytes(*b"dIn ");
-const IS_RUNNING_SOMEWHERE: u32 = u32::from_be_bytes(*b"gone");
+struct CommandRunner;
 
-fn property_u32(object: u32, selector: u32) -> Option<u32> {
-    let address = PropertyAddress {
-        selector,
-        scope: SCOPE_GLOBAL,
-        element: 0,
-    };
-    let mut value: u32 = 0;
-    let mut size = std::mem::size_of::<u32>() as u32;
-    // SAFETY: `address`, `size` and `value` outlive the call; `size` matches `value`'s type.
-    let status = unsafe {
-        AudioObjectGetPropertyData(
-            object,
-            &address,
-            0,
-            std::ptr::null(),
-            &mut size,
-            (&mut value as *mut u32).cast(),
-        )
-    };
-    (status == 0).then_some(value)
-}
-
-/// `kAudioDevicePropertyDeviceIsRunningSomewhere` on the default input device.
-pub fn mic_running_somewhere() -> MicState {
-    let Some(device) = property_u32(SYSTEM_OBJECT, DEFAULT_INPUT_DEVICE).filter(|d| *d != 0) else {
-        return MicState::Unknown;
-    };
-    match property_u32(device, IS_RUNNING_SOMEWHERE) {
-        Some(0) => MicState::Idle,
-        Some(_) => MicState::InUse,
-        None => MicState::Unknown,
-    }
-}
-
-/// The AppleScript that lists a browser's tab URLs, one per line.
-pub fn tabs_script(app: &str) -> String {
-    format!(
-        "tell application \"{app}\"\n\
-         set out to \"\"\n\
-         repeat with w in windows\n\
-         repeat with t in tabs of w\n\
-         set out to out & (URL of t) & linefeed\n\
-         end repeat\n\
-         end repeat\n\
-         return out\n\
-         end tell"
-    )
-}
-
-/// Sources backed by Core Audio, `sysinfo` and `osascript`.
-#[derive(Debug, Default)]
-pub struct MacSources {
-    failed_at: Mutex<HashMap<&'static str, Instant>>,
-}
-
-impl MacSources {
-    fn run_script(script: &str) -> Option<String> {
+impl AppleScriptRunner for CommandRunner {
+    fn run(&self, _browser: BrowserApp, script: &str) -> Result<String, ScriptFailure> {
         let mut child = Command::new("osascript")
             .arg("-e")
             .arg(script)
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
-            .ok()?;
+            .map_err(|_| ScriptFailure::Launch)?;
         let deadline = Instant::now() + SCRIPT_TIMEOUT;
         loop {
-            match child.try_wait().ok()? {
-                Some(status) if status.success() => {
-                    let mut out = String::new();
-                    child.stdout.take()?.read_to_string(&mut out).ok()?;
-                    return Some(out);
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let mut stdout = String::new();
+                    let mut stderr = String::new();
+                    if let Some(mut pipe) = child.stdout.take() {
+                        pipe.read_to_string(&mut stdout)
+                            .map_err(|_| ScriptFailure::Launch)?;
+                    }
+                    if let Some(mut pipe) = child.stderr.take() {
+                        pipe.read_to_string(&mut stderr)
+                            .map_err(|_| ScriptFailure::Launch)?;
+                    }
+                    return if status.success() {
+                        Ok(stdout)
+                    } else {
+                        Err(ScriptFailure::Exit(stderr))
+                    };
                 }
-                Some(_) => return None,
-                None if Instant::now() >= deadline => {
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Ok(None) => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return None;
+                    return Err(ScriptFailure::Timeout);
                 }
-                None => std::thread::sleep(Duration::from_millis(25)),
+                Err(_) => return Err(ScriptFailure::Launch),
             }
         }
     }
 }
 
-impl CallSources for MacSources {
-    fn mic_state(&self) -> MicState {
-        mic_running_somewhere()
+/// AppleScript that lists the addresses of every tab of the browser. Only the URLs are read (no
+/// titles or page content); the caller keeps just the ones that are supported call pages.
+pub fn tabs_script(browser: BrowserApp) -> String {
+    format!(
+        "tell application id \"{}\"\n\
+         set urls to {{}}\n\
+         repeat with w in windows\n\
+         try\n\
+         set urls to urls & (URL of every tab of w)\n\
+         end try\n\
+         end repeat\n\
+         set AppleScript's text item delimiters to linefeed\n\
+         return urls as text\n\
+         end tell",
+        browser.bundle_id
+    )
+}
+
+/// Sources backed by Core Audio process objects and `osascript`.
+pub struct MacSources {
+    runner: Arc<dyn AppleScriptRunner>,
+    failed_at: Mutex<HashMap<&'static str, (Instant, TabAccessError)>>,
+}
+
+impl Default for MacSources {
+    fn default() -> Self {
+        Self::with_runner(Arc::new(CommandRunner))
+    }
+}
+
+impl MacSources {
+    fn with_runner(runner: Arc<dyn AppleScriptRunner>) -> Self {
+        Self {
+            runner,
+            failed_at: Mutex::new(HashMap::new()),
+        }
     }
 
-    fn mic_users(&self) -> Vec<String> {
-        Vec::new() // macOS does not tell cheaply which process holds the microphone
-    }
+    fn read_tabs(
+        &self,
+        browser: BrowserApp,
+    ) -> Result<Vec<super::titles::CallTab>, TabAccessError> {
+        if let Some((at, error)) = self
+            .failed_at
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .get(browser.bundle_id)
+            .cloned()
+            && at.elapsed() < retry_after(&error)
+        {
+            return Err(error);
+        }
 
-    fn meet_tabs(&self) -> Vec<MeetTab> {
-        let running = process_names();
-        let mut tabs = Vec::new();
-        for (process, app) in BROWSERS {
-            if !running.iter().any(|p| p == process) {
-                continue; // never launch a browser just to look into it
+        match self.runner.run(browser, &tabs_script(browser)) {
+            Ok(output) => {
+                self.failed_at
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner())
+                    .remove(browser.bundle_id);
+                Ok(call_tabs_from_output(&output, browser.name))
             }
-            {
-                let failed = self.failed_at.lock().unwrap_or_else(|p| p.into_inner());
-                if failed
-                    .get(process)
-                    .is_some_and(|t| t.elapsed() < RETRY_AFTER_FAILURE)
-                {
-                    continue;
-                }
-            }
-            match Self::run_script(&tabs_script(app)) {
-                Some(output) => {
-                    for (code, url) in meet_rooms_from_urls(&output) {
-                        tabs.push(MeetTab {
-                            browser: process.to_string(),
-                            code: Some(code),
-                            url: Some(url),
-                        });
+            Err(failure) => {
+                let error = match failure {
+                    ScriptFailure::Exit(ref stderr) if is_automation_denied(stderr) => {
+                        tracing::debug!(browser = browser.name, "Apple Events permission denied");
+                        TabAccessError::PermissionDenied {
+                            browser: browser.name.to_owned(),
+                        }
                     }
-                }
-                None => {
-                    tracing::debug!("cannot read tabs of {process} (permission or error)");
-                    self.failed_at
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .insert(process, Instant::now());
-                }
+                    _ => {
+                        tracing::debug!(browser = browser.name, "could not read browser tabs");
+                        TabAccessError::Unavailable
+                    }
+                };
+                self.failed_at
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner())
+                    .insert(browser.bundle_id, (Instant::now(), error.clone()));
+                Err(error)
             }
         }
-        tabs
+    }
+}
+
+fn is_automation_denied(stderr: &str) -> bool {
+    stderr.contains("-1743") || stderr.contains("-1744")
+}
+
+fn retry_after(error: &TabAccessError) -> Duration {
+    match error {
+        TabAccessError::PermissionDenied { .. } => RETRY_AFTER_PERMISSION_DENIAL,
+        TabAccessError::Unavailable => RETRY_AFTER_FAILURE,
+    }
+}
+
+fn core_audio_mic_users() -> MicProbe {
+    let Ok(processes) = ca::System::processes() else {
+        return MicProbe::Unknown;
+    };
+    let own_pid = std::process::id() as i32;
+    let users = processes
+        .into_iter()
+        .filter_map(|process| {
+            let pid = process.pid().ok()?;
+            if pid == own_pid || !process.is_running_input().ok()? {
+                return None;
+            }
+            let bundle_id = process.bundle_id().ok().map(|id| id.to_string());
+            let name = bundle_id
+                .as_deref()
+                .and_then(procs::browser_for_bundle_id)
+                .map(|browser| browser.name.to_owned())
+                .or_else(|| {
+                    bundle_id
+                        .as_deref()
+                        .and_then(procs::classify_bundle_id)
+                        .map(app_label)
+                })
+                .or_else(|| bundle_id.as_deref().map(last_bundle_component))
+                .unwrap_or_else(|| format!("process {pid}"));
+            Some(MicUser {
+                process_name: name,
+                bundle_id,
+                pid: Some(pid),
+            })
+        })
+        .collect();
+    MicProbe::Known(users)
+}
+
+fn last_bundle_component(bundle_id: &str) -> String {
+    bundle_id
+        .rsplit('.')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(bundle_id)
+        .to_owned()
+}
+
+fn app_label(app: crate::types::DetectedApp) -> String {
+    use crate::types::DetectedApp;
+    match app {
+        DetectedApp::GoogleMeet => "Google Meet".into(),
+        DetectedApp::Zoom => "Zoom".into(),
+        DetectedApp::Teams => "Microsoft Teams".into(),
+        DetectedApp::Telegram => "Telegram".into(),
+        DetectedApp::Slack => "Slack".into(),
+        DetectedApp::Discord => "Discord".into(),
+        DetectedApp::Telemost => "Yandex Telemost".into(),
+        DetectedApp::Jitsi => "Jitsi".into(),
+        DetectedApp::Other(name) => name,
+    }
+}
+
+impl CallSources for MacSources {
+    fn microphone_users(&self) -> MicProbe {
+        core_audio_mic_users()
     }
 
-    fn running_processes(&self) -> Vec<String> {
-        process_names()
+    fn call_tabs(&self, user: &MicUser) -> Result<Vec<super::titles::CallTab>, TabAccessError> {
+        let browser = user
+            .bundle_id
+            .as_deref()
+            .and_then(procs::browser_for_bundle_id)
+            .or_else(|| procs::browser_for_process(&user.process_name))
+            .ok_or(TabAccessError::Unavailable)?;
+        self.read_tabs(browser)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::detect::procs::browser_for_bundle_id;
 
-    #[test]
-    fn four_char_codes_match_core_audio_headers() {
-        assert_eq!(SCOPE_GLOBAL, 0x676C_6F62);
-        assert_eq!(DEFAULT_INPUT_DEVICE, 0x6449_6E20);
-        assert_eq!(IS_RUNNING_SOMEWHERE, 0x676F_6E65);
+    struct MockRunner {
+        result: Result<String, ScriptFailure>,
+    }
+
+    impl AppleScriptRunner for MockRunner {
+        fn run(&self, _browser: BrowserApp, _script: &str) -> Result<String, ScriptFailure> {
+            self.result.clone()
+        }
     }
 
     #[test]
-    fn script_targets_the_given_app() {
-        let s = tabs_script("Google Chrome");
-        assert!(s.starts_with("tell application \"Google Chrome\""));
-        assert!(s.contains("URL of t"));
+    fn script_targets_one_bundle_and_reads_only_urls() {
+        let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
+        let script = tabs_script(browser);
+        assert!(script.contains("application id \"com.brave.Browser\""));
+        assert!(script.contains("URL of every tab of w"));
+        assert!(!script.contains("title"));
     }
 
     #[test]
-    fn mic_probe_does_not_crash() {
-        // Value depends on the machine; this only checks the FFI call is well-formed.
-        let _ = mic_running_somewhere();
+    fn apple_events_permission_denial_is_reported_without_running_osascript() {
+        let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
+        let sources = MacSources::with_runner(Arc::new(MockRunner {
+            result: Err(ScriptFailure::Exit(
+                "Not authorized to send Apple events to Brave (-1743)".into(),
+            )),
+        }));
+        let user = MicUser {
+            process_name: "Brave".into(),
+            bundle_id: Some(browser.bundle_id.into()),
+            pid: Some(42),
+        };
+        assert_eq!(
+            sources.call_tabs(&user),
+            Err(TabAccessError::PermissionDenied {
+                browser: "Brave".into()
+            })
+        );
+    }
+
+    #[test]
+    fn denial_code_1744_and_other_failures_are_classified_and_cached() {
+        let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
+        let user = MicUser {
+            process_name: "Brave".into(),
+            bundle_id: Some(browser.bundle_id.into()),
+            pid: Some(42),
+        };
+        let denied = MacSources::with_runner(Arc::new(MockRunner {
+            result: Err(ScriptFailure::Exit("execution error: (-1744)".into())),
+        }));
+        assert!(matches!(
+            denied.call_tabs(&user),
+            Err(TabAccessError::PermissionDenied { .. })
+        ));
+        for failure in [ScriptFailure::Timeout, ScriptFailure::Launch] {
+            let sources = MacSources::with_runner(Arc::new(MockRunner {
+                result: Err(failure),
+            }));
+            assert_eq!(sources.call_tabs(&user), Err(TabAccessError::Unavailable));
+        }
+    }
+
+    #[test]
+    fn successful_script_output_yields_call_tabs_for_that_browser() {
+        let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
+        let user = MicUser {
+            process_name: "Brave".into(),
+            bundle_id: Some(browser.bundle_id.into()),
+            pid: Some(42),
+        };
+        let sources = MacSources::with_runner(Arc::new(MockRunner {
+            result: Ok("https://example.com/\nhttps://meet.google.com/pfm-bdvp-jkc\n".into()),
+        }));
+        let tabs = sources.call_tabs(&user).expect("tabs");
+        assert_eq!(tabs.len(), 1);
+        assert_eq!(tabs[0].code.as_deref(), Some("pfm-bdvp-jkc"));
+        assert_eq!(tabs[0].browser, "Brave");
+    }
+
+    #[test]
+    fn recognizes_both_automation_denial_codes() {
+        assert!(is_automation_denied("error (-1743)"));
+        assert!(is_automation_denied("error (-1744)"));
+        assert!(!is_automation_denied("execution error"));
+    }
+
+    #[test]
+    fn core_audio_process_query_is_well_formed() {
+        // This property query does not request microphone or Automation permission.
+        let _ = core_audio_mic_users();
     }
 }

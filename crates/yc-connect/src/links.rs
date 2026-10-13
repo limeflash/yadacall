@@ -38,6 +38,9 @@ pub fn classify(url: &str) -> Option<VideoProvider> {
     if host == "telemost.yandex.ru" || host == "telemost.360.yandex.ru" {
         return (path.trim_matches('/').len() > 3).then_some(VideoProvider::Telemost);
     }
+    if host == "meet.jit.si" {
+        return (!path.trim_matches('/').is_empty()).then_some(VideoProvider::Jitsi);
+    }
     None
 }
 

@@ -9,9 +9,9 @@ use windows::core::BOOL;
 use winreg::RegKey;
 use winreg::enums::HKEY_CURRENT_USER;
 
-use super::procs::mic_users_from_consent;
+use super::procs::{self, mic_users_from_consent};
 use super::titles::parse_meet_title;
-use super::{CallSources, MeetTab, MicState, process_names};
+use super::{CallSources, MicProbe, MicUser, TabAccessError, titles};
 
 const MIC_KEY: &str =
     r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
@@ -72,38 +72,44 @@ pub fn window_titles() -> Vec<String> {
     titles
 }
 
-/// Sources backed by the registry, `EnumWindows` and `sysinfo`.
+/// Sources backed by the microphone ConsentStore and visible window titles.
 #[derive(Debug, Default)]
 pub struct WindowsSources;
 
 impl CallSources for WindowsSources {
-    fn mic_state(&self) -> MicState {
+    fn microphone_users(&self) -> MicProbe {
         match consent_entries() {
-            Some(entries) if mic_users_from_consent(&entries).is_empty() => MicState::Idle,
-            Some(_) => MicState::InUse,
-            None => MicState::Unknown,
+            Some(entries) => MicProbe::Known(
+                mic_users_from_consent(&entries)
+                    .into_iter()
+                    .map(|process_name| MicUser {
+                        process_name,
+                        bundle_id: None,
+                        pid: None,
+                    })
+                    .collect(),
+            ),
+            None => MicProbe::Unknown,
         }
     }
 
-    fn mic_users(&self) -> Vec<String> {
-        consent_entries()
-            .map(|e| mic_users_from_consent(&e))
-            .unwrap_or_default()
-    }
-
-    fn meet_tabs(&self) -> Vec<MeetTab> {
-        window_titles()
+    fn call_tabs(&self, process: &MicUser) -> Result<Vec<titles::CallTab>, TabAccessError> {
+        let Some(browser) = procs::browser_for_process(&process.process_name) else {
+            return Err(TabAccessError::Unavailable);
+        };
+        Ok(window_titles()
             .iter()
-            .filter_map(|t| parse_meet_title(t))
-            .map(|w| MeetTab {
-                browser: w.browser.unwrap_or_else(|| "browser".into()),
-                code: w.code,
-                url: None,
+            .filter_map(|title| {
+                let found = parse_meet_title(title)?;
+                (found.browser.as_deref() == Some(browser.name)).then(|| titles::CallTab {
+                    app: crate::types::DetectedApp::GoogleMeet,
+                    code: found.code.clone(),
+                    meet_code: found.code,
+                    url: None,
+                    browser: browser.name.to_owned(),
+                    title: Some(title.clone()),
+                })
             })
-            .collect()
-    }
-
-    fn running_processes(&self) -> Vec<String> {
-        process_names()
+            .collect())
     }
 }

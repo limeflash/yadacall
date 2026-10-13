@@ -169,9 +169,12 @@ pub struct ReminderSettings {
     pub open_in_account: bool,
     /// Notice calls that are not on any calendar and offer to record them.
     pub detect_unscheduled: bool,
-    /// The user pressed "Разрешить": detection may read the browsers' tabs (macOS asks for Automation
-    /// access the first time). Off: mic-in-use plus window titles and running processes only.
+    /// The user enabled browser access; the detector then reads only the active tab in the browser
+    /// that currently holds the microphone.
     pub browser_access: bool,
+    /// Browser currently blocked by macOS Automation permission, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub browser_automation_permission_required: Option<String>,
 }
 
 impl Default for ReminderSettings {
@@ -181,6 +184,7 @@ impl Default for ReminderSettings {
             open_in_account: true,
             detect_unscheduled: true,
             browser_access: false,
+            browser_automation_permission_required: None,
         }
     }
 }
@@ -191,8 +195,15 @@ impl Default for ReminderSettings {
 pub struct DetectedCall {
     pub id: String,
     pub platform: String,
-    /// `meet.google.com/kqv-tdre-xmn`
-    pub url: String,
+    /// Full call page address when browser access exposed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Room code or identifier parsed from the call page, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    /// Page title, or a generic title such as `Звонок в Brave`.
+    #[serde(default)]
+    pub title: String,
     pub detected_at: DateTime<Utc>,
 }
 

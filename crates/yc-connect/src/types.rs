@@ -12,6 +12,7 @@ pub enum VideoProvider {
     Zoom,
     Teams,
     Telemost,
+    Jitsi,
     Other,
 }
 
@@ -136,11 +137,25 @@ impl AccountMeta {
 pub struct DetectedCall {
     pub app: DetectedApp,
     /// `abc-defg-hij` for Google Meet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meet_code: Option<String>,
+    /// Provider-specific room code or identifier, when it can be read from the call URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    /// The call page URL, when browser access exposed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     /// Browser the Meet tab was found in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub browser: Option<String>,
+    /// Page title, or a generic title such as `Звонок в Brave`.
+    #[serde(default)]
+    pub title: String,
+    /// Browser requiring Automation permission, when macOS denied Apple Events access.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automation_permission_required: Option<String>,
     /// Calendar event this call corresponds to, when one matches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub matched_event_id: Option<String>,
     /// `true` when a Meet tab/window was actually seen; `false` when only a call app plus
     /// "microphone is in use" was observed.
@@ -155,6 +170,10 @@ pub enum DetectedApp {
     Zoom,
     Teams,
     Telegram,
+    Slack,
+    Discord,
+    Telemost,
+    Jitsi,
     Other(String),
 }
 
