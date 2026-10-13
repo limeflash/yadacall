@@ -76,6 +76,8 @@ pub const COMMANDS: &[&str] = &[
     "quit_app",
     "check_update",
     "install_update",
+    "reveal_logs",
+    "open_automation_settings",
 ];
 
 /// Commands of the integrations (`integrations_commands.rs`); same ACL rules as [`COMMANDS`].
@@ -173,6 +175,8 @@ pub fn run() {
             commands::quit_app,
             commands::check_update,
             commands::install_update,
+            commands::reveal_logs,
+            commands::open_automation_settings,
             integrations_commands::accounts,
             integrations_commands::add_google_account,
             integrations_commands::cancel_add_account,

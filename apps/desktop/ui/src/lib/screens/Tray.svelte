@@ -97,9 +97,9 @@
 {#snippet detectedCard(c: DetectedCall)}
   <div class="scard dcard">
     <div style="display: flex; flex-direction: column; gap: 1px">
-      <span style="font-size: 13px; font-weight: 700">{t("Ты в звонке {p}", { p: c.platform })}</span>
+      <span style="font-size: 13px; font-weight: 700">{!c.url && c.title ? c.title : t("Ты в звонке {p}", { p: c.platform })}</span>
       <span style="font-size: 13px">{t("Записать его?")}</span>
-      <span class="mg-mono yc-ellipsis" style="font-size: 11.5px; color: var(--muted)">{c.url}</span>
+      {#if c.url}<span class="mg-mono yc-ellipsis" style="font-size: 11.5px; color: var(--muted)">{c.url}</span>{/if}
     </div>
     <div style="display: flex; gap: 6px">
       <button type="button" class="yc-press sj" style="flex: 1.2; justify-content: center" onclick={() => answer(c, true)}>{t("Записать")}</button>

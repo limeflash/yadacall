@@ -73,6 +73,8 @@ export function createTauriApi(): Api {
     popoverFit: (label, height) => invoke("popover_fit", { label, height }),
     hidePopover: (label) => invoke("hide_popover", { label }),
     quit: () => invoke("quit_app"),
+    revealLogs: () => invoke("reveal_logs"),
+    openAutomationSettings: () => invoke("open_automation_settings"),
     checkUpdate: () => invoke("check_update"),
     installUpdate: () => invoke("install_update"),
     async onUpdate(cb) {

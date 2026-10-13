@@ -65,6 +65,8 @@ const COMMANDS: &[&str] = &[
     "resolve_detected_call",
     "check_update",
     "install_update",
+    "reveal_logs",
+    "open_automation_settings",
 ];
 
 fn main() {

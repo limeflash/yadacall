@@ -60,6 +60,9 @@ pub fn build_turns(segments: &[Segment]) -> Vec<Turn> {
                 previous.text.push(' ');
             }
             previous.text.push_str(&segment.text);
+            previous
+                .corrections
+                .extend(segment.corrections.iter().cloned());
             continue;
         }
         turns.push(Turn {
@@ -67,6 +70,7 @@ pub fn build_turns(segments: &[Segment]) -> Vec<Turn> {
             start_ms: segment.start_ms,
             end_ms: segment.end_ms,
             text: segment.text.clone(),
+            corrections: segment.corrections.clone(),
         });
     }
     turns

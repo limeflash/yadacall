@@ -296,6 +296,27 @@ pub async fn open_system_settings(b: B<'_>, kind: PermissionKind) -> R<()> {
     Ok(())
 }
 
+/// Opens the folder with YadaCall's log files in the file manager.
+#[tauri::command]
+pub fn reveal_logs() -> R<()> {
+    let dir = crate::log_directory()
+        .ok_or_else(|| yc_core::Error::NotFound("log directory".to_owned()))?;
+    std::fs::create_dir_all(&dir).map_err(yc_core::Error::from)?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>)
+        .map_err(|e| yc_core::Error::Io(std::io::Error::other(e.to_string())))?;
+    Ok(())
+}
+
+/// Opens System Settings at Privacy & Security > Automation (macOS browser-tab access for call detection).
+#[tauri::command]
+pub fn open_automation_settings() {
+    #[cfg(target_os = "macos")]
+    let _ = tauri_plugin_opener::open_url(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+        None::<&str>,
+    );
+}
+
 // ---- shell --------------------------------------------------------------------------------------------
 
 #[tauri::command]

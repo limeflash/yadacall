@@ -139,7 +139,7 @@ export function createMockIntegrations(rec: Pick<Api, "recorderStart">): Integra
     async resolveDetectedCall(id, record) {
       if (!detected || detected.id !== id) return;
       const call = detected; detected = null;
-      if (record) void rec.recorderStart({ title: `${call.platform} · ${call.url.split("/").pop()}` });
+      if (record) void rec.recorderStart({ title: `${call.platform} · ${(call.url ?? call.title ?? "").split("/").pop()}` });
     },
     async onIntegrations(cb) { listeners.add(cb); return () => { listeners.delete(cb); }; },
   };

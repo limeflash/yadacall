@@ -283,4 +283,9 @@ export const en: Record<string, string> = {
   "Итоги выключены в настройках": "Summaries are turned off in Settings",
   "Итоги выключены в настройках. Включи их там — и их можно будет собрать из меню ⋯.": "Summaries are turned off in Settings. Turn them on there, then build one from the ⋯ menu.",
   "Итоги выключены в настройках.": "Summaries are turned off in Settings.",
+  "Словарь терминов": "Term dictionary",
+  "Названия продуктов, имена, жаргон — расшифровка поправит написание, например «Google Mit» → «Google Meet»": "Product names, people, jargon — transcripts will fix the spelling, e.g. “Google Mit” → “Google Meet”",
+  "Добавить термин": "Add a term", "Убрать {term}": "Remove {term}", "Объединил с {name}": "Merged with {name}", "было: {was}": "was: {was}", "Открыть логи": "Open logs",
+  "macOS не даёт читать вкладки {browser}: разреши YadaCall в «Автоматизация».": "macOS blocks reading {browser} tabs: allow YadaCall under Automation.",
+  "записать?": "record?",
 };

@@ -54,6 +54,9 @@ pub struct Turn {
     pub start_ms: Ms,
     pub end_ms: Ms,
     pub text: String,
+    /// Term dictionary replacements applied inside this turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrections: Vec<TextCorrection>,
 }
 
 /// Contents of `transcript.json`.

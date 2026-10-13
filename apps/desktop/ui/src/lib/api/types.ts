@@ -15,6 +15,7 @@ export type MeetingStatus =
   | { state: "failed"; stage: Stage; message: string; retryable: boolean };
 
 export interface Bookmark { atMs: Ms; label?: string }
+export interface RenameOutcome { mergedInto?: { key: string; name: string } }
 export interface ParticipantHint { name: string; email?: string }
 export interface Participant { key: string; name: string; voiceId?: string; /** Invite names ranked as likely identities of this speaker. */ suggestions?: string[] }
 export interface TrackInfo { kind: TrackKind; device: string; offsetMs: Ms; samples: number }
@@ -37,7 +38,8 @@ export interface Meeting {
 }
 
 export interface Segment { startMs: Ms; endMs: Ms; track: TrackKind; speaker: string; text: string; confidence?: number }
-export interface Turn { speaker: string; startMs: Ms; endMs: Ms; text: string }
+export interface TextCorrection { original: string; replacement: string }
+export interface Turn { speaker: string; startMs: Ms; endMs: Ms; text: string; /** Term-dictionary replacements inside this turn. */ corrections?: TextCorrection[] }
 
 export interface Decision { text: string; atMs?: Ms }
 export interface SummaryTask { text: string; owner?: string; due?: string; atMs?: Ms; done: boolean }
@@ -210,6 +212,8 @@ export interface Settings {
   launchAtLogin: boolean;
   recordingReminder: boolean;
   recognizeVoices: boolean;
+  /** The user's own terms (product names, jargon) the transcript should spell correctly. */
+  terms: string[];
   miniPlayer: boolean;
   summaries: SummarySettings;
   onboarded: boolean;
@@ -231,7 +235,8 @@ export interface Api {
   deleteMeeting(id: string): Promise<void>;
   /** Re-runs recognition on the kept audio (`meeting_retranscribe`, engine branch). */
   retranscribeMeeting(id: string): Promise<void>;
-  renameSpeaker(id: string, key: string, name: string): Promise<void>;
+  /** `mergedInto` is set when the name already belonged to another voice: the two were merged. */
+  renameSpeaker(id: string, key: string, name: string): Promise<RenameOutcome>;
   setTaskDone(id: string, index: number, done: boolean): Promise<void>;
   regenerateSummary(id: string): Promise<Summary>;
   exportMeeting(id: string, format: ExportFormat): Promise<string>;
@@ -279,6 +284,10 @@ export interface Api {
   /** Popover windows report their content height so the shell can fit and re-anchor them to the tray icon. */
   popoverFit(label: "tray" | "mini", height: number): Promise<void>;
   hidePopover(label: "tray" | "mini"): Promise<void>;
+  /** Opens the folder with the app's log files. */
+  revealLogs(): Promise<void>;
+  /** Opens System Settings > Privacy > Automation (macOS). */
+  openAutomationSettings(): Promise<void>;
   quit(): Promise<void>;
   /** Hash routes requested by other windows (tray popover). */
   onNavigate(cb: (hash: string) => void): Promise<() => void>;
@@ -367,9 +376,11 @@ export interface ReminderSettings {
   detectUnscheduled: boolean;
   /** The user pressed "Разрешить": detection may read browser tabs (macOS asks for Automation access then). */
   browserAccess: boolean;
+  /** Browser macOS blocked from Automation (tab access), when it did. */
+  browserAutomationPermissionRequired?: string;
 }
 
-export interface DetectedCall { id: string; platform: string; url: string; detectedAt: string }
+export interface DetectedCall { id: string; platform: string; /** Absent for a generic browser call. */ url?: string; code?: string; /** Page title or "Звонок в Brave". */ title?: string; detectedAt: string }
 
 /** The `integrations` Tauri event (tag = "type"). */
 export type IntegrationEvent =
