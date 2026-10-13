@@ -149,7 +149,8 @@ pub struct ModelCost {
     /// Active parameters per generated token (MoE models can be smaller here).
     #[serde(default)]
     pub active_params: f64,
-    /// Weight bytes read for one generated token, including quantization overhead.
+    /// Weight bytes read for one generated token, including quantization overhead. For the
+    /// Gemma 4 26B-A4B entry this is the downloaded size × 3.8B active / 25.2B total parameters.
     #[serde(default)]
     pub bytes_per_token: u64,
     /// Transformer layer count.
@@ -182,6 +183,44 @@ pub struct ModelCost {
     /// Fraction of layers using full-context attention.
     #[serde(default)]
     pub global_layer_fraction: f64,
+    /// Attention layout used to estimate context-dependent cache memory.
+    #[serde(default)]
+    pub attention: AttentionCost,
+}
+
+/// Attention layout used by the KV-cache memory estimate.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AttentionCost {
+    /// Conventional K/V cache, using the layer and head fields on [`ModelCost`].
+    #[default]
+    Standard,
+    /// Multi-head latent attention. llama.cpp caches one compressed latent plus its RoPE key
+    /// dimensions; its MLA value view reuses the latent, so it is counted once.
+    /// Verified in `src/models/deepseek2.cpp`: `Kcur` concatenates `kv_cmpr` and `k_pe`, `Vcur`
+    /// views `kv_cmpr`, and the graph uses the MLA K-only cache input.
+    Mla {
+        /// Compressed key/value latent width per layer.
+        #[serde(default)]
+        kv_lora_rank: u32,
+        /// RoPE key width stored alongside the latent per layer.
+        #[serde(default)]
+        qk_rope_head_dim: u32,
+    },
+    /// Hybrid recurrent and full-attention layout. The recurrent state is fixed in size while
+    /// full-attention cache grows with context.
+    Hybrid {
+        /// Number of layers with a context-growing full-attention cache.
+        #[serde(default)]
+        full_attention_layers: u32,
+        /// Total fixed recurrent-state memory for linear-attention layers.
+        #[serde(default)]
+        linear_state_bytes: u64,
+    },
 }
 
 /// Platform-specific llama-server archive.

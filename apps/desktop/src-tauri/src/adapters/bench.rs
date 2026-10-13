@@ -5,7 +5,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use yc_core::ports::{EmbedKind, SpeakerEmbedder, SpeechRecognizer};
 use yc_core::{Error, Result};
-use yc_hub::calibration::Measurement;
+use yc_hub::calibration::{CalibrationMetric, Measurement};
 use yc_hub::catalog::{ModelKind, ModelSpec};
 use yc_hub::runtime;
 use yc_ml::{AsrEngine, Backend, CampPlusEmbedder};
@@ -95,6 +95,7 @@ async fn asr(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<Me
     insights.record(Measurement {
         model_id: spec.id.clone(),
         kind: ModelKind::Asr,
+        metric: CalibrationMetric::Primary,
         backend: predicted.backend.clone(),
         predicted: predicted.est_realtime_x.unwrap_or_default(),
         measured: x,
@@ -134,6 +135,7 @@ async fn embed(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<
     insights.record(Measurement {
         model_id: spec.id.clone(),
         kind: ModelKind::Embed,
+        metric: CalibrationMetric::Primary,
         backend: predicted.backend.clone(),
         predicted: predicted_rate,
         measured: passages,
@@ -186,6 +188,7 @@ async fn speaker(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Resul
     insights.record(Measurement {
         model_id: spec.id.clone(),
         kind: ModelKind::Speaker,
+        metric: CalibrationMetric::Primary,
         backend: "auto".to_owned(),
         predicted: 0.0,
         measured: x,

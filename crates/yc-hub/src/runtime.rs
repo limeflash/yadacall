@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     Error, Result, benchmark,
-    calibration::{Calibration, Measurement},
+    calibration::{Calibration, CalibrationMetric, Measurement},
     catalog::{ModelFile, ModelKind, ModelSpec, RuntimeSpec, RuntimeSupportAsset},
     downloader::{DownloadControl, Downloader, model_storage_dir},
     hw, predictor,
@@ -90,8 +90,16 @@ pub struct LlmBenchmark {
     pub backend: String,
     /// Analytical estimate before recording this run.
     pub predicted_tok_s: f64,
+    /// Analytical prompt-processing estimate before recording this run.
+    pub predicted_prefill_tok_s: f64,
     /// llama.cpp's reported generation throughput.
     pub measured_tok_s: f64,
+    /// llama.cpp's reported prompt-processing throughput.
+    pub measured_prefill_tok_s: f64,
+    /// Number of prompt tokens used for the prefill measurement.
+    pub prompt_tokens: u64,
+    /// llama.cpp-reported prompt-processing duration in milliseconds.
+    pub prompt_ms: f64,
     /// Number of generated tokens used in the measurement.
     pub generated_tokens: u64,
     /// llama.cpp-reported generation duration in milliseconds.
@@ -209,7 +217,16 @@ pub async fn benchmark_model(
     let mut server = tokio::process::Command::new(executable)
         .args(["--host", "127.0.0.1", "--port", &port.to_string(), "-m"])
         .arg(&model_path)
-        .args(["-ngl", "999", "-c", "8192"])
+        .args([
+            "-ngl",
+            "999",
+            "-c",
+            "8192",
+            "--cache-type-k",
+            "q8_0",
+            "--cache-type-v",
+            "q8_0",
+        ])
         .kill_on_drop(true)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -249,13 +266,16 @@ pub async fn benchmark_model(
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
     }
+    // About 1.3–1.7k tokens depending on the model tokenizer: long enough for stable prompt
+    // timings, but short enough to keep a 2B CPU-only benchmark close to a few seconds.
+    let prompt = benchmark_prompt();
     let response = client
         .post(format!("{base_url}/v1/chat/completions"))
         .json(&serde_json::json!({
             // Instruction-tuned models stop at once on a raw prompt; go through the chat template.
             "messages": [{
                 "role": "user",
-                "content": "Write one short paragraph of about five sentences on why meeting notes are useful."
+                "content": prompt
             }],
             "max_tokens": max_tokens.max(8),
             "temperature": 0.0,
@@ -278,14 +298,36 @@ pub async fn benchmark_model(
             message: "llama-server response did not include timings.predicted_per_second"
                 .to_owned(),
         })?;
-    if !(measured.is_finite() && measured > 0.0) {
+    let measured_prefill = body
+        .pointer("/timings/prompt_per_second")
+        .and_then(serde_json::Value::as_f64)
+        .ok_or_else(|| Error::Model {
+            model: model.id.clone(),
+            message: "llama-server response did not include timings.prompt_per_second".to_owned(),
+        })?;
+    if !(measured.is_finite()
+        && measured > 0.0
+        && measured_prefill.is_finite()
+        && measured_prefill > 0.0)
+    {
         let _ = server.kill().await;
         return Err(Error::Model {
             model: model.id.clone(),
-            message: "llama-server reported no generation speed (the model produced no tokens)"
-                .to_owned(),
+            message: "llama-server reported no prompt or generation speed".to_owned(),
         });
     }
+    let prompt_tokens = body
+        .pointer("/timings/prompt_n")
+        .and_then(serde_json::Value::as_u64)
+        .or_else(|| {
+            body.pointer("/usage/prompt_tokens")
+                .and_then(serde_json::Value::as_u64)
+        })
+        .unwrap_or_default();
+    let prompt_ms = body
+        .pointer("/timings/prompt_ms")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_default();
     let generated_tokens = body
         .pointer("/timings/predicted_n")
         .and_then(serde_json::Value::as_u64)
@@ -303,9 +345,9 @@ pub async fn benchmark_model(
         .map_err(|error| Error::Storage(format!("benchmark worker failed: {error}")))?;
     let calibration_path = root.join("calibration.json");
     let mut calibration = Calibration::load(&calibration_path)?;
-    let predicted = predictor::predict(model, &profile, &benchmark, &Calibration::default())
-        .est_tok_s
-        .unwrap_or_default();
+    let prediction = predictor::predict(model, &profile, &benchmark, &Calibration::default());
+    let predicted = prediction.est_tok_s.unwrap_or_default();
+    let predicted_prefill = prediction.est_prefill_tok_s.unwrap_or_default();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -313,9 +355,19 @@ pub async fn benchmark_model(
     calibration.record(Measurement {
         model_id: model.id.clone(),
         kind: ModelKind::Llm,
+        metric: CalibrationMetric::Primary,
         backend: backend.to_owned(),
         predicted,
         measured,
+        measured_at_unix: now,
+    });
+    calibration.record(Measurement {
+        model_id: model.id.clone(),
+        kind: ModelKind::Llm,
+        metric: CalibrationMetric::Prefill,
+        backend: backend.to_owned(),
+        predicted: predicted_prefill,
+        measured: measured_prefill,
         measured_at_unix: now,
     });
     calibration.save(&calibration_path)?;
@@ -323,10 +375,23 @@ pub async fn benchmark_model(
         model_id: model.id.clone(),
         backend: backend.to_owned(),
         predicted_tok_s: predicted,
+        predicted_prefill_tok_s: predicted_prefill,
         measured_tok_s: measured,
+        measured_prefill_tok_s: measured_prefill,
+        prompt_tokens,
+        prompt_ms,
         generated_tokens,
         generation_ms,
     })
+}
+
+fn benchmark_prompt() -> String {
+    let notes = "The product team reviewed customer feedback, launch risks, owners, delivery dates, and follow-up actions during the weekly planning meeting. ";
+    let mut prompt = notes.repeat(60);
+    prompt.push_str(
+        "Summarize the decisions, risks, owners, and next steps from these meeting notes.",
+    );
+    prompt
 }
 
 /// Extract a zip pack, strip a common top-level directory, and preserve Unix executable bits.

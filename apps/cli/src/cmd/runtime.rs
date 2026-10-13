@@ -112,11 +112,15 @@ async fn benchmark(model_id: &str, backend: Option<BackendArg>, tokens: u32) -> 
         runtime::benchmark_model(&data_dir, model, &executable, backend_name(backend), tokens)
             .await?;
     println!(
-        "{} [{}]: predicted {:.1} tok/s, measured {:.1} tok/s ({} tokens, {:.0} ms); saved calibration to {}",
+        "{} [{}]: predicted {:.1} decode / {:.1} prefill tok/s; measured {:.1} decode / {:.1} prefill tok/s ({} prompt tokens, {:.0} ms; {} output tokens, {:.0} ms); saved calibration to {}",
         result.model_id,
         result.backend,
         result.predicted_tok_s,
+        result.predicted_prefill_tok_s,
         result.measured_tok_s,
+        result.measured_prefill_tok_s,
+        result.prompt_tokens,
+        result.prompt_ms,
         result.generated_tokens,
         result.generation_ms,
         data_dir.join("calibration.json").display()

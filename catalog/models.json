@@ -689,7 +689,7 @@
       "cost": {
         "totalParams": 25200000000.0,
         "activeParams": 3800000000.0,
-        "bytesPerToken": 14618145824,
+        "bytesPerToken": 2204323577,
         "nLayers": 30,
         "kvHeads": 8,
         "headDim": 512,
