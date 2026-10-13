@@ -43,6 +43,13 @@ export function shortDate(iso: string): string {
   return new Intl.DateTimeFormat(locale(), { day: "numeric", month: "short" }).format(new Date(iso)).replace(".", "");
 }
 
+/** A task's due date: the model may return "2026-10-20" or free text ("на следующей неделе") — free text is shown as is. */
+export function dueLabel(due?: string): string {
+  if (!due) return "";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(due) ? new Date(due + "T12:00:00") : null;
+  return d && !Number.isNaN(d.getTime()) ? new Intl.DateTimeFormat(locale(), { day: "numeric", month: "short" }).format(d).replace(".", "") : due;
+}
+
 export function dayKey(iso: string): string { return new Date(iso).toDateString(); }
 
 export function bytes(n: number): string {

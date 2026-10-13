@@ -133,7 +133,7 @@
   <div aria-hidden="true" class="fade"></div>
   <form class="askbar" onsubmit={submit}>
     <label style="flex: 1; min-width: 0; display: flex"><span class="mg-sr">{t("Уточнить вопрос")}</span>
-      <input type="text" bind:value={input} placeholder={thread.length ? t("А что на это сказал Борис?") : t("Какие задачи на мне на этой неделе?")} /></label>
+      <input type="text" bind:value={input} placeholder={thread.length ? t("Уточнить вопрос…") : t("Спросить про встречи…")} /></label>
     <button type="submit" aria-label={t("Спросить")} class="yc-press send"><Icon name="arrowUp" size={16} /></button>
   </form>
 </main>

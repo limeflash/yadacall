@@ -8,8 +8,12 @@ export function speakerName(m: Pick<Meeting, "participants">, key: string): stri
   if (p?.name) return p.name;
   return key === "them" ? t("Собеседник") : t("Гость");
 }
+/** "Спикер 3" / "Speaker 3": what the engine calls a voice nobody named yet. */
+const placeholderName = /^(спикер|speaker|гость|guest)\s*\d*$/i;
 export function isNamed(m: Pick<Meeting, "participants">, key: string): boolean {
-  return key === "me" || key === "them" || !!m.participants.find((x) => x.key === key)?.name;
+  if (key === "me" || key === "them") return true;
+  const name = m.participants.find((x) => x.key === key)?.name?.trim();
+  return !!name && !placeholderName.test(name);
 }
 /** Avatar / waveform colour slot: me=0, s1=1, s2=2, s3=3, anything further = 4 (muted). */
 export function speakerIndex(key: string): number {

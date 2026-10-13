@@ -226,4 +226,10 @@ export const en: Record<string, string> = {
   "Обновление": "Update", "Доступна версия {v}": "Version {v} is available", "Обновить": "Update", "Позже": "Later", "Скачиваю": "Downloading",
   "Устанавливаю и перезапускаю…": "Installing and restarting…",
   "Идёт запись. Заверши или отмени её, потом обнови приложение.": "A recording is in progress. Finish or cancel it, then update.",
+  "Спросить про эту встречу…": "Ask about this meeting…", "Спросить про встречи…": "Ask about your meetings…", "Уточнить вопрос…": "Follow up…",
+  "Не получилось показать этот экран": "Couldn't show this screen",
+  "Данные в порядке — сбой только в отображении. Попробуй открыть экран ещё раз.": "Your data is fine — only the display failed. Try opening the screen again.",
+  "К встречам": "Back to meetings",
+  "Распознать заново": "Transcribe again", "Распознаю заново — это займёт несколько минут": "Transcribing again — this takes a few minutes",
+  "Приглашены": "Invited", "Приглашённые на встречу": "Invitees", "Найти": "Search", "Никого не нашла": "Nobody found", "Выбери голос ниже и нажми на имя.": "Pick a voice below, then tap a name.",
 };

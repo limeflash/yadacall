@@ -15,6 +15,7 @@ export type MeetingStatus =
   | { state: "failed"; stage: Stage; message: string; retryable: boolean };
 
 export interface Bookmark { atMs: Ms; label?: string }
+export interface ParticipantHint { name: string; email?: string }
 export interface Participant { key: string; name: string; voiceId?: string; /** Invite names ranked as likely identities of this speaker. */ suggestions?: string[] }
 export interface TrackInfo { kind: TrackKind; device: string; offsetMs: Ms; samples: number }
 
@@ -29,6 +30,8 @@ export interface Meeting {
   tracks: TrackInfo[];
   bookmarks: Bookmark[];
   participants: Participant[];
+  /** People invited to the calendar event behind the recording. */
+  participantHints?: ParticipantHint[];
   asrModel?: string;
   status: MeetingStatus;
 }
@@ -211,6 +214,8 @@ export interface Api {
   getMeeting(id: string): Promise<MeetingDetail>;
   renameMeeting(id: string, title: string): Promise<void>;
   deleteMeeting(id: string): Promise<void>;
+  /** Re-runs recognition on the kept audio (`meeting_retranscribe`, engine branch). */
+  retranscribeMeeting(id: string): Promise<void>;
   renameSpeaker(id: string, key: string, name: string): Promise<void>;
   setTaskDone(id: string, index: number, done: boolean): Promise<void>;
   regenerateSummary(id: string): Promise<Summary>;
