@@ -1,0 +1,23 @@
+---
+// GitHub Pages serves 404.html for every unknown path, so this page is bilingual.
+import Base from '../layouts/Base.astro';
+import Mark from '../components/Mark.astro';
+import { X } from '../lib/strings';
+import { href } from '../lib/site';
+
+const paths = { ru: '/', en: '/en/' };
+const btn = 'display: inline-flex; align-items: center; height: 46px; padding: 0 22px; border-radius: 14px; font-size: 15px; font-weight: 800; text-decoration: none';
+---
+<Base lang="ru" title={`404 — ${X.ru.notFoundTitle} · ${X.en.notFoundTitle}`} description={X.ru.notFoundText} paths={paths} current="ru" noindex>
+  <div class="yl-404">
+    <div class="yc-float" style="width: 120px; height: 120px"><Mark eager /></div>
+    <span class="mg-mono yl-404-code">404</span>
+    <h1>{X.ru.notFoundTitle}</h1>
+    <p>{X.ru.notFoundText}</p>
+    <p lang="en">{X.en.notFoundText}</p>
+    <div class="yl-404-row">
+      <a class="yl-btn" href={href('/')} style={`${btn}; background: var(--accent); color: var(--ink-on-accent)`}>{X.ru.notFoundHome}</a>
+      <a class="yl-btn" href={href('/en/')} lang="en" style={`${btn}; border: 1px solid var(--border); background: var(--surface); color: var(--text)`}>{X.en.notFoundHome}</a>
+    </div>
+  </div>
+</Base>

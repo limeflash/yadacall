@@ -1,0 +1,37 @@
+---
+// Animated cat mascot (mint set). Layers and positions are copied from the design's Mark component;
+// the keyframes (ycmBlink / ycmLook / ycmCup / ycmBand) live in styles/tokens.css.
+import band from '../assets/mascot/band.webp';
+import cupL from '../assets/mascot/cup-l.webp';
+import cupR from '../assets/mascot/cup-r.webp';
+import eyeL from '../assets/mascot/eye-l.webp';
+import eyeR from '../assets/mascot/eye-r.webp';
+import face from '../assets/mascot/face.webp';
+import head from '../assets/mascot/head.webp';
+
+interface Props {
+  animated?: boolean;
+  /** load the layers right away (above the fold) instead of lazily */
+  eager?: boolean;
+}
+const { animated = true, eager = false } = Astro.props;
+const on = animated;
+const anim = on
+  ? { blink: 'ycmBlink 4.8s ease-in-out infinite', look: 'ycmLook 7s ease-in-out infinite', cupL: 'ycmCup 3.2s ease-in-out infinite', cupR: 'ycmCup 3.2s ease-in-out .4s infinite', band: 'ycmBand 3.2s ease-in-out infinite' }
+  : { blink: 'none', look: 'none', cupL: 'none', cupR: 'none', band: 'none' };
+const loading = eager ? 'eager' : 'lazy';
+const common = { alt: '', decoding: 'async', loading } as const;
+---
+<div class="ycm-anim" style="position: relative; width: 100%; aspect-ratio: 1 / 1; overflow: visible">
+  <div style="position: absolute; left: -19.44%; top: -20.22%; width: 139.33%; aspect-ratio: 1 / 1">
+    <img src={band.src} width={band.width} height={band.height} {...common} style={`position: absolute; left: 22.4%; top: 18.47%; width: 36.4%; height: 28.72%; pointer-events: none; transform-origin: 20% 90%; animation: ${anim.band}`} />
+    <img src={cupR.src} width={cupR.width} height={cupR.height} {...common} style={`position: absolute; left: 67.59%; top: 45.86%; width: 17.8%; height: 26.91%; pointer-events: none; animation: ${anim.cupR}`} />
+    <img src={face.src} width={face.width} height={face.height} {...common} style="position: absolute; left: 41.63%; top: 38.36%; width: 35.15%; height: 32.52%; pointer-events: none" />
+    <img src={head.src} width={head.width} height={head.height} {...common} style="position: absolute; left: 24.53%; top: 20.26%; width: 53.01%; height: 61.86%; pointer-events: none" />
+    <div style={`position: absolute; inset: 0; animation: ${anim.look}`}>
+      <img src={eyeL.src} width={eyeL.width} height={eyeL.height} {...common} style={`position: absolute; left: 51.77%; top: 46.85%; width: 7.95%; height: 14.36%; pointer-events: none; animation: ${anim.blink}`} />
+      <img src={eyeR.src} width={eyeR.width} height={eyeR.height} {...common} style={`position: absolute; left: 64.59%; top: 49.53%; width: 7.6%; height: 14.51%; pointer-events: none; animation: ${anim.blink}`} />
+    </div>
+    <img src={cupL.src} width={cupL.width} height={cupL.height} {...common} style={`position: absolute; left: 14.37%; top: 40.83%; width: 25.67%; height: 32.06%; pointer-events: none; animation: ${anim.cupL}`} />
+  </div>
+</div>

@@ -1,0 +1,28 @@
+---
+// Mistgate icon paths (24 grid, stroke 2.2, round caps) copied from the design's bundle.js.
+const paths: Record<string, string> = {
+  chevronRight: "M9 5l7 7-7 7",
+  externalLink: "M14 4h6v6M20 4l-9 9M18 14v5H5V6h5",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
+  arrowUp: "M12 19V5M6 11l6-6 6 6",
+  layers: "M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5",
+  text: "M4 6h16M4 10h16M4 14h10M4 18h7",
+  refresh: "M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5",
+  pulse: "M3 12h4l3-7 4 14 3-7h4",
+  warn: "M12 4l9 16H3L12 4zM12 10v4M12 17h.01",
+  upload: "M12 16V4M12 4L8 8M12 4l4 4M4 20h16",
+  bolt: "M13 3L5 14h6l-1 7 8-11h-6l1-7z",
+  disk: "M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
+  cpu: "M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z",
+  shield: "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3zM9 12l2.2 2.2L15.5 10",
+};
+
+interface Props {
+  name: string;
+  size?: number;
+}
+const { name, size = 16 } = Astro.props;
+---
+<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="mg-icon"><path d={paths[name] ?? ''}></path></svg>

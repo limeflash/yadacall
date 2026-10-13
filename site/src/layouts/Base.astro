@@ -1,0 +1,93 @@
+---
+import '../styles/fonts.css';
+import '../styles/tokens.css';
+import '../styles/base.css';
+import '../styles/landing.css';
+import '../styles/site.css';
+import onestCyr from '../assets/fonts/Onest-cyrillic-343120f6.woff2?url';
+import onestLatin from '../assets/fonts/Onest-latin-04a5efeb.woff2?url';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { abs, href } from '../lib/site';
+import type { Lang } from '../lib/i18n';
+import { X } from '../lib/strings';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** path of this page's RU and EN versions, e.g. { ru: '/privacy/', en: '/en/privacy/' } */
+  paths: { ru: string; en: string };
+  /** which of them this page is */
+  current: Lang;
+  /** true on the landing: header links are in-page anchors */
+  landing?: boolean;
+  noindex?: boolean;
+  bodyClass?: string;
+}
+const { lang, title, description, paths, current, landing = false, noindex = false } = Astro.props;
+const x = X[lang];
+const canonical = abs(paths[current]);
+const og = abs(lang === 'en' ? '/og-en.png' : '/og.png');
+// Preload the Onest subsets the first screen needs: the RU page uses both (wordmark + Cyrillic), EN only latin.
+const preload = lang === 'ru' ? [onestCyr, onestLatin] : [onestLatin];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'YadaCall',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'macOS, Windows, Linux',
+  description: x.description,
+  url: abs(paths[current]),
+  license: 'https://opensource.org/licenses/MIT',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
+---
+<!doctype html>
+<html lang={x.locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0c0c0e" />
+    <meta name="color-scheme" content="dark" />
+    {noindex ? <meta name="robots" content="noindex" /> : null}
+    <link rel="canonical" href={canonical} />
+    {!noindex && <link rel="alternate" hreflang="ru" href={abs(paths.ru)} />}
+    {!noindex && <link rel="alternate" hreflang="en" href={abs(paths.en)} />}
+    {!noindex && <link rel="alternate" hreflang="x-default" href={abs(paths.ru)} />}
+    <link rel="icon" type="image/png" sizes="48x48" href={href('/favicon.png')} />
+    <link rel="apple-touch-icon" href={href('/apple-touch-icon.png')} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={x.siteName} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={x.ogLocale} />
+    <meta property="og:locale:alternate" content={lang === 'ru' ? X.en.ogLocale : X.ru.ogLocale} />
+    <meta property="og:image" content={og} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={og} />
+    {preload.map((u) => <link rel="preload" as="font" type="font/woff2" href={u} crossorigin />)}
+    {landing && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  </head>
+  <body>
+    <div class="mg yl" lang={x.locale} data-theme="dark" id="yl-root" style="--accent: #7dd3a0; position: relative; overflow-x: clip; background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 16px; line-height: 1.5">
+      <a class="mg-skip" href="#main">{x.skip}</a>
+      <Header lang={lang} landing={landing} paths={paths} current={current} />
+      <main id="main">
+        <slot />
+      </main>
+      <Footer lang={lang} />
+    </div>
+    <script>
+      import '../scripts/nav';
+    </script>
+  </body>
+</html>
