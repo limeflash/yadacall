@@ -1,14 +1,47 @@
 # YadaCall
 
-Записывает созвоны в две дорожки — «я» и «собеседник», расшифровывает их **прямо на компьютере и прямо во время звонка**, собирает итоги и задачи и отвечает на вопросы по всем встречам. Без облака, аккаунтов и телеметрии. macOS, Windows, Linux.
+Записывает созвоны в две дорожки — «я» и «собеседник», расшифровывает их **прямо на компьютере и прямо во время звонка**, собирает итоги и задачи и отвечает на вопросы по всем встречам. Звук никогда не покидает компьютер. Без аккаунтов и телеметрии. macOS, Windows, Linux.
 
-Records calls as two tracks (you / the other side), transcribes them **on-device while the call is happening**, builds summaries and action items, and answers questions across all your meetings. No cloud, no accounts, no telemetry.
+Records calls as two tracks (you / the other side), transcribes them **on-device while the call is happening**, builds summaries and action items, and answers questions across all your meetings. Audio never leaves your computer. No accounts, no telemetry.
 
-- Russian-first speech recognition (GigaAM v3), 25 languages via Parakeet v3
-- Local summaries with Gemma 4 (llama.cpp), or your own Claude / OpenAI-compatible / Ollama endpoint
-- Shows whether each model will run well on *your* machine before you download it
-- Plain files: every meeting is a folder with `transcript.md` + `transcript.json`
+## Что умеет
 
-Status: early development. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Расшифровка на устройстве во время звонка** — GigaAM v3 для русского (≈ 20–26× быстрее реального времени на M1 Pro), Parakeet v3 для 25 языков. После «Стоп» текст готов за секунды.
+- **Две дорожки без виртуальных драйверов** — Core Audio taps на macOS, WASAPI loopback на Windows, PulseAudio/PipeWire на Linux. Запись переживает падение и смену наушников; с Bluetooth-наушниками пишет встроенный микрофон, чтобы звонок не проваливался в режим гарнитуры.
+- **Разметка голосов** в групповых звонках и узнавание знакомых по прошлым встречам; имена подсказываются из приглашения в календаре.
+- **Итоги, решения и задачи** со ссылками на момент разговора — на выбор: локально (Gemma 4 через llama.cpp), через Ollama (в т. ч. облачные модели по подписке), Claude, любой OpenAI-совместимый API — или без итогов вовсе.
+- **Вопрос ко всем встречам** — гибридный поиск (полнотекст + смысл) и ответ с цитатами; видно, что ушло в облако.
+- **Календарь Google** (несколько аккаунтов) — напоминание перед звонком, «Войти и записать» в нужном аккаунте; ICS-ссылки для Яндекса, Outlook, iCloud.
+- **«Потянет ли?» до скачивания** — для каждой модели прогноз по твоему железу («≈ 39 ток/с · 3,5 из 16 ГБ»), загрузка в несколько потоков с докачкой и проверкой sha256.
+- **Простые файлы** — каждая встреча это папка с `transcript.md`, `transcript.json`, итогами и звуком (FLAC).
+
+## Установка
+
+Скачай файл для своей системы со страницы [Releases](https://github.com/limeflash/yadacall/releases/latest).
+
+| Система | Файл | Заметки |
+|---|---|---|
+| macOS 14.2+ (Apple Silicon) | `YadaCall_*_aarch64.dmg` | Сборка пока без подписи Apple: при первом запуске — правый клик по приложению → «Открыть», или `xattr -dr com.apple.quarantine /Applications/YadaCall.app`. |
+| Windows 10/11 x64 | `YadaCall_*_x64-setup.exe` или `.msi` | SmartScreen предупредит о неизвестном издателе: «Подробнее» → «Выполнить в любом случае». |
+| Linux x64 (Ubuntu 24.04+ и аналоги) | `.AppImage` или `.deb` | Нужен PulseAudio или PipeWire. |
+
+Модели скачиваются при первом запуске (расшифровка ≈ 230 МБ; Gemma 4 E2B для локальных итогов ≈ 2,8 ГБ — по желанию). Обновления приходят прямо в приложение.
+
+Вход в Google-календарь сейчас в тестовом режиме у Google (ограниченный круг аккаунтов); всем остальным подходит подписка на календарь по ICS-ссылке.
+
+## Сборка из исходников
+
+```bash
+git clone https://github.com/limeflash/yadacall && cd yadacall/apps/desktop
+pnpm install && pnpm tauri build --bundles app
+```
+
+Нужны Rust (версия зафиксирована в `rust-toolchain.toml`), Node LTS и pnpm; C++-тулчейн не нужен. CLI для экспериментов: `cargo run -p yadacall-cli -- --help` (`transcribe`, `bench-asr`, `models`, `hw`, `summarize`, `record`, `google`, `detect-call`).
+
+Документы: [архитектура](docs/ARCHITECTURE.md) · [выпуск релизов](docs/RELEASING.md) · [свой Google OAuth-клиент](docs/GOOGLE_OAUTH.md).
+
+## Приватность
+
+Звук обрабатывается только на компьютере. В сеть уходят: загрузка моделей и обновлений, запросы к календарю (если подключён) и — только если ты выбрал облачный провайдер итогов — текст расшифровки. Телеметрии нет.
 
 License: MIT.
