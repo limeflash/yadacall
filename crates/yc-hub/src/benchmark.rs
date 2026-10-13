@@ -100,7 +100,13 @@ fn measure_gemm(threads: usize) -> f64 {
                 let a_rows = &a[row_start * N..(row_start + rows) * N];
                 let b_rows = &b;
                 scope.spawn(move || {
-                    // The row slices are disjoint, while A and B are immutable inputs.
+                    // Row-major operands: row stride N, column stride 1. `a_rows`/`c_rows` hold exactly
+                    // `rows × N` elements and `b_rows` holds `N × N`, so every access stays inside its
+                    // slice; the C row blocks are disjoint across threads. (Column-major strides here
+                    // used to read and write far outside the slices — a crash on Windows.)
+                    debug_assert_eq!(a_rows.len(), rows * N);
+                    debug_assert_eq!(c_rows.len(), rows * N);
+                    debug_assert_eq!(b_rows.len(), N * N);
                     unsafe {
                         matrixmultiply::sgemm(
                             rows,
@@ -108,15 +114,15 @@ fn measure_gemm(threads: usize) -> f64 {
                             N,
                             1.0,
                             a_rows.as_ptr(),
-                            1,
                             N as isize,
+                            1,
                             b_rows.as_ptr(),
-                            1,
                             N as isize,
+                            1,
                             0.0,
                             c_rows.as_mut_ptr(),
-                            1,
                             N as isize,
+                            1,
                         );
                     }
                 });
@@ -127,4 +133,57 @@ fn measure_gemm(threads: usize) -> f64 {
     std::hint::black_box(c[0]);
     let seconds = best.as_secs_f64().max(0.000_001);
     (2.0 * (N as f64).powi(3) / seconds) / 1_000_000_000.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: the GEMM probe once passed column-major strides for row-major slices and read and
+    /// wrote outside them (access violation on Windows). Runs the real probe with several thread
+    /// counts so CI on every OS exercises it.
+    #[test]
+    fn gemm_probe_stays_in_bounds_for_any_thread_count() {
+        for threads in [1, 2, 3, 7, 8, 16] {
+            let gflops = measure_gemm(threads);
+            assert!(
+                gflops.is_finite() && gflops > 0.0,
+                "threads={threads}: {gflops}"
+            );
+        }
+    }
+
+    /// The strides must describe row-major data: check one product against a naive multiply.
+    #[test]
+    fn row_major_strides_compute_the_right_product() {
+        const M: usize = 3;
+        const N: usize = 4;
+        let a: Vec<f32> = (0..M * N).map(|i| i as f32).collect();
+        let b: Vec<f32> = (0..N * N).map(|i| (i % 5) as f32).collect();
+        let mut c = vec![0.0f32; M * N];
+        unsafe {
+            matrixmultiply::sgemm(
+                M,
+                N,
+                N,
+                1.0,
+                a.as_ptr(),
+                N as isize,
+                1,
+                b.as_ptr(),
+                N as isize,
+                1,
+                0.0,
+                c.as_mut_ptr(),
+                N as isize,
+                1,
+            );
+        }
+        for i in 0..M {
+            for j in 0..N {
+                let expected: f32 = (0..N).map(|k| a[i * N + k] * b[k * N + j]).sum();
+                assert_eq!(c[i * N + j], expected);
+            }
+        }
+    }
 }
