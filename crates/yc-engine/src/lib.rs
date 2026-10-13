@@ -45,4 +45,5 @@ pub use recorder::YadaRecorder;
 pub use recover::{ImportOptions, PendingRecovery};
 pub use session::{MicChoice, RecordingInfo, StartOptions};
 pub use settings::Settings;
+pub use voices::{MergedSpeaker, RenameOutcome};
 pub use yc_core::meeting::ParticipantHint;

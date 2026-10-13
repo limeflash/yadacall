@@ -45,20 +45,24 @@ struct Utt {
 fn merge_thresholds_on_real_audio() {
     let models = PathBuf::from(std::env::var_os("YC_MODELS_DIR").expect("YC_MODELS_DIR"));
     let calib = PathBuf::from(std::env::var_os("YC_CALIB_DIR").expect("YC_CALIB_DIR"));
-    let mut embedder = CampPlusEmbedder::load(
-        &models.join("speaker-campplus-zh-en-16k"),
-        Backend::Cpu,
-    )
-    .expect("load CAMPPlus");
+    let mut embedder =
+        CampPlusEmbedder::load(&models.join("speaker-campplus-zh-en-16k"), Backend::Cpu)
+            .expect("load CAMPPlus");
 
     // ---- the real meeting ----
     let transcript: serde_json::Value =
         serde_json::from_slice(&std::fs::read(calib.join("transcript.json")).unwrap()).unwrap();
-    let (mic_pcm, them_pcm) = (read_f32(&calib.join("mic.f32")), read_f32(&calib.join("them.f32")));
+    let (mic_pcm, them_pcm) = (
+        read_f32(&calib.join("mic.f32")),
+        read_f32(&calib.join("them.f32")),
+    );
     let (mic_offset, them_offset) = (1307u64, 2907u64);
     let mut utts: Vec<Utt> = Vec::new();
     for seg in transcript["segments"].as_array().unwrap() {
-        let (start, end) = (seg["startMs"].as_u64().unwrap(), seg["endMs"].as_u64().unwrap());
+        let (start, end) = (
+            seg["startMs"].as_u64().unwrap(),
+            seg["endMs"].as_u64().unwrap(),
+        );
         let track = seg["track"].as_str().unwrap();
         let (pcm, offset) = if track == "mic" {
             (&mic_pcm, mic_offset)
@@ -86,8 +90,14 @@ fn merge_thresholds_on_real_audio() {
 
     let cen = |sel: &[&Utt]| centroid(sel.iter().map(|u| u.emb.as_slice()));
     let (s1, s2): (Vec<&Utt>, Vec<&Utt>) = (
-        them.iter().copied().filter(|u| u.old_speaker == "s1").collect(),
-        them.iter().copied().filter(|u| u.old_speaker == "s2").collect(),
+        them.iter()
+            .copied()
+            .filter(|u| u.old_speaker == "s1")
+            .collect(),
+        them.iter()
+            .copied()
+            .filter(|u| u.old_speaker == "s2")
+            .collect(),
     );
     eprintln!(
         "OLD split: s1 n={} s2 n={}  centroid cos(s1,s2)={:.3}  s2 secs={:.1}",

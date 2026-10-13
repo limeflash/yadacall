@@ -91,7 +91,7 @@ pub(crate) fn speaker_names(meeting: &Meeting) -> Vec<(String, String)> {
     names
 }
 
-fn is_diarised_key(key: &str) -> bool {
+pub(crate) fn is_diarised_key(key: &str) -> bool {
     key == SPEAKER_THEM
         || (key.starts_with('s') && key.len() > 1 && key[1..].chars().all(|c| c.is_ascii_digit()))
 }
