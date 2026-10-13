@@ -27,6 +27,21 @@ pub struct ClusterConfig {
 }
 
 /// Default for [`ClusterConfig::merge_similarity`].
+///
+/// Calibrated with CAMPPlus (192-d) on a real 6-minute 1:1 call (`tests/calibration.rs`, ignored;
+/// 19 remote and 36 own utterances of at least 1 s) plus macOS TTS voices:
+///
+/// * one remote person, utterance pairs: mean 0.56, min 0.19, max 0.88; interleaved halves of the
+///   same person: centroid cosine 0.94; the pair that the old clustering had split into "two
+///   Dimas" (17 + 2 utterances, 8.6 s): centroid cosine 0.567;
+/// * different people (own mic vs remote), utterance pairs: mean 0.18, max 0.44; centroids 0.31
+///   against the whole remote side and 0.16 against the small split-off cluster;
+/// * TTS, same voice on different sentences: mean 0.90, min 0.83; different voices: mean 0.30,
+///   centroids mean 0.32, lowest 0.08 (one pair of installed voices rendered identically, cosine 1.0).
+///
+/// So different people stay below ~0.45 (utterances) and 0.31 (centroids), while one person
+/// split by the clustering lands at 0.55 or more: 0.5 separates them. The floor under which a
+/// small cluster is "clearly someone else" is 0.25 (`distinct_similarity`).
 pub const DEFAULT_MERGE_SIMILARITY: f32 = 0.5;
 
 impl Default for ClusterConfig {
@@ -636,6 +651,145 @@ mod tests {
         assert_eq!(with_fold.iter().copied().max(), Some(2), "outlier absorbed");
         let without = cluster(&emb, &[], &ClusterConfig::default());
         assert_eq!(without.iter().copied().max(), Some(3));
+    }
+
+    /// Unit vector at `degrees` in the first plane of a 4-d space, with a little jitter.
+    fn at(degrees: f32, seed: &mut u32) -> Vec<f32> {
+        let r = degrees.to_radians();
+        let mut v = vec![
+            r.cos() + 0.02 * noise(seed),
+            r.sin() + 0.02 * noise(seed),
+            0.02 * noise(seed),
+            0.02 * noise(seed),
+        ];
+        normalize(&mut v);
+        v
+    }
+
+    /// 17 utterances at 0 degrees and 2 at 50 degrees (centroid cosine ~0.64).
+    fn split_person() -> (Vec<Vec<f32>>, Vec<f32>) {
+        let mut seed = 3;
+        let mut emb: Vec<Vec<f32>> = (0..17).map(|_| at(0.0, &mut seed)).collect();
+        emb.extend((0..2).map(|_| at(50.0, &mut seed)));
+        let mut secs = vec![5.0; 17];
+        secs.extend([4.3, 4.3]);
+        (emb, secs)
+    }
+
+    fn strict() -> ClusterConfig {
+        // Nothing merges in the agglomerative step, as with the person split in the field data.
+        ClusterConfig {
+            distance_threshold: 0.05,
+            merge_similarity: 2.0,
+            small_cluster_secs: 0.0,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn one_person_split_in_two_is_rejoined_by_centroid_similarity() {
+        let (emb, secs) = split_person();
+        let before = cluster(&emb, &secs, &strict());
+        assert_eq!(before.iter().copied().max(), Some(1), "premise: split");
+        let merged = cluster(
+            &emb,
+            &secs,
+            &ClusterConfig {
+                merge_similarity: 0.5,
+                small_cluster_secs: 0.0,
+                ..strict()
+            },
+        );
+        assert!(merged.iter().all(|&l| l == 0));
+        // A stricter bar keeps them apart.
+        let kept = cluster(
+            &emb,
+            &secs,
+            &ClusterConfig {
+                merge_similarity: 0.9,
+                small_cluster_secs: 0.0,
+                ..strict()
+            },
+        );
+        assert_eq!(kept.iter().copied().max(), Some(1));
+    }
+
+    #[test]
+    fn small_cluster_is_folded_unless_clearly_another_person() {
+        let (emb, secs) = split_person();
+        let folded = cluster(
+            &emb,
+            &secs,
+            &ClusterConfig {
+                merge_similarity: 0.9,
+                small_cluster_secs: 20.0,
+                ..strict()
+            },
+        );
+        assert!(folded.iter().all(|&l| l == 0), "8.6 s of 94 s is small");
+
+        // A short cluster at 90 degrees (cosine ~0 to the big one) is someone else.
+        let mut seed = 5;
+        let mut emb: Vec<Vec<f32>> = (0..17).map(|_| at(0.0, &mut seed)).collect();
+        emb.extend((0..2).map(|_| at(90.0, &mut seed)));
+        let kept = cluster(
+            &emb,
+            &secs,
+            &ClusterConfig {
+                small_cluster_secs: 20.0,
+                ..strict()
+            },
+        );
+        assert_eq!(kept.iter().copied().max(), Some(1));
+
+        // A big second cluster is never "small", whatever its similarity.
+        let big = vec![5.0; emb.len()];
+        let mut two_big = emb.clone();
+        two_big.truncate(19);
+        let labels = cluster(
+            &two_big,
+            &big,
+            &ClusterConfig {
+                merge_similarity: 0.9,
+                small_cluster_share: 0.01,
+                small_cluster_secs: 20.0,
+                ..strict()
+            },
+        );
+        assert_eq!(labels.iter().copied().max(), Some(1));
+    }
+
+    #[test]
+    fn explicit_speaker_count_skips_the_merge_pass() {
+        let (emb, secs) = split_person();
+        let labels = cluster(
+            &emb,
+            &secs,
+            &ClusterConfig {
+                num_speakers: Some(2),
+                merge_similarity: 0.1,
+                small_cluster_secs: 20.0,
+                ..Default::default()
+            },
+        );
+        assert_eq!(labels.iter().copied().max(), Some(1));
+    }
+
+    #[test]
+    fn a_second_cluster_matching_a_taken_voice_is_absorbed() {
+        let known = vec![KnownVoice {
+            id: "dima".into(),
+            name: "Дима".into(),
+            emails: Vec::new(),
+            centroid: vec![1.0, 0.0],
+        }];
+        // Cluster 0 is Dima; cluster 1 also matches the profile but loses the one-to-one match.
+        let cents = vec![vec![0.99, 0.05], vec![0.8, 0.6], vec![0.0, 1.0]];
+        assert_eq!(same_voice_merge(&cents, &known, 0.7, 0.25), Some((1, 0)));
+        // Clearly different from the holder: not merged.
+        let far = vec![vec![1.0, 0.0], vec![0.72, 0.69]];
+        assert_eq!(same_voice_merge(&far, &known, 0.7, 0.9), None);
+        assert_eq!(same_voice_merge(&cents[2..], &known, 0.7, 0.25), None);
     }
 
     #[test]

@@ -7852,6 +7852,7 @@ dependencies = [
  "uuid",
  "yc-audio",
  "yc-core",
+ "yc-ml",
  "yc-store",
  "yc-text",
 ]
