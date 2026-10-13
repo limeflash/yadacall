@@ -116,9 +116,10 @@ impl Recorder {
 
         let mut ready: Vec<(TrackKind, Receiver<Result<String>>)> = Vec::new();
         if let Some(sel) = cfg.mic.clone() {
+            let prefer_builtin = cfg.prefer_builtin_mic;
             let (track, rx) = spawn_track(
                 TrackKind::Mic,
-                move || CpalBackend::new(Source::Input(sel)),
+                move || CpalBackend::new(Source::Input(sel), prefer_builtin),
                 &cfg,
                 anchor,
                 &paused,
@@ -243,7 +244,7 @@ fn spawn_system(
 ) -> Result<(Track, Receiver<Result<String>>)> {
     spawn_track(
         TrackKind::System,
-        || CpalBackend::new(Source::Loopback),
+        || CpalBackend::new(Source::Loopback, false),
         cfg,
         anchor,
         paused,
@@ -406,9 +407,26 @@ mod tests {
 
     /// A fake device: a real-time sine generator whose "default device" can be switched.
     struct FakeBackend {
+        /// Rate the stream *declares*.
         rate: u32,
+        /// Rate the device really delivers (0 = as declared). Changeable mid-stream.
+        actual: Arc<AtomicU32>,
         current: Arc<AtomicU32>,
         open_delay: Duration,
+        /// When the generator of the last stream stopped.
+        ended: Arc<std::sync::Mutex<Option<Instant>>>,
+    }
+
+    impl FakeBackend {
+        fn new(rate: u32, current: Arc<AtomicU32>, open_delay: Duration) -> Self {
+            Self {
+                rate,
+                actual: Arc::new(AtomicU32::new(0)),
+                current,
+                open_delay,
+                ended: Arc::default(),
+            }
+        }
     }
 
     struct FakeStream {
@@ -433,23 +451,32 @@ mod tests {
             let stop = Arc::new(AtomicBool::new(false));
             let flag = Arc::clone(&stop);
             let rate = self.rate;
+            let actual = Arc::clone(&self.actual);
+            let ended = Arc::clone(&self.ended);
             let thread = std::thread::spawn(move || {
-                let block = (rate / 100) as usize;
                 let mut n = 0u64;
+                let mut k = 0u32;
                 let start = Instant::now();
                 while !flag.load(Ordering::Relaxed) {
+                    let now_rate = match actual.load(Ordering::Relaxed) {
+                        0 => rate,
+                        r => r,
+                    };
+                    let block = (now_rate / 100) as usize;
                     let samples: Vec<f32> = (0..block)
                         .map(|i| {
                             0.5 * (2.0 * std::f32::consts::PI * 440.0 * (n + i as u64) as f32
-                                / rate as f32)
+                                / now_rate as f32)
                                 .sin()
                         })
                         .collect();
                     n += block as u64;
                     sink.push_mono(&samples);
-                    let due = start + Duration::from_secs_f64(n as f64 / f64::from(rate));
+                    k += 1;
+                    let due = start + Duration::from_millis(10) * k;
                     std::thread::sleep(due.saturating_duration_since(Instant::now()));
                 }
+                *ended.lock().unwrap() = Some(Instant::now());
             });
             let id = self.current.load(Ordering::Relaxed);
             Ok((
@@ -460,6 +487,7 @@ mod tests {
                 OpenInfo {
                     device: format!("Fake {id}"),
                     sample_rate: rate,
+                    substituted_for: None,
                 },
             ))
         }
@@ -482,11 +510,7 @@ mod tests {
         let backend_state = Arc::clone(&current);
         let (track, ready) = spawn_track(
             TrackKind::Mic,
-            move || FakeBackend {
-                rate: 44_100,
-                current: backend_state,
-                open_delay: Duration::from_millis(400),
-            },
+            move || FakeBackend::new(44_100, backend_state, Duration::from_millis(400)),
             &cfg,
             anchor,
             &paused,
@@ -561,6 +585,118 @@ mod tests {
             (500..800).contains(&meta.pauses[0].duration_ms),
             "{:?}",
             meta.pauses
+        );
+    }
+
+    type Ended = Arc<std::sync::Mutex<Option<Instant>>>;
+
+    /// Starts one fake mic track declaring 48 kHz whose real delivery rate is `actual`.
+    fn start_fake(
+        dir: &std::path::Path,
+        actual: &Arc<AtomicU32>,
+    ) -> (RecorderHandle, Receiver<RecorderEvent>, Ended) {
+        let mut cfg = RecorderConfig::new(dir);
+        cfg.prevent_sleep = false;
+        cfg.skip_disk_check = true;
+        let anchor = Anchor::now();
+        let (events_tx, events_rx) = crossbeam_channel::unbounded();
+        let paused = Arc::new(AtomicBool::new(false));
+        let ended: Ended = Arc::default();
+        let (actual2, ended2) = (Arc::clone(actual), Arc::clone(&ended));
+        let (track, ready) = spawn_track(
+            TrackKind::Mic,
+            move || {
+                let mut b = FakeBackend::new(48_000, Arc::new(AtomicU32::new(1)), Duration::ZERO);
+                b.actual = actual2;
+                b.ended = ended2;
+                b
+            },
+            &cfg,
+            anchor,
+            &paused,
+            &events_tx,
+        )
+        .unwrap();
+        ready.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        let handle = RecorderHandle {
+            anchor,
+            tracks: vec![track],
+            events_rx: events_rx.clone(),
+            events_tx,
+            paused,
+            _sleep: None,
+            stopped: false,
+        };
+        (handle, events_rx, ended)
+    }
+
+    /// Seconds of audio in the track minus the wall time the generator ran (after the track's offset).
+    fn error_vs_wall(
+        handle: &RecorderHandle,
+        ended: &Ended,
+        info: &yc_core::meeting::TrackInfo,
+    ) -> f64 {
+        let end = ended.lock().unwrap().expect("generator ended");
+        let wall = end.duration_since(handle.anchor.instant).as_secs_f64()
+            - info.offset_ms as f64 / 1000.0;
+        info.samples as f64 / 16_000.0 - wall
+    }
+
+    #[test]
+    fn mid_stream_rate_change_keeps_track_on_wall_clock() {
+        // Bluetooth headset opens its mic: the same stream suddenly delivers 24 kHz instead of the
+        // declared 48 kHz (the field bug: the track came out at half length).
+        let dir = tempfile::tempdir().unwrap();
+        let actual = Arc::new(AtomicU32::new(0));
+        let (mut handle, events, ended) = start_fake(dir.path(), &actual);
+        std::thread::sleep(Duration::from_millis(2500));
+        actual.store(24_000, Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(5500));
+        let infos = handle.finish().unwrap();
+
+        let err = error_vs_wall(&handle, &ended, &infos[0]);
+        assert!(err.abs() < 0.05, "track off the wall clock by {err:.3} s");
+        let evs: Vec<_> = events.try_iter().collect();
+        assert!(
+            evs.contains(&RecorderEvent::RateChanged {
+                track: TrackKind::Mic,
+                from_hz: 48_000,
+                to_hz: 24_000
+            }),
+            "{evs:?}"
+        );
+        let meta = read_meta(&meta_path(dir.path(), TrackKind::Mic)).unwrap();
+        assert!(
+            meta.device_changes
+                .iter()
+                .any(|c| c.device.contains("24000 Hz")),
+            "{:?}",
+            meta.device_changes
+        );
+    }
+
+    #[test]
+    fn drift_guard_bounds_an_undetectable_rate_error() {
+        // 36 kHz is no standard rate, so the rate watch cannot fix it; the drift guard must still
+        // keep the track near the wall clock (and rebuild the stream) instead of letting it slip.
+        let dir = tempfile::tempdir().unwrap();
+        let actual = Arc::new(AtomicU32::new(36_000));
+        let (mut handle, events, ended) = start_fake(dir.path(), &actual);
+        std::thread::sleep(Duration::from_secs(9));
+        let infos = handle.finish().unwrap();
+
+        let err = error_vs_wall(&handle, &ended, &infos[0]);
+        assert!(err.abs() < 1.7, "drift not bounded: {err:.2} s");
+        let evs: Vec<_> = events.try_iter().collect();
+        assert!(
+            evs.iter()
+                .any(|e| matches!(e, RecorderEvent::DriftCorrected { .. })),
+            "{evs:?}"
+        );
+        assert!(
+            evs.iter()
+                .any(|e| matches!(e, RecorderEvent::DeviceChanged { .. })),
+            "stream was rebuilt"
         );
     }
 }

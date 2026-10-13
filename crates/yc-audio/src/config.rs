@@ -56,6 +56,11 @@ pub struct RecorderConfig {
     pub frame_queue: usize,
     /// Hold a "no idle sleep" assertion while recording.
     pub prevent_sleep: bool,
+    /// When the default microphone is a Bluetooth headset and a built-in microphone exists, record
+    /// the built-in one instead: opening a headset microphone drops it to the call-quality HFP
+    /// profile and degrades everything the user hears. Applies only to [`DeviceSel::Default`] —
+    /// a microphone picked by name is always honoured. Default: on.
+    pub prefer_builtin_mic: bool,
     /// Skip the free-disk-space pre-check (tests).
     pub skip_disk_check: bool,
 }
@@ -71,6 +76,7 @@ impl RecorderConfig {
             frame_len: 512,
             frame_queue: 512,
             prevent_sleep: true,
+            prefer_builtin_mic: true,
             skip_disk_check: false,
         }
     }
@@ -106,6 +112,19 @@ pub enum RecorderEvent {
     },
     /// The live-frame consumer lags; `total` frames have been dropped so far on this track.
     FramesDropped { track: TrackKind, total: u64 },
+    /// The default microphone is a Bluetooth headset, so the built-in microphone `using` is
+    /// recorded instead (keeps the headset in high-quality A2DP).
+    MicSubstituted { bluetooth: String, using: String },
+    /// The capture stream changed its sample rate mid-call (Bluetooth A2DP ↔ HFP); the resampler was
+    /// rebuilt without a gap.
+    RateChanged {
+        track: TrackKind,
+        from_hz: u32,
+        to_hz: u32,
+    },
+    /// The track had drifted `drift_ms` away from the wall clock (positive: it was behind) and was
+    /// padded / trimmed back.
+    DriftCorrected { track: TrackKind, drift_ms: i64 },
     /// Recording paused (nothing is written until resumed).
     Paused,
     /// Recording resumed.

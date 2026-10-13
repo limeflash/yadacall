@@ -62,6 +62,11 @@ impl Pipeline {
         }
     }
 
+    /// Samples written to the track so far.
+    pub(crate) fn written(&self) -> u64 {
+        self.writer.samples()
+    }
+
     pub(crate) fn is_paused(&self) -> bool {
         self.paused
     }

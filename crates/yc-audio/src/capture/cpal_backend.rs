@@ -7,6 +7,7 @@ use yc_core::error::PermissionKind;
 use yc_core::{Error, Result};
 
 use crate::config::DeviceSel;
+use crate::devices::pick_default_input;
 use crate::supervisor::{Backend, OpenInfo, Sink};
 
 /// What the backend records.
@@ -21,22 +22,30 @@ pub(crate) enum Source {
 pub(crate) struct CpalBackend {
     host: cpal::Host,
     source: Source,
+    prefer_builtin_mic: bool,
+    /// Headset avoided by the last `resolve` (reported once through `OpenInfo`).
+    substituted_for: Option<String>,
 }
 
 impl CpalBackend {
-    pub(crate) fn new(source: Source) -> Self {
+    pub(crate) fn new(source: Source, prefer_builtin_mic: bool) -> Self {
         Self {
             host: cpal::default_host(),
             source,
+            prefer_builtin_mic,
+            substituted_for: None,
         }
     }
 
-    fn resolve(&self) -> Result<cpal::Device> {
+    fn resolve(&mut self) -> Result<cpal::Device> {
         match &self.source {
             Source::Input(DeviceSel::Default) => {
-                self.host.default_input_device().ok_or_else(|| {
-                    Error::Device("no default input device (is a microphone connected?)".into())
-                })
+                let (device, substituted) = pick_default_input(&self.host, self.prefer_builtin_mic)
+                    .ok_or_else(|| {
+                        Error::Device("no default input device (is a microphone connected?)".into())
+                    })?;
+                self.substituted_for = substituted;
+                Ok(device)
             }
             Source::Input(DeviceSel::Named(wanted)) => find_input(&self.host, wanted),
             #[cfg(target_os = "windows")]
@@ -164,17 +173,18 @@ impl Backend for CpalBackend {
             OpenInfo {
                 device: label,
                 sample_rate,
+                substituted_for: self.substituted_for.take(),
             },
         ))
     }
 
     fn target(&self) -> Option<String> {
         match &self.source {
-            Source::Input(DeviceSel::Default) => self
-                .host
-                .default_input_device()
-                .and_then(|d| d.id().ok())
-                .map(|i| i.to_string()),
+            Source::Input(DeviceSel::Default) => {
+                pick_default_input(&self.host, self.prefer_builtin_mic)
+                    .and_then(|(d, _)| d.id().ok())
+                    .map(|i| i.to_string())
+            }
             Source::Input(DeviceSel::Named(n)) => Some(n.clone()),
             #[cfg(target_os = "windows")]
             Source::Loopback => self

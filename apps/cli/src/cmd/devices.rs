@@ -27,6 +27,15 @@ pub fn run(_args: Args) -> anyhow::Result<()> {
         "Input is Bluetooth:          {}",
         fmt(yc_audio::input_is_bluetooth())
     );
+    if let Some(m) = yc_audio::resolve_default_mic(true) {
+        match m.substituted_for {
+            Some(headset) => println!(
+                "Default microphone:          {} (instead of {headset}, which would drop it to call quality)",
+                m.device
+            ),
+            None => println!("Default microphone:          {}", m.device),
+        }
+    }
     Ok(())
 }
 

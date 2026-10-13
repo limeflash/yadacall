@@ -31,10 +31,10 @@ mod supervisor;
 pub use config::{AudioFrame, DeviceSel, RecorderConfig, RecorderEvent, SilenceConfig};
 pub use decode::{DecodeInfo, decode_to_16k_mono};
 pub use devices::{
-    DeviceInfo, input_is_bluetooth, list_input_devices, list_output_devices,
-    output_is_builtin_speakers, system_audio_support,
+    DeviceInfo, MicResolution, input_is_bluetooth, list_input_devices, list_output_devices,
+    output_is_builtin_speakers, resolve_default_mic, system_audio_support,
 };
-pub use flac::encode_flac;
+pub use flac::{Repair, encode_flac, repair_flac};
 pub use pipeline::LEVEL_HZ;
 pub use recorder::{Levels, Recorder, RecorderHandle};
 pub use recover::recover;
