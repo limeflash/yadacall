@@ -15,6 +15,8 @@ use yc_llm::{
 enum ProviderChoice {
     Local,
     Ollama,
+    #[value(name = "ollama-cloud")]
+    OllamaCloud,
     Openai,
     Anthropic,
 }
@@ -105,11 +107,15 @@ async fn build_provider(
                 base_url: args
                     .base_url
                     .as_deref()
-                    .unwrap_or("http://localhost:11434/v1")
+                    .unwrap_or("http://127.0.0.1:11434")
                     .to_owned(),
             };
             config.build()?
         }
+        ProviderChoice::OllamaCloud => ProviderConfig::OllamaCloud {
+            model: args.model.as_deref().unwrap_or("gpt-oss:120b").to_owned(),
+        }
+        .build()?,
         ProviderChoice::Openai => {
             let config = ProviderConfig::OpenAiCompatible {
                 provider_id: "openai".to_owned(),

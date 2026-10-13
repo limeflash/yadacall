@@ -174,6 +174,8 @@ fn map_citations(text: &str, hits: &[ContextHit]) -> Vec<AnswerCitation> {
 fn provider_label(provider: &dyn ChatProvider) -> String {
     if provider.provider_id() == "anthropic" {
         "Claude".to_owned()
+    } else if provider.provider_id() == "ollama-cloud" {
+        "Ollama Cloud".to_owned()
     } else if provider.provider_id() == "local" {
         "local model".to_owned()
     } else {

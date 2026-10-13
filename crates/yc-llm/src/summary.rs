@@ -301,8 +301,8 @@ fn parse_and_validate(
     duration_ms: u64,
     title_is_untitled: bool,
 ) -> std::result::Result<SummaryJson, String> {
-    let parsed: SummaryJson =
-        serde_json::from_str(&response.text).map_err(|error| format!("invalid JSON: {error}"))?;
+    let parsed: SummaryJson = serde_json::from_str(json_body(&response.text))
+        .map_err(|error| format!("invalid JSON: {error}"))?;
     if parsed.about.is_empty() || parsed.about.len() > 3 {
         return Err("about must contain between one and three paragraphs".to_owned());
     }
@@ -338,6 +338,19 @@ fn parse_and_validate(
         }
     }
     Ok(parsed)
+}
+
+/// The JSON object inside a reply. Providers that do not enforce the schema (Ollama cloud models)
+/// wrap it in a Markdown fence or a sentence.
+fn json_body(text: &str) -> &str {
+    let text = text.trim();
+    if text.starts_with('{') {
+        return text;
+    }
+    match (text.find('{'), text.rfind('}')) {
+        (Some(start), Some(end)) if end > start => &text[start..=end],
+        _ => text,
+    }
 }
 
 fn to_core_summary(value: SummaryJson, language: &str, model: &str) -> Result<Summary> {
@@ -666,6 +679,13 @@ fn format_duration(ms: u64) -> String {
 mod tests {
     use super::*;
     use crate::{ChatStream, Timings, TokenUsage};
+
+    #[test]
+    fn json_is_found_inside_a_markdown_fence() {
+        assert_eq!(json_body("```json\n{\"a\": 1}\n```"), "{\"a\": 1}");
+        assert_eq!(json_body("  {\"a\": 1} "), "{\"a\": 1}");
+        assert_eq!(json_body("no json"), "no json");
+    }
 
     #[test]
     fn parses_minute_and_hour_timestamps() {

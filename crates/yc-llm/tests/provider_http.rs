@@ -12,9 +12,9 @@ use yc_core::{
     meeting::{Bookmark, MeetingId},
 };
 use yc_llm::{
-    AnthropicProvider, ChatMessage, ChatProvider, ChatRequest, ContextHit, MeetingMetadata,
-    OpenAiCompatibleProvider, SummaryInput, SummaryOptions, SummaryTemplate, SummaryTurn,
-    answer_question, summarize,
+    AnthropicProvider, ChatMessage, ChatProvider, ChatRequest, ContextHit, JsonSchema,
+    MeetingMetadata, OllamaProvider, OpenAiCompatibleProvider, SummaryInput, SummaryOptions,
+    SummaryTemplate, SummaryTurn, answer_question, summarize,
 };
 
 #[derive(Clone)]
@@ -357,4 +357,120 @@ async fn openai_sse_answer_returns_source_citation_mapping_and_egress_note() {
     assert_eq!(answer.egress.chars_sent, hit.text.chars().count());
     assert!(!answer.egress.audio_sent);
     let _ = server.await.expect("mock server task");
+}
+
+fn ndjson(lines: &[&str]) -> Vec<u8> {
+    let mut out = lines.join("\n").into_bytes();
+    out.push(b'\n');
+    out
+}
+
+#[tokio::test]
+async fn ollama_native_chat_sends_schema_options_and_bearer_key() {
+    let (base, server) = mock_server_with_replies(vec![json_reply(json!({
+        "message": { "role": "assistant", "content": "{\"ok\":true}" },
+        "done": true, "done_reason": "stop",
+        "prompt_eval_count": 50, "prompt_eval_duration": 500_000_000_u64,
+        "eval_count": 8, "eval_duration": 200_000_000_u64
+    }))])
+    .await;
+    let provider =
+        OllamaProvider::new(&base, Some("secret-key".into()), "gpt-oss:120b").expect("provider");
+    assert_eq!(provider.provider_id(), "ollama-cloud");
+    let mut request = ChatRequest::new("system", vec![ChatMessage::user("hi")], 77);
+    request.json_schema = Some(JsonSchema {
+        name: "s".into(),
+        schema: json!({ "type": "object", "properties": { "ok": { "type": "boolean" } } }),
+    });
+    let response = provider.complete(request).await.expect("response");
+    assert_eq!(response.text, "{\"ok\":true}");
+    assert_eq!(response.timings.decode_tokens_per_second, Some(40.0));
+    assert_eq!(response.timings.prompt_tokens_per_second, Some(100.0));
+    assert_eq!(response.usage.output_tokens, Some(8));
+    let requests = server.await.expect("mock server task");
+    assert_eq!(requests[0].path, "/api/chat");
+    assert!(requests[0].headers.contains("Bearer secret-key"));
+    assert_eq!(requests[0].body["stream"], false);
+    assert_eq!(requests[0].body["think"], false);
+    assert_eq!(requests[0].body["options"]["num_predict"], 77);
+    assert_eq!(requests[0].body["format"]["type"], "object");
+    assert_eq!(requests[0].body["messages"][0]["role"], "system");
+}
+
+#[tokio::test]
+async fn ollama_ndjson_stream_joins_split_lines_and_skips_thinking() {
+    let l1 = r#"{"message":{"content":"","thinking":"hmm"},"done":false}"#;
+    let l2 = r#"{"message":{"content":"При"},"done":false}"#;
+    let l3 = r#"{"message":{"content":"вет [1]"},"done":false}"#;
+    let l4 = r#"{"message":{"content":""},"done":true,"done_reason":"stop","eval_count":3}"#;
+    let all = ndjson(&[l1, l2, l3, l4]);
+    // Cut in the middle of a multi-byte character of the second line.
+    let cut = l1.len() + 1 + l2.find("При").expect("text") + 3;
+    let (base, server) = mock_server_with_replies(vec![Reply {
+        status: 200,
+        content_type: "application/x-ndjson",
+        chunks: vec![all[..cut].to_vec(), all[cut..].to_vec()],
+    }])
+    .await;
+    let provider = OllamaProvider::new(&base, None, "m").expect("provider");
+    assert_eq!(provider.provider_id(), "ollama");
+    let hit = ContextHit {
+        meeting_id: MeetingId::new(),
+        meeting_title: "План".into(),
+        date: "2026-10-12".into(),
+        speaker: "Ирина".into(),
+        start_ms: 1_000,
+        text: "Привет".into(),
+    };
+    let answer = answer_question(&provider, "Что было?", vec![hit], |_| {})
+        .await
+        .expect("answer");
+    assert_eq!(answer.text, "Привет [1]");
+    assert_eq!(answer.citations.len(), 1);
+    let requests = server.await.expect("mock server task");
+    assert!(!requests[0].headers.contains("Authorization"));
+    assert_eq!(requests[0].body["stream"], true);
+}
+
+#[tokio::test]
+async fn ollama_retries_without_think_flag_when_the_model_rejects_it() {
+    let (base, server) = mock_server_with_replies(vec![
+        Reply {
+            status: 400,
+            content_type: "application/json",
+            chunks: vec![br#"{"error":"\"x\" does not support think"}"#.to_vec()],
+        },
+        json_reply(json!({ "message": { "content": "ok" }, "done": true })),
+    ])
+    .await;
+    let provider = OllamaProvider::new(&base, None, "x").expect("provider");
+    let response = provider
+        .complete(ChatRequest::new("", vec![ChatMessage::user("hi")], 10))
+        .await
+        .expect("response");
+    assert_eq!(response.text, "ok");
+    let requests = server.await.expect("mock server task");
+    assert_eq!(requests[0].body["think"], false);
+    assert!(requests[1].body.get("think").is_none());
+}
+
+#[tokio::test]
+async fn ollama_probe_reports_version_models_and_sign_in() {
+    let (base, server) = mock_server_with_replies(vec![
+        json_reply(json!({ "version": "0.40.3" })),
+        json_reply(json!({ "models": [
+            { "name": "gemma4:e4b", "size": 5_000_000_000_u64 },
+            { "name": "glm-5.2:cloud", "size": 338, "remote_host": "https://ollama.com:443" }
+        ]})),
+        json_reply(json!({ "name": "someone" })),
+    ])
+    .await;
+    let probe = OllamaProvider::probe(&base).await;
+    assert!(probe.running && probe.signed_in);
+    assert_eq!(probe.version.as_deref(), Some("0.40.3"));
+    assert_eq!(probe.models.len(), 2);
+    assert!(probe.models[1].cloud && !probe.models[0].cloud);
+    let _ = server.await.expect("mock server task");
+    // Nothing listens any more.
+    assert!(!OllamaProvider::probe(&base).await.running);
 }
