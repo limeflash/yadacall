@@ -305,21 +305,17 @@ fn parse_and_validate(
     duration_ms: u64,
     title_is_untitled: bool,
 ) -> std::result::Result<SummaryJson, String> {
-    let parsed: SummaryJson = serde_json::from_str(json_body(&response.text))
+    let mut parsed: SummaryJson = serde_json::from_str(json_body(&response.text))
         .map_err(|error| format!("invalid JSON: {error}"))?;
     if parsed.about.is_empty() || parsed.about.len() > 3 {
         return Err("about must contain between one and three paragraphs".to_owned());
     }
-    if let Some(title) = parsed.title.as_deref() {
-        if !title_is_untitled {
-            return Err("title must be null when the meeting already has a title".to_owned());
-        }
-        if title.trim().is_empty() {
-            return Err("title must be null or contain a useful title".to_owned());
-        }
-        if is_generic_title(title) {
-            return Err("title must describe the meeting topic, not a generic summary".to_owned());
-        }
+    // A title is only a suggestion: small models often propose one even when told not to. Drop an
+    // unwanted, empty or generic title instead of failing the whole summary over it.
+    if parsed.title.as_deref().is_some_and(|title| {
+        !title_is_untitled || title.trim().is_empty() || is_generic_title(title)
+    }) {
+        parsed.title = None;
     }
     for decision in &parsed.decisions {
         let at_ms = parse_timestamp(&decision.at)
@@ -726,7 +722,7 @@ mod tests {
     }
 
     #[test]
-    fn title_validation_only_accepts_specific_titles_for_untitled_meetings() {
+    fn title_suggestions_are_kept_only_when_specific_and_wanted() {
         let response = |title: &str| ChatResponse {
             text: format!(
                 r#"{{"title":{title},"about":["ok"],"decisions":[],"tasks":[],"open_questions":[]}}"#
@@ -735,15 +731,22 @@ mod tests {
             timings: Timings::default(),
             stop_reason: None,
         };
-        assert!(parse_and_validate(&response("null"), 99_000, false).is_ok());
-        assert!(parse_and_validate(&response(r#""NB Week""#), 99_000, true).is_ok());
-        assert!(parse_and_validate(&response(r#""Specific title""#), 99_000, false).is_err());
+        let title = |text: &str, untitled: bool| {
+            parse_and_validate(&response(text), 99_000, untitled)
+                .expect("a title problem must not fail the summary")
+                .title
+        };
+        assert_eq!(title("null", false), None);
+        assert_eq!(title(r#""NB Week""#, true).as_deref(), Some("NB Week"));
+        // The meeting already has a title: the suggestion is dropped, the summary survives.
+        assert_eq!(title(r#""Specific title""#, false), None);
         for generic in [
             r#""Резюме встречи NB Week""#,
             r#""Meeting summary""#,
             r#""Итоги встречи""#,
+            r#""  ""#,
         ] {
-            assert!(parse_and_validate(&response(generic), 99_000, true).is_err());
+            assert_eq!(title(generic, true), None);
         }
     }
 
