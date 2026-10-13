@@ -1,0 +1,63 @@
+name: Smoke test (Windows)
+
+# Installs the published Windows release, launches it and collects crash evidence; also runs the
+# CLI probes that the app performs at startup, to isolate native crashes.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to test
+        default: v0.1.1
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download ${{ inputs.tag }} -p "*_x64-setup.exe" -D dl
+      - name: Install silently
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dl\*_x64-setup.exe | Select-Object -First 1
+          Start-Process $exe.FullName -ArgumentList '/S' -Wait
+          Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter yadacall-desktop.exe | Select-Object FullName
+      - name: Launch app and watch for 45 s
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $app = Get-ChildItem "$env:LOCALAPPDATA\Programs","$env:ProgramFiles" -Recurse -Filter yadacall-desktop.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $env:RUST_LOG = "debug"
+          $p = Start-Process $app.FullName -PassThru
+          Start-Sleep 45
+          if ($p.HasExited) { "APP EXITED with code $($p.ExitCode)" } else { "APP STILL RUNNING"; Stop-Process $p -Force }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: CLI probes (hw, devices, detect-call)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          cargo build -p yadacall-cli --release
+          foreach ($args in @('hw', 'devices', 'detect-call --no-tabs', 'models')) {
+            "=== yadacall $args"
+            & .\target\release\yadacall.exe $args.Split(' ')
+            "exit code: $LASTEXITCODE"
+          }
+      - name: Collect evidence
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory evidence -Force | Out-Null
+          Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001,1026} -MaxEvents 30 -ErrorAction SilentlyContinue |
+            Format-List TimeCreated,ProviderName,Id,Message | Out-File evidence\events.txt
+          Copy-Item "$env:LOCALAPPDATA\YadaCall\logs\*" evidence -ErrorAction SilentlyContinue
+          Get-Content evidence\events.txt -ErrorAction SilentlyContinue | Select-Object -First 80
+          Get-ChildItem evidence | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName -Tail 60 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-smoke-evidence
+          path: evidence
