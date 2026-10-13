@@ -461,6 +461,7 @@ impl DemoBackend {
                             text: text.into(),
                             words: vec![],
                             confidence: None,
+                            corrections: Vec::new(),
                         };
                         r.turns.push(Turn {
                             speaker: who.into(),

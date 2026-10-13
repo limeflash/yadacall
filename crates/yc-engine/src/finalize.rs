@@ -109,7 +109,11 @@ impl Engine {
             asr_model: read_asr_model(dir),
             status: MeetingStatus::Ready,
         };
-        let segments = build_transcript(dir, &meeting, &pauses)?;
+        let mut segments = build_transcript(dir, &meeting, &pauses)?;
+        let terms = self.term_dictionary();
+        for segment in &mut segments {
+            terms.correct_segment(segment);
+        }
         let has_system_speech = segments.iter().any(|s| s.track == TrackKind::System);
 
         let plan = self.plan_pipeline(

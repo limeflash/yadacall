@@ -13,7 +13,21 @@ pub struct ClusterConfig {
     /// A one-segment cluster with less total speech than this (seconds) is folded into the nearest
     /// other cluster. Clusters with at least two segments always meet the minimum evidence rule.
     pub min_cluster_secs: f32,
+    /// After clustering, clusters whose centroids are at least this cosine-similar are one person
+    /// and are merged (closest pair first). Ignored when `num_speakers` is set.
+    pub merge_similarity: f32,
+    /// A cluster with less than this share of all the speech *and* under `small_cluster_secs` is
+    /// folded into its nearest cluster (see [`ClusterConfig::distinct_similarity`]).
+    pub small_cluster_share: f32,
+    /// Seconds of speech under which a cluster counts as small.
+    pub small_cluster_secs: f32,
+    /// A small cluster whose best centroid similarity is below this is clearly someone else and
+    /// is kept.
+    pub distinct_similarity: f32,
 }
+
+/// Default for [`ClusterConfig::merge_similarity`].
+pub const DEFAULT_MERGE_SIMILARITY: f32 = 0.5;
 
 impl Default for ClusterConfig {
     fn default() -> Self {
@@ -22,6 +36,10 @@ impl Default for ClusterConfig {
             num_speakers: None,
             max_speakers: 10,
             min_cluster_secs: 8.0,
+            merge_similarity: DEFAULT_MERGE_SIMILARITY,
+            small_cluster_share: 0.15,
+            small_cluster_secs: 20.0,
+            distinct_similarity: 0.25,
         }
     }
 }
@@ -164,7 +182,154 @@ pub fn cluster(embeddings: &[Vec<f32>], durations_secs: &[f32], cfg: &ClusterCon
             cfg.min_cluster_secs,
         );
     }
+    if cfg.num_speakers.is_none() {
+        merge_close(&mut labels, embeddings, cfg.merge_similarity);
+        if !durations_secs.is_empty() {
+            fold_small(&mut labels, embeddings, durations_secs, cfg);
+        }
+    }
     relabel_by_first_appearance(&labels)
+}
+
+/// Distinct labels in ascending order.
+fn distinct(labels: &[usize]) -> Vec<usize> {
+    let mut v = labels.to_vec();
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// Centroid of the embeddings carrying `label`.
+fn label_centroid(labels: &[usize], embeddings: &[Vec<f32>], label: usize) -> Vec<f32> {
+    centroid(
+        (0..labels.len())
+            .filter(|&i| labels[i] == label)
+            .map(|i| embeddings[i].as_slice()),
+    )
+}
+
+/// Merges the closest pair of clusters (by centroid cosine) again and again while that pair is at
+/// least `min_similarity` alike. Average linkage over single utterances is stricter than centroid
+/// similarity, so one person who sounded different on a few utterances ends up as several clusters
+/// that this pass rejoins.
+pub fn merge_close(labels: &mut [usize], embeddings: &[Vec<f32>], min_similarity: f32) {
+    loop {
+        let ids = distinct(labels);
+        if ids.len() < 2 {
+            return;
+        }
+        let cents: Vec<Vec<f32>> = ids
+            .iter()
+            .map(|&c| label_centroid(labels, embeddings, c))
+            .collect();
+        let mut best: Option<(usize, usize, f32)> = None;
+        for a in 0..ids.len() {
+            for b in (a + 1)..ids.len() {
+                let s = cosine(&cents[a], &cents[b]);
+                if best.is_none_or(|(_, _, top)| s > top) {
+                    best = Some((a, b, s));
+                }
+            }
+        }
+        let Some((a, b, s)) = best else { return };
+        if s < min_similarity {
+            return;
+        }
+        let (keep, gone) = (ids[a], ids[b]);
+        for l in labels.iter_mut() {
+            if *l == gone {
+                *l = keep;
+            }
+        }
+    }
+}
+
+/// Folds each small cluster (under `small_cluster_share` of all speech and under
+/// `small_cluster_secs`) into its nearest cluster, unless even the nearest one is below
+/// `distinct_similarity` — then it is plausibly another person who barely spoke.
+fn fold_small(
+    labels: &mut [usize],
+    embeddings: &[Vec<f32>],
+    durations: &[f32],
+    cfg: &ClusterConfig,
+) {
+    let secs_of = |labels: &[usize], c: usize| -> f32 {
+        (0..labels.len())
+            .filter(|&i| labels[i] == c)
+            .map(|i| durations.get(i).copied().unwrap_or(0.0))
+            .sum()
+    };
+    let total: f32 = (0..labels.len())
+        .map(|i| durations.get(i).copied().unwrap_or(0.0))
+        .sum();
+    let mut kept: Vec<usize> = Vec::new(); // small but distinct: never reconsidered
+    loop {
+        let ids = distinct(labels);
+        if ids.len() < 2 {
+            return;
+        }
+        let smallest = ids
+            .iter()
+            .copied()
+            .filter(|c| !kept.contains(c))
+            .map(|c| (c, secs_of(labels, c)))
+            .filter(|&(_, secs)| {
+                secs < cfg.small_cluster_secs && secs < cfg.small_cluster_share * total
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        let Some((small, _)) = smallest else { return };
+        let small_c = label_centroid(labels, embeddings, small);
+        let nearest = ids
+            .iter()
+            .copied()
+            .filter(|&c| c != small)
+            .map(|c| (c, cosine(&small_c, &label_centroid(labels, embeddings, c))))
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        match nearest {
+            Some((into, sim)) if sim >= cfg.distinct_similarity => {
+                for l in labels.iter_mut() {
+                    if *l == small {
+                        *l = into;
+                    }
+                }
+            }
+            _ => kept.push(small),
+        }
+    }
+}
+
+/// Finds a cluster that should be absorbed because it matches a saved voice that a *different*
+/// cluster already holds (voices are matched one-to-one, so the second hit stays unmatched).
+/// Returns `(absorbed, into)` cluster indices when such a pair exists and the two clusters are
+/// not clearly different people (`distinct_similarity`).
+pub fn same_voice_merge(
+    centroids: &[Vec<f32>],
+    known: &[KnownVoice],
+    min_voice_similarity: f32,
+    distinct_similarity: f32,
+) -> Option<(usize, usize)> {
+    let matched = match_voices(centroids, known, min_voice_similarity);
+    let mut best: Option<(usize, usize, f32)> = None;
+    for (c, cen) in centroids.iter().enumerate() {
+        if matched[c].is_some() {
+            continue;
+        }
+        for (holder, voice) in matched.iter().enumerate() {
+            let Some(v) = *voice else { continue };
+            let k = &known[v];
+            if k.centroid.len() != cen.len() {
+                continue;
+            }
+            let s = cosine(cen, &k.centroid);
+            if s >= min_voice_similarity
+                && cosine(cen, &centroids[holder]) >= distinct_similarity
+                && best.is_none_or(|(_, _, top)| s > top)
+            {
+                best = Some((c, holder, s));
+            }
+        }
+    }
+    best.map(|(c, holder, _)| (c, holder))
 }
 
 /// Renumbers labels `0..k` by order of first appearance.

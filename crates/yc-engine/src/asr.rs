@@ -54,6 +54,7 @@ pub fn recognize_region(
                     })
                     .collect(),
                 confidence: rec.confidence,
+                corrections: Vec::new(),
             });
         }
     }

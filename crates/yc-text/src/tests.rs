@@ -55,6 +55,7 @@ fn segment(start: u64, end: u64, track: TrackKind, speaker: &str, text: &str) ->
             text: text.to_owned(),
         }],
         confidence: Some(0.9),
+        corrections: Vec::new(),
     }
 }
 
