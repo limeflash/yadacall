@@ -2,15 +2,15 @@
   import { onMount } from "svelte";
   import Button from "../kit/Button.svelte";
   import Segmented from "../kit/Segmented.svelte";
-  import Select from "../kit/Select.svelte";
   import Switch from "../kit/Switch.svelte";
   import Kbd from "../kit/Kbd.svelte";
   import SectionLabel from "../kit/SectionLabel.svelte";
   import AccentPicker from "../kit/AccentPicker.svelte";
   import Mascot from "../kit/Mascot.svelte";
   import StatusPill from "../kit/StatusPill.svelte";
+  import SummarySection from "./SummarySection.svelte";
   import { api, integrations } from "../api";
-  import type { Connection, ModelEntry, Permissions, SummaryProvider, ThemeChoice, KeepAudio } from "../api";
+  import type { Connection, ModelEntry, Permissions, ThemeChoice, KeepAudio } from "../api";
   import { app, saveSettings, theme, update, checkForUpdates, installUpdate } from "../state.svelte";
   import { t, plural, i18n } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
@@ -23,7 +23,6 @@
   let asr = $state<ModelEntry[]>([]);
   let perms = $state<Permissions | null>(null);
   let capturing = $state<null | "hotkeyRecord" | "hotkeyBookmark">(null);
-  let apiKey = $state("");
 
   async function loadModels() { asr = (await api.modelsOverview()).models.filter((m) => m.kind === "asr"); }
   let meet = $state<Connection | null>(null);
@@ -41,21 +40,7 @@
     { id: "light", label: "Светлая", A: L, B: L, clip: "none" },
     { id: "dark", label: "Тёмная", A: D, B: D, clip: "none" },
   ];
-  const providers = $derived<{ value: SummaryProvider; label: string; hint?: string }[]>([
-    { value: "claude", label: "Claude", hint: t("облако, только текст") },
-    { value: "local", label: "Gemma 4", hint: t("на компьютере, без интернета") },
-    { value: "ollama", label: "Ollama", hint: t("локальный сервер") },
-    { value: "openai", label: t("OpenAI-совместимый"), hint: "OpenRouter, LM Studio…" },
-  ]);
-  const modelOptions: Record<SummaryProvider, { value: string; label: string; hint?: string }[]> = {
-    claude: [{ value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", hint: "по умолчанию" }, { value: "claude-haiku-5-5", label: "Claude Haiku 5.5", hint: "быстрее и дешевле" }, { value: "claude-opus-5-5", label: "Claude Opus 5.5", hint: "для длинных встреч" }],
-    local: [{ value: "gemma-4-e4b", label: "Gemma 4 E4B", hint: "рекомендуется" }, { value: "gemma-4-e2b", label: "Gemma 4 E2B", hint: "легче" }],
-    ollama: [{ value: "gemma4:e4b", label: "gemma4:e4b" }, { value: "llama3.1:8b", label: "llama3.1:8b" }],
-    openai: [],
-  };
   const keepOptions = $derived<{ value: KeepAudio; label: string }[]>([{ value: "none", label: t("Не хранить") }, { value: "7d", label: t("7 дней") }, { value: "30d", label: t("30 дней") }, { value: "forever", label: t("Всегда") }]);
-  const provider = $derived(s.summaries.provider);
-  const remote = $derived(provider === "claude" || provider === "openai");
 
   function accelKeys(a: string): string[] {
     const pretty = prettyAccel(a);
@@ -74,7 +59,6 @@
   }
   async function pickFolder() { const f = await api.pickFolder(); if (f) saveSettings({ libraryDir: f }); }
   async function askPerm(k: "microphone" | "systemAudio") { perms = await api.requestPermission(k); }
-  function saveKey() { if (apiKey.trim()) { saveSettings({ summaries: { apiKey: apiKey.trim() } }); apiKey = ""; toast(t("Ключ сохранён в связке ключей системы")); } }
   function modelBtn(m: ModelEntry): string {
     const d = m.download;
     if (m.active && m.installed) return t("Основная");
@@ -153,37 +137,7 @@
         </label>
       </div>
 
-      <div style="padding: 14px 4px 0"><SectionLabel as="h2">{t("Итоги")}</SectionLabel></div>
-      <div class="group">
-        <div class="grow">
-          <span style="flex: 1; min-width: 0; font-size: 14px">{t("Чем собирать итоги")}</span>
-          <div style="width: 220px; flex: none"><Select compact label={t("Чем собирать итоги")} value={provider} onchange={(v) => saveSettings({ summaries: { provider: v, model: modelOptions[v][0]?.value ?? s.summaries.model } })} options={providers} /></div>
-        </div>
-        {#if modelOptions[provider].length}
-          <div class="grow bt">
-            <span style="flex: 1; min-width: 0; font-size: 14px">{t("Модель")}</span>
-            <div style="width: 220px; flex: none"><Select compact label={t("Модель итогов")} value={s.summaries.model} onchange={(v) => saveSettings({ summaries: { model: v } })} options={modelOptions[provider].map((o) => ({ ...o, hint: o.hint ? t(o.hint) : undefined }))} /></div>
-          </div>
-        {/if}
-        {#if provider === "openai" || provider === "ollama"}
-          <label class="grow bt">
-            <span style="flex: 1; min-width: 0; font-size: 14px">{provider === "ollama" ? "Ollama URL" : t("Адрес API")}</span>
-            <input class="tf mg-mono" style="width: 220px" value={s.summaries.baseUrl ?? (provider === "ollama" ? "http://localhost:11434" : "")} placeholder="https://…/v1" onchange={(e) => saveSettings({ summaries: { baseUrl: e.currentTarget.value } })} />
-          </label>
-          {#if provider === "openai"}
-            <label class="grow bt"><span style="flex: 1; min-width: 0; font-size: 14px">{t("Модель (имя)")}</span>
-              <input class="tf mg-mono" style="width: 220px" value={s.summaries.model} onchange={(e) => saveSettings({ summaries: { model: e.currentTarget.value } })} /></label>
-          {/if}
-        {/if}
-        {#if provider === "claude" || provider === "openai"}
-          <div class="grow bt">
-            <span class="two" style="flex: 1"><span style="font-size: 14px">{t("Ключ API")}</span><span class="sub">{s.summaries.apiKeySet ? t("Сохранён в связке ключей системы") : t("Хранится в связке ключей системы, не в файлах")}</span></span>
-            <input class="tf mg-mono" style="width: 150px" type="password" bind:value={apiKey} placeholder={s.summaries.apiKeySet ? "••••••••" : "sk-…"} autocomplete="off" onkeydown={(e) => { if (e.key === "Enter") saveKey(); }} />
-            <Button size="sm" onclick={saveKey} disabled={!apiKey.trim()}>{t("Сохранить")}</Button>
-          </div>
-        {/if}
-      </div>
-      <div class="hint">{remote ? t("Уходит только текст расшифровки, аудио остаётся у тебя") : t("Всё считается на этом компьютере, ничего не уходит в сеть")}</div>
+      <SummarySection />
 
       <div style="padding: 14px 4px 0"><SectionLabel as="h2">{t("Хранить аудио")}</SectionLabel></div>
       <Segmented variant="thumb" label={t("Сколько хранить аудио")} value={s.keepAudio} onchange={(v) => saveSettings({ keepAudio: v })} options={keepOptions} />
@@ -286,7 +240,6 @@
   .two { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .sub { font-size: 12px; color: var(--muted); }
   .hint { padding: 2px 4px 0; font-size: 12px; color: var(--muted); }
-  .tf { height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font-size: 12px; }
   .kbtn { padding: 2px; border: 0; border-radius: 8px; background: none; cursor: pointer; }
   .kbtn:hover { background: var(--surface-2); }
   .cap { font-size: 12px; color: var(--accent-text); padding: 0 6px; }

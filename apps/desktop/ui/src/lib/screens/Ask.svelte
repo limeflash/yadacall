@@ -13,7 +13,7 @@
 
   let { q }: { q?: string } = $props();
 
-  type QA = { q: string; text: string; citations: Citation[]; sent?: SentNote; busy: boolean; error?: string; picked: number | null };
+  type QA = { q: string; text: string; citations: Citation[]; sent?: SentNote; generated?: boolean; busy: boolean; error?: string; picked: number | null };
   let thread = $state<QA[]>([]);
   let input = $state("");
   let scroller: HTMLElement;
@@ -26,7 +26,7 @@
       await api.ask(question, (e) => {
         if (e.kind === "token") qa.text += e.text;
         else if (e.kind === "citations") qa.citations = e.items;
-        else if (e.kind === "done") { qa.sent = e.sent; qa.busy = false; }
+        else if (e.kind === "done") { qa.sent = e.sent; qa.generated = e.generated !== false; qa.busy = false; }
         else if (e.kind === "error") { qa.error = t(e.message); qa.busy = false; }
       });
     } catch (err) { qa.error = errText(err); }
@@ -95,6 +95,7 @@
                 {#if "s" in seg}{seg.s}{:else}{" "}<button type="button" class="yc-tc mg-mono tcb" aria-label={t("Источник {n}", { n: seg.n })} onclick={() => (qa.picked = qa.picked === seg.n ? null : seg.n)}>{seg.n}</button>{/if}
               {/each}
               {#if qa.busy && !qa.text}<span style="color: var(--muted)">{t("Ищу по всем встречам…")}</span>{/if}
+              {#if qa.generated === false}<span style="color: var(--muted)">{qa.citations.length ? t("Итоги выключены, поэтому ответа нет — вот что нашлось:") : t("Ничего не нашлось. Итоги выключены, поэтому ответ не генерируется.")}</span>{/if}
             </p>
           {/if}
 
@@ -113,9 +114,9 @@
             </div>
           {/if}
 
-          {#if !qa.busy && qa.text}
+          {#if !qa.busy && (qa.text || qa.generated === false)}
             <div class="foot">
-              <CopyButton value={qa.text.replace(/\s?\[\d+\]/g, "")} label={t("Копировать")} />
+              {#if qa.text}<CopyButton value={qa.text.replace(/\s?\[\d+\]/g, "")} label={t("Копировать")} />{/if}
               <span style="flex: 1"></span>
               {#if qa.sent}
                 <span class="sent"><Icon name="lock" size={12} />

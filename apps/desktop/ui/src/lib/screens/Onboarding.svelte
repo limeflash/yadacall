@@ -2,13 +2,12 @@
   import { onMount } from "svelte";
   import Icon from "../kit/Icon.svelte";
   import Button from "../kit/Button.svelte";
-  import Switch from "../kit/Switch.svelte";
   import Segmented from "../kit/Segmented.svelte";
   import ThemeToggle from "../kit/ThemeToggle.svelte";
   import StatusPill from "../kit/StatusPill.svelte";
   import Mascot from "../kit/Mascot.svelte";
   import { api } from "../api";
-  import type { ModelEntry, Permissions } from "../api";
+  import type { ModelEntry, OllamaStatus, Permissions, SummaryMode } from "../api";
   import { app, saveSettings, theme, onEngineEvent } from "../state.svelte";
   import { t, i18n } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
@@ -17,11 +16,16 @@
 
   let perms = $state<Permissions>({ microphone: "notDetermined", systemAudio: "notDetermined" });
   let model = $state<ModelEntry | null>(null);
-  let summaries = $state(true);
+  type Choice = "local" | "ollama" | "off";
+  let choice = $state<Choice>("local");
+  let gemma = $state<ModelEntry | null>(null);
+  let ollama = $state<OllamaStatus | null>(null);
 
   onMount(() => {
     api.permissions().then((p) => (perms = p));
-    summaries = (app.settings?.summaries.provider ?? "claude") !== "local";
+    // the smallest Gemma the predictor knows, and whether Ollama is around
+    api.modelsOverview().then((o) => (gemma = o.models.filter((m) => m.kind === "llm").sort((a, b) => a.sizeBytes - b.sizeBytes)[0] ?? null));
+    api.ollamaStatus("local").then((st) => (ollama = st)).catch(() => (ollama = null));
     api.modelsOverview().then(async (o) => {
       model = o.models.filter((m) => m.kind === "asr").sort((a, b) => Number(b.active) - Number(a.active) || a.sizeBytes - b.sizeBytes)[0] ?? null;
       if (model && !model.installed && !model.download) { await api.modelDownload(model.id); }
@@ -37,8 +41,25 @@
   const dlLabel = $derived(pct >= 100 ? t("готово") : model ? `${bytes(model.download?.doneBytes ?? 0)} ${t("из")} ${bytes(model.sizeBytes)}` : "");
 
   async function grantSystem() { perms = await api.requestPermission("systemAudio"); }
-  function setSummaries(v: boolean) { summaries = v; saveSettings({ summaries: { provider: v ? "claude" : "local" } }); }
-  async function finish() { await saveSettings({ onboarded: true }); go({ name: "meetings" }); }
+  /** What Ollama offers for text: the account's cloud models first, never embedders. */
+  const found = $derived.by(() => {
+    if (!ollama?.running) return null;
+    const chat = ollama.models.filter((m) => !/embed/i.test(m.name));
+    return (ollama.signedIn ? chat.find((m) => m.cloud) : undefined) ?? chat.find((m) => !m.cloud) ?? null;
+  });
+  const speed = $derived(gemma?.estimate.split("·")[0].trim() ?? "");
+  const gemmaLine = $derived(gemma ? [gemma.name, bytes(gemma.sizeBytes), speed].filter(Boolean).join(" · ") : t("Gemma 4"));
+  $effect(() => { if (choice === "ollama" && !found) choice = "local"; });
+
+  async function finish() {
+    let mode: SummaryMode = { mode: "off" };
+    if (choice === "local") mode = { mode: "local", model: gemma?.id ?? "" };
+    else if (choice === "ollama" && found) mode = { mode: "ollama", base: "local", model: found.name };
+    await saveSettings({ summaries: { mode }, onboarded: true });
+    // The chosen on-device model downloads in the background, like the recogniser.
+    if (choice === "local" && gemma && !gemma.installed && !gemma.download) api.modelDownload(gemma.id).catch(() => {});
+    go({ name: "meetings" });
+  }
 </script>
 
 <div class="wrap">
@@ -77,11 +98,27 @@
         </div>
         <span aria-hidden="true" class="bar"><span style="width: {pct}%"></span></span>
       </div>
-      <label class="row bt">
-        <span aria-hidden="true" class="ic"><Icon name="sparkle" size={16} /></span>
-        <span class="two"><span style="font-size: 14px; font-weight: 600">{t("Итоги через Claude")}</span><span class="s">{t("Можно выключить — останется только расшифровка")}</span></span>
-        <Switch checked={summaries} onchange={setSummaries} aria-label={t("Итоги через Claude")} />
-      </label>
+      <div class="col bt" role="radiogroup" aria-label={t("Итоги встреч")}>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span aria-hidden="true" class="ic"><Icon name="sparkle" size={16} /></span>
+          <span class="two"><span style="font-size: 14px; font-weight: 600">{t("Итоги встреч")}</span><span class="s">{t("Можно не собирать — останется только расшифровка")}</span></span>
+        </div>
+        <button type="button" role="radio" aria-checked={choice === "local"} class="opt yc-press" class:on={choice === "local"} onclick={() => (choice = "local")}>
+          <span aria-hidden="true" class="dot"></span>
+          <span class="two"><span class="ot">{t("На компьютере")}</span><span class="s mg-mono">{gemmaLine}</span></span>
+        </button>
+        {#if found}
+          <button type="button" role="radio" aria-checked={choice === "ollama"} class="opt yc-press" class:on={choice === "ollama"} onclick={() => (choice = "ollama")}>
+            <span aria-hidden="true" class="dot"></span>
+            <span class="two"><span class="ot">{t("Через Ollama")}</span><span class="s mg-mono">{t("найдено: {name}", { name: found.name })}</span></span>
+          </button>
+        {/if}
+        <button type="button" role="radio" aria-checked={choice === "off"} class="opt yc-press" class:on={choice === "off"} onclick={() => (choice = "off")}>
+          <span aria-hidden="true" class="dot"></span>
+          <span class="two"><span class="ot">{t("Без итогов")}</span><span class="s">{t("Только расшифровка и поиск")}</span></span>
+        </button>
+        <span class="s" style="padding: 0 2px">{choice === "ollama" && found?.cloud ? t("Текст расшифровки уходит в Ollama Cloud, звук — никогда") : choice === "off" ? t("Позже можно включить в настройках — в том числе Claude или Ollama Cloud по ключу") : t("Всё считается на этом компьютере, ничего не уходит в сеть")}</span>
+      </div>
     </div>
 
     <div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
@@ -107,5 +144,10 @@
   .s { font-size: 12px; color: var(--muted); }
   .bar { display: block; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
   .bar span { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.6s var(--ease-out-soft); }
+  .opt { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--text); text-align: left; font: inherit; }
+  .opt.on { border-color: var(--accent); background: var(--accent-soft); }
+  .opt .dot { flex: none; width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid var(--border-strong, var(--muted)); border-radius: 50%; }
+  .opt.on .dot { border: 5px solid var(--accent); }
+  .ot { font-size: 14px; font-weight: 600; }
   .done { width: 100%; display: flex; align-items: center; justify-content: center; height: 44px; border: 0; border-radius: 14px; background: var(--accent); color: var(--ink-on-accent); font-size: 14px; font-weight: 800; }
 </style>

@@ -60,6 +60,7 @@ pub fn friendly(e: &yc_core::Error) -> &'static str {
         }
         E::Invalid(m) if m.contains("sign in again") => "Вход в Google истёк. Войди заново.",
         E::Invalid(m) if m.contains("sign-in was denied") => "Вход в Google отменён.",
+        E::Invalid(m) if m.contains("summaries are turned off") => "Итоги выключены в настройках.",
         E::Invalid(_) => "Сейчас это действие недоступно.",
         E::Io(_) => "Ошибка чтения или записи файла.",
     }

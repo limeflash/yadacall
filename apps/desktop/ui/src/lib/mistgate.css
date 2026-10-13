@@ -320,6 +320,8 @@
   display: flex; min-height: 40px; cursor: pointer; align-items: center; gap: 8px; padding: 6px 10px;
   border-radius: var(--radius-ctl); font-size: 13px; font-weight: 600; color: var(--text); user-select: none;
 }
+.mg-select__group { padding: 8px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: var(--muted); }
+.mg-select__group:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--border); }
 .mg-select__item[data-highlighted] { background: var(--surface-2); }
 .mg-select__item-text { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .mg-select__hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 1.375; font-weight: 500; color: var(--muted); }

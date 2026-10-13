@@ -4,6 +4,7 @@ import { i18n, plural, t } from "./i18n/index.svelte";
 import { go } from "./router.svelte";
 import { toast } from "./toast.svelte";
 import { errText } from "./api/error";
+import { mergeSummaries } from "./api/summaries";
 import { visibleInterval, installVisibilityFlag } from "./visibility";
 
 /** Global reactive app state. Components read from here; engine events and API calls write to it. */
@@ -107,7 +108,7 @@ export async function saveSettings(patch: SettingsPatch) {
   // optimistic: theme / accent / language must feel instant
   if (app.settings) {
     const { summaries, ...rest } = patch;
-    app.settings = { ...app.settings, ...rest, summaries: { ...app.settings.summaries, ...(summaries ?? {}), apiKeySet: app.settings.summaries.apiKeySet || !!summaries?.apiKey } };
+    app.settings = { ...app.settings, ...rest, summaries: mergeSummaries(app.settings.summaries, summaries) };
     if (patch.uiLanguage) i18n.lang = patch.uiLanguage;
   }
   try { app.settings = await api.updateSettings(patch); } catch (e) { toast.error(e); }

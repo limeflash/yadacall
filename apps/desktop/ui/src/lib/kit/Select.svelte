@@ -1,5 +1,5 @@
 <script lang="ts" generics="V extends string">
-  type Opt = { value: V; label: string; hint?: string };
+  type Opt = { value: V; label: string; hint?: string; /** Options with the same group are listed under one heading. */ group?: string };
   let { options, value, onchange, label = "", compact = false, class: cls = "" }:
     { options: Opt[]; value: V; onchange: (v: V) => void; label?: string; compact?: boolean; class?: string } = $props();
   let open = $state(false), active = $state(0);
@@ -37,6 +37,7 @@
     <div class="mg-select__popup">
       <ul id={uid} role="listbox" class="mg-select__list">
         {#each options as o, i (o.value)}
+          {#if o.group && o.group !== options[i - 1]?.group}<li role="presentation" class="mg-select__group">{o.group}</li>{/if}
           <li role="option" aria-selected={o.value === value} data-highlighted={i === active ? "" : undefined} class="mg-select__item"
             onpointerenter={() => (active = i)} onclick={() => choose(o.value)} onkeydown={() => {}}>
             <span class="mg-select__item-text"><span>{o.label}</span>{#if o.hint}<span class="mg-select__hint">{o.hint}</span>{/if}</span>
