@@ -1,0 +1,482 @@
+---
+// The landing page body. Markup, inline styles, class names and copy follow Landing.dc.html from the approved
+// Claude Design export. The one deliberate difference: the conic hero beam (.yl-beam) is gone.
+// Everything dynamic is driven by src/scripts/landing.ts.
+import Base from '../layouts/Base.astro';
+import Icon from './Icon.astro';
+import Mark from './Mark.astro';
+import { CALLS, LINES, T, TECH, type Lang } from '../lib/i18n';
+import { X } from '../lib/strings';
+import { clock, demoVals, h1Words, heroVals } from '../lib/hero-state';
+import { FALLBACK_MB, dlUrl, mb, type ReleaseData } from '../lib/release';
+import { REPO, RELEASES_LATEST } from '../lib/site';
+import { getRelease } from '../lib/release-build';
+import shotRec from '../assets/shots/shot-recording.webp';
+import shotTr from '../assets/shots/shot-transcript.webp';
+import shotSum from '../assets/shots/shot-summary.webp';
+import shotAsk from '../assets/shots/shot-ask.webp';
+import shotCal from '../assets/shots/shot-calendar.webp';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = T[lang];
+const x = X[lang];
+const rel: ReleaseData = await getRelease();
+const paths = { ru: '/', en: '/en/' };
+
+// ---- shared style strings (identical values to the design's inline styles) ----
+const wrap = 'max-width: 1180px; margin: 0 auto; box-sizing: border-box; padding: 0 clamp(16px, 4vw, 40px)';
+const eyebrow = 'font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text)';
+const h2 = 'margin: 0; font-size: clamp(32px, 4.2vw, 52px); line-height: 1.05; font-weight: 800; letter-spacing: -0.045em';
+const lead = 'margin: 0; font-size: 17px; line-height: 1.6; color: var(--muted)';
+const g2 = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(40px, 6vw, 80px); align-items: center';
+const secPad = 'padding: clamp(88px, 11vw, 150px) 0 0';
+const eqSpan = (color: string, anim: string) => `display: block; width: 2px; height: 3px; border-radius: 1px; background: ${color}; animation: ${anim}`;
+
+// ---- initial state = the design's first render (line 0, word 0, 'mac') ----
+const hv = heroVals(lang, 0, 0);
+const demo0 = demoVals(lang, 0, 0);
+const h1 = h1Words(t.h1);
+const h1Label = t.h1.map((w) => w[0]).join(' ').replace(/ /g, ' ');
+const calls = CALLS[lang].concat(CALLS[lang]);
+
+const macMb = mb(rel.mac, FALLBACK_MB.mac);
+const winMb = mb(rel.win, FALLBACK_MB.win);
+const sizeText = (n: number) => `${n} ${t.mb}`;
+// the design's "21 МБ" / "21 MB" mentions in running text follow the real macOS installer size
+const withSize = (s: string) => s.replace(/21 (МБ|MB)/, `<span data-size-mac>${macMb} $1</span>`);
+
+const stats = [
+  { i: 'disk', v: sizeText(macMb), l: t.stats[0], size: true },
+  { i: 'cpu', v: sizeText(230), l: t.stats[1], size: false },
+  { i: 'globe', v: '25', l: t.stats[2], size: false },
+  { i: 'shield', v: '0', l: t.stats[3], size: false },
+];
+
+type OsId = 'mac' | 'win' | 'linux';
+const DL: { id: OsId; os: string; ext: string; icon: string; chips: string[] }[] = [
+  { id: 'mac', os: 'macOS', ext: '.dmg', icon: 'M5 5.5h14v10H5z M2.5 18.5h19', chips: ['.dmg', 'Apple Silicon', sizeText(macMb)] },
+  { id: 'win', os: 'Windows', ext: '.exe', icon: 'M3 4.5h18v11.5H3z M8.5 20h7 M12 16v4', chips: ['.exe', 'x64', sizeText(winMb)] },
+  { id: 'linux', os: 'Linux', ext: '.AppImage', icon: 'M4 4.5h16v15H4z M8 9.5l3 2.5-3 2.5 M13 15h3', chips: ['.AppImage', '.deb', 'x64'] },
+];
+const initialOs: OsId = 'mac';
+const osName = { mac: 'macOS', win: 'Windows', linux: 'Linux' }[initialOs];
+
+const payload = {
+  lang,
+  lines: LINES[lang],
+  mb: t.mb,
+  ctaFor: t.ctaFor,
+  btn: t.btn,
+  stat: { mac: 21, cpu: 230, langs: 25 },
+  rel,
+};
+const title = x.title;
+---
+<Base lang={lang} title={title} description={x.description} paths={paths} current={lang} landing>
+  <section id="top" style="position: relative; padding: clamp(14px, 2.4vw, 28px) 0 clamp(16px, 3vw, 32px)">
+    <canvas id="yl-bg" aria-hidden="true" style="position: absolute; left: 0; top: -68px; width: 100%; height: calc(100% + 68px); pointer-events: none; -webkit-mask-image: radial-gradient(ellipse 62% 70% at 50% 30%, #000 18%, transparent 80%); mask-image: radial-gradient(ellipse 62% 70% at 50% 30%, #000 18%, transparent 80%)"></canvas>
+
+    <div style={`position: relative; ${wrap}; display: flex; flex-direction: column; align-items: center; text-align: center`}>
+
+      <div class="yl-stage yl-up" style="position: relative; width: 100%; max-width: 880px; height: var(--sh); animation-delay: .05s">
+        <div aria-hidden="true" class="yl-aura" style="position: absolute; left: 50%; top: 44%; width: calc(var(--sh) * 2.3); height: calc(var(--sh) * 2.3); margin: calc(var(--sh) * -1.15) 0 0 calc(var(--sh) * -1.15); border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent) 55%, transparent); pointer-events: none"></div>
+        <canvas id="yl-orb" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%"></canvas>
+        <div aria-hidden="true" style="position: absolute; left: 50%; top: 44%; width: calc(var(--sh) * .32); height: calc(var(--sh) * .32); transform: translate(-50%, -50%)"><Mark eager /></div>
+
+        <span id="yl-chip-me" class="yl-chip" style={`position: absolute; right: calc(50% + var(--sh) * .47); top: calc(var(--sh) * .44); margin-top: -18px; display: inline-flex; align-items: center; gap: 8px; height: 36px; box-sizing: border-box; padding: 0 13px; border: 1px solid ${hv.meLine}; border-radius: 18px; background: var(--dock); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: ${hv.meGlow}; font-size: 13px; font-weight: 600; white-space: nowrap; transition: border-color .3s, box-shadow .4s`}>
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent)"></span>
+          <span class="yl-chip-t">{t.me}</span>
+          <span aria-hidden="true" data-eq="me" style="display: inline-flex; align-items: center; gap: 2px; height: 12px">{hv.eqMe.map((b) => <span style={eqSpan('var(--accent)', b)}></span>)}</span>
+        </span>
+        <span id="yl-chip-them" class="yl-chip" style={`position: absolute; left: calc(50% + var(--sh) * .47); top: calc(var(--sh) * .44); margin-top: -18px; display: inline-flex; align-items: center; gap: 8px; height: 36px; box-sizing: border-box; padding: 0 13px; border: 1px solid ${hv.themLine}; border-radius: 18px; background: var(--dock); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: ${hv.themGlow}; font-size: 13px; font-weight: 600; white-space: nowrap; transition: border-color .3s, box-shadow .4s`}>
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--them)"></span>
+          <span class="yl-chip-t">{t.them}</span>
+          <span aria-hidden="true" data-eq="them" style="display: inline-flex; align-items: center; gap: 2px; height: 12px">{hv.eqThem.map((b) => <span style={eqSpan('var(--them)', b)}></span>)}</span>
+        </span>
+      </div>
+
+      <p class="yl-up" aria-live="off" style="margin: -4px 0 0; width: 100%; max-width: 640px; height: 26px; overflow: hidden; white-space: nowrap; font-size: clamp(14.5px, 1.2vw, 16px); line-height: 26px; text-shadow: 0 0 10px var(--bg), 0 0 3px var(--bg); animation-delay: .25s">
+        <span id="yl-cap-name" style={`font-weight: 800; color: ${hv.cap.nameColor}`}>{hv.cap.name}</span><span style="color: var(--faint)"> — </span><span id="yl-cap-text" class={hv.cap.caret} style="color: var(--muted)">{hv.cap.text}</span>
+      </p>
+
+      <a class="yl-up yl-pill" href={rel.url} data-rel-link style="margin-top: clamp(22px, 2.6vw, 30px); display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 6px; border: 1px solid var(--border); border-radius: 15px; background: color-mix(in srgb, var(--surface) 80%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: var(--muted); font-size: 13px; text-decoration: none; animation-delay: .1s">
+        <span data-rel-version style="height: 20px; padding: 0 8px; border-radius: 10px; background: var(--accent); color: var(--ink-on-accent); font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center">{rel.version}</span>
+        {x.whatsNew}
+        <Icon name="chevronRight" size={12} />
+      </a>
+
+      <h1 aria-label={h1Label} style="margin: 18px 0 0; max-width: 1100px; font-size: clamp(40px, 6.1vw, 88px); line-height: 1.02; font-weight: 800; letter-spacing: -0.055em">
+        <span aria-hidden="true" class="yc-balance" style="display: block">{h1.a.map((w) => <span class="yl-hw yl-hw1" style={`animation-delay: ${w.d}`}>{w.t}</span>)}</span>
+        <span aria-hidden="true" class="yc-balance" style="display: block">{h1.b.map((w) => <span class="yl-hw yl-hw2" style={`animation-delay: ${w.d}`}>{w.t}</span>)}</span>
+      </h1>
+
+      <p class="yc-pretty yl-up" style="margin: 22px 0 0; max-width: 640px; font-size: clamp(16px, 1.45vw, 19px); line-height: 1.6; color: var(--muted); animation-delay: .55s">{t.sub}</p>
+
+      <div class="yl-up" style="margin-top: 30px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; animation-delay: .7s">
+        <a id="yl-hero-cta" class="yl-btn yl-shine" href={dlUrl(rel, initialOs)} style="display: inline-flex; align-items: center; gap: 10px; height: 54px; padding: 0 26px; border-radius: 16px; background: var(--accent); color: var(--ink-on-accent); font-size: 16px; font-weight: 800; text-decoration: none; box-shadow: 0 14px 44px -12px color-mix(in srgb, var(--accent) 75%, transparent)">
+          <svg class="yc-ic" width="17" height="17" viewBox="0 0 24 24" style="stroke-width: 2.6" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>
+          <span data-cta-text>{t.ctaFor + osName}</span>
+        </a>
+        <a class="yl-btn" href={REPO} style="display: inline-flex; align-items: center; gap: 10px; height: 54px; padding: 0 22px; border: 1px solid var(--border); border-radius: 16px; background: color-mix(in srgb, var(--surface) 85%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: var(--text); font-size: 16px; font-weight: 700; text-decoration: none">
+          {t.cta2}
+          <Icon name="externalLink" size={14} />
+        </a>
+      </div>
+
+      <div class="yl-up" style="margin-top: 22px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; font-size: 13.5px; color: var(--muted); animation-delay: .85s">
+        {t.checks.map((c) => (
+          <span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 18px; height: 18px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center"><Icon name="check" size={12} /></span>{c}</span>
+        ))}
+      </div>
+      <p class="mg-mono yl-up" style="margin: 14px 0 0; font-size: 12px; color: var(--faint); animation-delay: .95s">{t.meta}</p>
+    </div>
+  </section>
+
+  <section aria-label={t.shotLabel} style="padding: clamp(36px, 6vw, 72px) 0 0">
+    <div style={`${wrap}; display: flex; justify-content: center`}>
+      <div id="yl-win" style="position: relative; width: 100%; max-width: 1040px; transform-origin: 50% 0; will-change: transform">
+        <div aria-hidden="true" style="position: absolute; left: 6%; right: 6%; top: 8%; bottom: -8%; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 22%, transparent), transparent); filter: blur(34px); pointer-events: none"></div>
+        <div style="position: relative; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--surface); box-shadow: 0 50px 100px -40px rgba(0, 0, 0, 0.8)">
+          <div aria-hidden="true" style="height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--bg)">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2)"></span>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2)"></span>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2)"></span>
+          </div>
+          <img src={shotRec.src} width={shotRec.width} height={shotRec.height} alt={t.altRec} fetchpriority="high" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 1000 / 680" />
+        </div>
+        <div class="yl-float yc-float" style="position: absolute; left: -40px; bottom: 70px; width: 290px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--dock); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow-dock)">
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 700; color: var(--muted)"><span class="yc-rec" style="width: 7px; height: 7px; border-radius: 50%; background: var(--danger)"></span>{t.liveLabel}</span>
+          <span style="font-size: 14px; line-height: 1.45"><span style="font-weight: 700; color: var(--muted)">{t.liveName}</span> — <span class="yc-caret">{t.liveText}</span></span>
+        </div>
+        <div class="yl-float" style="position: absolute; right: -34px; top: 96px; display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--dock); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow-dock); font-size: 13px">
+          <span style="width: 30px; height: 30px; flex: none; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center"><Icon name="lock" size={14} /></span>
+          <span style="display: flex; flex-direction: column"><span style="font-weight: 700">{t.lockTitle}</span><span style="font-size: 12px; color: var(--muted)">{t.lockSub}</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label={t.callsLabel} style="padding: clamp(64px, 8vw, 100px) 0 0">
+    <div class="yl-rv" style="display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center">
+      <span style="padding: 0 16px; font-size: 14px; color: var(--muted)">{t.callsIntro}</span>
+      <div class="yl-marqbox" style="width: 100%; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent)">
+        <div class="yl-marq">
+          {calls.map((c, i) => (
+            <span aria-hidden={i >= calls.length / 2 ? 'true' : undefined} style="display: inline-flex; align-items: center; gap: 56px; font-size: clamp(20px, 2.4vw, 28px); font-weight: 800; letter-spacing: -0.03em; color: var(--faint); white-space: nowrap">{c}<span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: var(--border)"></span></span>
+          ))}
+        </div>
+      </div>
+      <span style="padding: 0 16px; font-size: 13px; color: var(--faint)">{t.callsNote}</span>
+    </div>
+  </section>
+
+  <section aria-label={t.statsLabel} style="padding: clamp(56px, 7vw, 88px) 0 0">
+    <div style={wrap}>
+      <div class="yl-rv yl-g4s" data-count="1" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border); border-radius: 22px; overflow: hidden; background: var(--border)">
+        {stats.map((s, i) => (
+          <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: clamp(18px, 2.4vw, 28px) clamp(16px, 2vw, 24px); background: var(--bg)">
+            <span aria-hidden="true" style="width: 38px; height: 38px; margin-bottom: 6px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center"><Icon name={s.i} size={16} /></span>
+            <span class="mg-mono yc-num" data-stat={i} style="font-size: clamp(28px, 3.4vw, 42px); line-height: 1; font-weight: 700; letter-spacing: -0.05em">{s.v}</span>
+            <span class="yc-pretty" style="font-size: 14px; line-height: 1.45; color: var(--muted)">{s.l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section id="features" style={secPad}>
+    <div class="yl-g2" style={`${wrap}; ${g2}`}>
+      <div class="yl-rv" style="display: flex; flex-direction: column; gap: 18px">
+        <span class="mg-mono" style={eyebrow}>{t.trEyebrow}</span>
+        <h2 class="yc-balance" style={h2}>{t.trTitle}</h2>
+        <p class="yc-pretty" style={lead}>{t.trText}</p>
+        <div style="display: flex; flex-direction: column; margin-top: 8px; border-top: 1px solid var(--border)">
+          {t.speed.map((s) => (
+            <div style="display: flex; align-items: baseline; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--border)">
+              <span class="mg-mono" style="flex: none; min-width: 112px; font-size: 26px; font-weight: 700; letter-spacing: -0.04em; color: var(--accent-text)">{s.v}</span>
+              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 15px">{s.l}</span><span style="font-size: 13px; color: var(--faint)">{s.n}</span></span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div id="yl-demo" class="yl-rv" role="group" aria-label={t.demoLabel} style="position: relative; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 22px; background: var(--surface); overflow: hidden; transition-delay: .12s">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border)">
+          <span class="yc-rec" style="width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--danger)"></span>
+          <span id="yl-demo-time" class="mg-mono yc-num" style="font-size: 14px; font-weight: 700">{clock(772)}</span>
+          <span class="yc-ellipsis" style="flex: 1; min-width: 0; font-size: 13px; color: var(--muted)">{t.demoTitle}</span>
+          <span style="flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted)">
+            <span style="width: 8px; height: 8px; border-radius: 3px; background: var(--accent)"></span>{t.legendMe}
+            <span style="width: 8px; height: 8px; margin-left: 6px; border-radius: 3px; background: var(--them)"></span>{t.legendThem}
+          </span>
+        </div>
+        <div id="yl-demo-list" style="display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; height: 340px; padding: 18px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%); mask-image: linear-gradient(to bottom, transparent, #000 24%)">
+          {/* first paint / no-JS: the whole first line; landing.ts takes over at once with the design's word-by-word loop */}
+          <div style={`display: flex; justify-content: ${demo0[0].justify}`}>
+            <div class="yl-up" style={`max-width: 84%; display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: ${demo0[0].radius}; background: ${demo0[0].bg}; animation-duration: .45s`}>
+              <span style={`font-size: 11.5px; font-weight: 700; color: ${demo0[0].nameColor}`}>{demo0[0].name}</span>
+              <span style="font-size: 14.5px; line-height: 1.5">{LINES[lang][0].text}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted)">
+          <span style="display: inline-flex; align-items: center; gap: 8px">{t.mic}
+            <span aria-hidden="true" data-eq="me" style="display: inline-flex; align-items: center; gap: 2px; height: 12px">{hv.eqMe.map((b) => <span style={eqSpan('var(--accent)', b)}></span>)}</span>
+          </span>
+          <span style="display: inline-flex; align-items: center; gap: 8px">{t.callAudio}
+            <span aria-hidden="true" data-eq="them" style="display: inline-flex; align-items: center; gap: 2px; height: 12px">{hv.eqThem.map((b) => <span style={eqSpan('var(--them)', b)}></span>)}</span>
+          </span>
+          <span style="flex: 1"></span>
+          <span class="mg-mono">{t.onDevice}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style={secPad}>
+    <div class="yl-g2" style={`${wrap}; ${g2}`}>
+      <div class="yl-rv" style="min-width: 0; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--surface); box-shadow: 0 30px 70px -40px rgba(0, 0, 0, 0.7)">
+        <img src={shotTr.src} width={shotTr.width} height={shotTr.height} alt={t.altTr} loading="lazy" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 1000 / 680" />
+      </div>
+      <div class="yl-rv yl-first" style="display: flex; flex-direction: column; gap: 18px; transition-delay: .12s">
+        <span class="mg-mono" style={eyebrow}>{t.whoEyebrow}</span>
+        <h2 class="yc-balance" style={h2}>{t.whoTitle}</h2>
+        <p class="yc-pretty" style={lead}>{t.whoText}</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
+          <span style="height: 32px; padding: 0 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; display: inline-flex; align-items: center; gap: 7px"><span class="mg-mono" style="color: var(--accent-text)">⌥⇧M</span>{t.keyMark}</span>
+          <span style="height: 32px; padding: 0 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; display: inline-flex; align-items: center; gap: 7px"><span class="mg-mono" style="color: var(--accent-text)">⌥⇧R</span>{t.keyRec}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style={secPad}>
+    <div style={`${wrap}; display: flex; flex-direction: column; gap: clamp(36px, 5vw, 56px)`}>
+      <div class="yl-rv" style="display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center">
+        <span class="mg-mono" style={eyebrow}>{t.sumEyebrow}</span>
+        <h2 class="yc-balance" style={`${h2}; max-width: 780px`}>{t.sumTitle}</h2>
+        <p class="yc-pretty" style={`${lead}; max-width: 620px`}>{t.sumText}</p>
+      </div>
+
+      <div class="yl-rv" style="border: 1px solid var(--border); border-radius: 20px; overflow: hidden; background: var(--surface); box-shadow: 0 40px 90px -50px rgba(0, 0, 0, 0.75)">
+        <img src={shotSum.src} width={shotSum.width} height={shotSum.height} alt={t.altSum} loading="lazy" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 1000 / 680" />
+      </div>
+
+      <div class="yl-rv" style="display: flex; flex-direction: column; gap: 14px">
+        <span style="font-size: 15px; font-weight: 700">{t.whereTitle}</span>
+        <div class="yl-g4" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+          {t.where.map((w, i) => (
+            <div class="yl-card yl-spot" style={`display: flex; flex-direction: column; gap: 6px; padding: 18px; border: 1px solid ${i === 0 ? 'var(--accent-line)' : 'var(--border)'}; border-radius: 16px; background-color: var(--surface)`}>
+              <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 15px; font-weight: 700">{w[0]}{i === 0 && <span style="height: 20px; padding: 0 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center">{t.offlineTag}</span>}</span>
+              <span class="yc-pretty" style="font-size: 13.5px; line-height: 1.5; color: var(--muted)">{w[1]}</span>
+            </div>
+          ))}
+        </div>
+        <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; color: var(--muted)"><span style="display: inline-flex; padding-top: 2px; color: var(--accent-text)"><Icon name="lock" size={14} /></span>{t.cloudNote}</span>
+      </div>
+    </div>
+  </section>
+
+  <section style={secPad}>
+    <div style={`${wrap}; display: flex; flex-direction: column; gap: 12px`}>
+      <div class="yl-g2" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div class="yl-card yl-spot yl-rv" style="min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 22px; background-color: var(--surface); overflow: hidden">
+          <div style="display: flex; flex-direction: column; gap: 10px; padding: 28px 28px 22px">
+            <span class="mg-mono" style={eyebrow}>{t.askEyebrow}</span>
+            <h3 class="yc-balance" style="margin: 0; font-size: clamp(24px, 2.6vw, 30px); line-height: 1.12; font-weight: 800; letter-spacing: -0.035em">{t.askTitle}</h3>
+            <p class="yc-pretty" style="margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted)">{t.askText}</p>
+          </div>
+          <div style="margin: auto 0 0 28px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: 14px 0 0 0; overflow: hidden; aspect-ratio: 16 / 10">
+            <img src={shotAsk.src} width={shotAsk.width} height={shotAsk.height} alt={t.altAsk} loading="lazy" decoding="async" style="display: block; width: 150%; max-width: none; height: auto; transform: translate(-21%, -2%)" />
+          </div>
+        </div>
+        <div class="yl-card yl-spot yl-rv" style="min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 22px; background-color: var(--surface); overflow: hidden; transition-delay: .1s">
+          <div style="display: flex; flex-direction: column; gap: 10px; padding: 28px 28px 22px">
+            <span class="mg-mono" style={eyebrow}>{t.calEyebrow}</span>
+            <h3 class="yc-balance" style="margin: 0; font-size: clamp(24px, 2.6vw, 30px); line-height: 1.12; font-weight: 800; letter-spacing: -0.035em">{t.calTitle}</h3>
+            <p class="yc-pretty" style="margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted)">{t.calText}</p>
+          </div>
+          <div style="margin: auto 0 0 28px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: 14px 0 0 0; overflow: hidden; aspect-ratio: 16 / 10">
+            <img src={shotCal.src} width={shotCal.width} height={shotCal.height} alt={t.altCal} loading="lazy" decoding="async" style="display: block; width: 150%; max-width: none; height: auto; transform: translate(-21%, -2%)" />
+          </div>
+        </div>
+      </div>
+
+      <div class="yl-g3s" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+        {t.small.map((f, i) => (
+          <div class="yl-card yl-spot yl-rv" style={`min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background-color: var(--surface); transition-delay: ${((i % 3) * 0.08).toFixed(2)}s`}>
+            <span style="width: 36px; height: 36px; border-radius: 11px; background: var(--surface-2); color: var(--accent-text); display: grid; place-items: center"><Icon name={f[0]} size={16} /></span>
+            <span style="font-size: 16px; font-weight: 700; letter-spacing: -0.01em">{f[1]}</span>
+            <span class="yc-pretty" style="font-size: 14px; line-height: 1.55; color: var(--muted)">{f[2]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section id="models" style={secPad}>
+    <div class="yl-g2" style={`${wrap}; ${g2}`}>
+      <div class="yl-rv" style="display: flex; flex-direction: column; gap: 18px">
+        <span class="mg-mono" style={eyebrow}>{t.modEyebrow}</span>
+        <h2 class="yc-balance" style={h2}>{t.modTitle}</h2>
+        <p class="yc-pretty" style={lead}>{t.modText}</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px">
+          {t.dlChips.map((c) => (
+            <span style="height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: 15px; font-size: 13px; color: var(--muted); display: inline-flex; align-items: center">{c}</span>
+          ))}
+        </div>
+      </div>
+
+      <div class="yl-rv" style="min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 22px; background: var(--surface); transition-delay: .12s">
+        {t.models.map((m, i) => (
+          <div style={`display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 14px 16px; border-radius: 14px; background: var(--bg); border: 1px solid ${i === 0 ? 'var(--accent-line)' : 'var(--border)'}`}>
+            <span style="flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <span class="mg-mono yc-ellipsis" style="font-size: 14px; font-weight: 700">{m[0]}</span>
+              <span class="yc-ellipsis" style="font-size: 12.5px; color: var(--muted)">{m[1]}</span>
+            </span>
+            <span class="mg-mono" style={`flex: none; height: 26px; padding: 0 10px; border-radius: 13px; background: ${m[3] === 'warn' ? 'var(--warning-soft)' : 'var(--accent-soft)'}; color: ${m[3] === 'warn' ? 'var(--warning-text)' : 'var(--accent-text)'}; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; white-space: nowrap`}>{m[2]}</span>
+          </div>
+        ))}
+        <span style="padding: 6px 8px 4px; font-size: 12px; color: var(--faint)">{t.measured}</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy" style={secPad}>
+    <div style={wrap}>
+      <div class="yl-rv" style="position: relative; overflow: hidden; display: flex; flex-direction: column; gap: clamp(28px, 4vw, 44px); padding: clamp(24px, 5vw, 64px); border: 1px solid var(--accent-line); border-radius: 28px; background: var(--surface)">
+        <div aria-hidden="true" style="position: absolute; right: -60px; top: -60px; width: 340px; height: 340px; background-image: radial-gradient(color-mix(in srgb, var(--accent) 35%, transparent) 1.2px, transparent 1.8px); background-size: 16px 16px; -webkit-mask-image: radial-gradient(circle, #000, transparent 70%); mask-image: radial-gradient(circle, #000, transparent 70%); pointer-events: none"></div>
+        <div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 760px">
+          <span class="mg-mono" style={eyebrow}>{t.privEyebrow}</span>
+          <h2 class="yc-balance" style="margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.02; font-weight: 800; letter-spacing: -0.05em">{t.privTitle}</h2>
+          <p class="yc-pretty" style={lead}>{t.privText}</p>
+        </div>
+        <div class="yl-priv" style="position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 14px; padding: 24px; border-radius: 18px; background: var(--bg)">
+            <span style="font-size: 15px; font-weight: 800">{t.stayTitle}</span>
+            {t.stay.map((p) => (
+              <span style="display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; line-height: 1.5">
+                <span style="flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center"><Icon name="check" size={12} /></span>
+                {p}
+              </span>
+            ))}
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px; padding: 24px; border-radius: 18px; background: var(--bg)">
+            <span style="font-size: 15px; font-weight: 800">{t.goTitle}</span>
+            {t.go.map((p) => (
+              <span style="display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; line-height: 1.5; color: var(--muted)">
+                <span style="flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; background: var(--surface-2); color: var(--muted); display: grid; place-items: center"><Icon name="arrowUp" size={12} /></span>
+                {p}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="oss" style={secPad}>
+    <div class="yl-g2" style={`${wrap}; ${g2}`}>
+      <div class="yl-rv" style="min-width: 0; display: flex; flex-direction: column; gap: 18px">
+        <span class="mg-mono" style={eyebrow}>Open source · MIT</span>
+        <h2 class="yc-balance" style={h2}>{t.ossTitle}</h2>
+        <p class="yc-pretty" style={lead} set:html={withSize(t.ossText)}></p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px">
+          <span style="font-size: 13px; color: var(--faint)">{t.hood}</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            {TECH.map((s) => <span class="mg-mono" style="height: 28px; padding: 0 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; display: inline-flex; align-items: center">{s}</span>)}
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            {t.ossModels.map((s) => <span style="height: 28px; padding: 0 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center">{s}</span>)}
+          </div>
+        </div>
+      </div>
+
+      <div class="yl-rv" style="min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 22px; background: var(--surface); overflow: hidden; transition-delay: .12s">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--muted)">
+          <Icon name="layers" size={14} />
+          <span class="mg-mono">{t.folder}</span>
+        </div>
+        <div class="mg-mono" style="display: flex; flex-direction: column; gap: 4px; padding: 18px 20px 22px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere">
+          <span style="color: var(--text)">▾ 2026-10-12 · {t.f1}</span>
+          <span style="padding-left: 22px; color: var(--accent-text)">transcript.md</span>
+          <span style="padding-left: 22px; color: var(--accent-text)">transcript.json</span>
+          <span style="padding-left: 22px; color: var(--muted)">{t.fSummary}</span>
+          <span style="padding-left: 22px; color: var(--muted)">{t.fAudio}</span>
+          <span style="color: var(--faint)">▸ 2026-10-12 · {t.f2}</span>
+          <span style="color: var(--faint)">▸ 2026-10-09 · {t.f3}</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 20px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted)">
+          <span>{t.keepLabel}</span>
+          {t.keep.map((l, i) => <span style={`height: 26px; padding: 0 10px; border-radius: 13px; background: ${i === 1 ? 'var(--accent-soft)' : 'transparent'}; color: ${i === 1 ? 'var(--accent-text)' : 'var(--muted)'}; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center`}>{l}</span>)}
+          <span style="flex-basis: 100%; font-size: 12.5px; color: var(--faint)">{t.keepNote}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label={t.limitsTitle} style={secPad}>
+    <div style={`${wrap}; display: flex; flex-direction: column; gap: 22px`}>
+      <h2 class="yl-rv" style="margin: 0; font-size: clamp(24px, 2.8vw, 32px); line-height: 1.15; font-weight: 800; letter-spacing: -0.035em">{t.limitsTitle}</h2>
+      <div class="yl-g4" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        {t.limits.map((l, i) => (
+          <div class="yl-rv" style={`min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 20px; border: 1px dashed var(--border); border-radius: 16px; transition-delay: ${(i * 0.07).toFixed(2)}s`}>
+            <span style="font-size: 15px; font-weight: 700">{l[0]}</span>
+            <span class="yc-pretty" style="font-size: 13.5px; line-height: 1.55; color: var(--muted)">{l[1]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section id="download" style="position: relative; padding: clamp(100px, 13vw, 170px) 0 clamp(80px, 10vw, 120px)">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(color-mix(in srgb, var(--text) 10%, transparent) 1px, transparent 1.6px); background-size: 20px 20px; -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 40%, #000, transparent 72%); mask-image: radial-gradient(ellipse 60% 55% at 50% 40%, #000, transparent 72%); pointer-events: none"></div>
+    <div style={`position: relative; ${wrap}; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center`}>
+      <div class="yc-float yl-rv" style="width: 150px; height: 150px"><Mark /></div>
+      <h2 class="yc-balance yl-rv" style="margin: 8px 0 0; max-width: 760px; font-size: clamp(34px, 5vw, 60px); line-height: 1.02; font-weight: 800; letter-spacing: -0.05em">{t.dlTitle}</h2>
+      <p class="yl-rv" style="margin: 0; font-size: 17px; color: var(--muted)" set:html={withSize(t.dlText)}></p>
+      <div class="yl-g3d" style="width: 100%; max-width: 900px; margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; text-align: left">
+        {DL.map((d, i) => {
+          const mine = d.id === initialOs;
+          return (
+            <div class="yl-card yl-spot yl-rv" data-dl-card={d.id} style={`position: relative; overflow: hidden; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 22px; border: 1px solid ${mine ? 'var(--accent-line)' : 'var(--border)'}; border-radius: 22px; background-color: var(--surface); color: var(--text); text-decoration: none; transition-delay: ${(i * 0.08).toFixed(2)}s`}>
+              <span data-mine-glow aria-hidden="true" style={`display: ${mine ? 'block' : 'none'}; position: absolute; left: -20%; right: -20%; top: -70%; height: 140%; background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 16%, transparent), transparent); pointer-events: none`}></span>
+              <span style="position: relative; display: flex; align-items: flex-start; gap: 12px">
+                <span data-tile aria-hidden="true" style={`width: 48px; height: 48px; flex: none; border-radius: 15px; background: ${mine ? 'var(--accent)' : 'var(--surface-2)'}; color: ${mine ? 'var(--ink-on-accent)' : 'var(--text)'}; display: grid; place-items: center`}>
+                  <svg class="yc-ic" width="22" height="22" viewBox="0 0 24 24" style="stroke-width: 2"><path d={d.icon}></path></svg>
+                </span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 2px">
+                  <span style="font-size: 20px; line-height: 1.2; font-weight: 800; letter-spacing: -0.03em">{d.os}</span>
+                  <span style="font-size: 13px; color: var(--muted)">{t.req[d.id]}</span>
+                </span>
+              </span>
+              <span style="position: relative; display: flex; flex-wrap: wrap; gap: 6px">
+                <span data-mine-chip style={`display: ${mine ? 'inline-flex' : 'none'}; height: 26px; padding: 0 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-text); font-size: 12px; font-weight: 700; align-items: center; gap: 5px`}><Icon name="check" size={12} />{t.yours}</span>
+                {d.chips.map((c, ci) => {
+                  const style = 'height: 26px; padding: 0 9px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); font-size: 12px; display: inline-flex; align-items: center';
+                  return d.id === 'linux' && c === '.deb'
+                    ? <a class="mg-mono yl-deb" data-dl-deb href={rel.deb?.url ?? rel.url} style={`${style}; position: relative; z-index: 2; text-decoration: none`}>{c}</a>
+                    : <span class="mg-mono" data-chip-size={ci === 2 && d.id !== 'linux' ? d.id : undefined} style={style}>{c}</span>;
+                })}
+              </span>
+              <a class="yl-stretch" data-dl-btn={d.id} href={dlUrl(rel, d.id)} style={`margin-top: auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 13px; background: ${mine ? 'var(--accent)' : 'var(--surface-2)'}; color: ${mine ? 'var(--ink-on-accent)' : 'var(--text)'}; font-size: 14px; font-weight: 800; text-decoration: none`}>
+                <svg class="yc-ic" width="15" height="15" viewBox="0 0 24 24" style="stroke-width: 2.6" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>
+                {t.btn + ' ' + d.ext}
+                <span class="mg-sr"> — {d.os}</span>
+              </a>
+            </div>
+          );
+        })}
+      </div>
+      <a class="yl-link" href={RELEASES_LATEST} style="margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px">{t.allVersions}<Icon name="externalLink" size={12} /></a>
+    </div>
+  </section>
+
+  <script type="application/json" id="yl-data" set:html={JSON.stringify(payload).replace(/</g, '\\u003c')} />
+  <script>
+    import '../scripts/landing';
+  </script>
+</Base>

@@ -1,0 +1,41 @@
+---
+import Base from '../layouts/Base.astro';
+import type { Lang } from '../lib/i18n';
+import { PRIVACY, X } from '../lib/strings';
+import { href } from '../lib/site';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const doc = PRIVACY[lang];
+const x = X[lang];
+const paths = { ru: '/privacy/', en: '/en/privacy/' };
+const home = href(lang === 'en' ? '/en/' : '/');
+---
+<Base lang={lang} title={x.privacyTitle} description={x.privacyDescription} paths={paths} current={lang}>
+  <div class="yl-doc" style="padding: clamp(40px, 6vw, 72px) 0 clamp(72px, 9vw, 120px)">
+    <div style="max-width: 1180px; margin: 0 auto; box-sizing: border-box; padding: 0 clamp(16px, 4vw, 40px)">
+      <a class="yl-link yl-back" href={home}>← {x.back}</a>
+      <article class="yl-prose">
+        <header class="yl-prose-head">
+          <h1>{doc.title}</h1>
+          <p class="mg-mono yl-prose-date"><time datetime={doc.updatedIso}>{doc.updated}</time></p>
+          <p class="yl-prose-lead">{doc.lead}</p>
+        </header>
+        <nav class="yl-toc" aria-label={doc.tocLabel}>
+          <span class="yl-toc-t">{doc.tocLabel}</span>
+          <ol>
+            {doc.sections.map((s) => <li><a class="yl-link" href={`#${s.id}`}>{s.h}</a></li>)}
+          </ol>
+        </nav>
+        {doc.sections.map((s, i) => (
+          <section id={s.id} aria-labelledby={`${s.id}-h`}>
+            <h2 id={`${s.id}-h`}><span class="mg-mono">{String(i + 1).padStart(2, '0')}</span>{s.h}</h2>
+            <Fragment set:html={s.html} />
+          </section>
+        ))}
+      </article>
+    </div>
+  </div>
+</Base>

@@ -1,0 +1,26 @@
+---
+import Mark from './Mark.astro';
+import { T, type Lang } from '../lib/i18n';
+import { REPO, RELEASES_LATEST, href } from '../lib/site';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = T[lang];
+const policy = href(lang === 'en' ? '/en/privacy/' : '/privacy/');
+---
+<footer style="border-top: 1px solid var(--border)">
+  <div style="max-width: 1180px; margin: 0 auto; box-sizing: border-box; padding: 28px clamp(16px, 4vw, 40px) 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px">
+    <span style="display: flex; align-items: center; gap: 9px">
+      <span style="display: block; width: 26px; height: 26px"><Mark animated={false} /></span>
+      <span style="font-size: 15px; font-weight: 800; letter-spacing: -0.03em">yada<span style="color: var(--accent-text)">call</span></span>
+    </span>
+    <span style="flex: 1 1 260px; font-size: 13px; color: var(--faint)">{t.footer}</span>
+    <nav aria-label={t.footLinks} style="display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13.5px">
+      <a class="yl-link" href={REPO}>GitHub</a>
+      <a class="yl-link" href={RELEASES_LATEST} data-rel-page>{t.releases}</a>
+      <a class="yl-link" href={policy}>{t.policy}</a>
+    </nav>
+  </div>
+</footer>

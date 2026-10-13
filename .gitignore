@@ -6,3 +6,5 @@ node_modules/
 *.pcm
 /models-cache
 .env
+/site/dist
+/site/.astro

@@ -1,0 +1,43 @@
+/* Site-only additions (not in the design export): stretched download links, privacy prose, 404. */
+
+/* download card: the whole card is clickable through the primary button's ::after; .deb stays its own link */
+.yl-stretch::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.yl-card:has(.yl-stretch:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.yl-stretch:focus-visible { outline: none; }
+.yl-deb { transition: color .2s, border-color .2s; }
+.yl-deb:hover { color: var(--text) !important; border-color: var(--faint) !important; }
+
+/* ---------- long text pages (privacy) ---------- */
+.yl-back { display: inline-flex; margin-bottom: clamp(24px, 4vw, 44px); font-size: 14px; }
+.yl-prose { max-width: 760px; margin: 0 auto; }
+.yl-prose-head { display: flex; flex-direction: column; gap: 16px; margin-bottom: 36px; }
+.yl-prose h1 { margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.02; font-weight: 800; letter-spacing: -0.05em; text-wrap: balance; }
+.yl-prose-date { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); }
+.yl-prose-lead { margin: 0; font-size: 18px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+.yl-toc { margin-bottom: 8px; padding: 18px 22px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); }
+.yl-toc-t { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--faint); }
+.yl-toc ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; font-size: 14.5px; }
+.yl-toc li { min-width: 0; }
+.yl-prose section { scroll-margin-top: 84px; margin-top: clamp(36px, 5vw, 56px); }
+.yl-prose h2 { display: flex; align-items: baseline; gap: 14px; margin: 0 0 16px; font-size: clamp(24px, 2.8vw, 32px); line-height: 1.15; font-weight: 800; letter-spacing: -0.035em; text-wrap: balance; }
+.yl-prose h2 .mg-mono { flex: none; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: var(--accent-text); }
+.yl-prose h3 { margin: 28px 0 10px; font-size: 17px; line-height: 1.3; font-weight: 800; letter-spacing: -0.01em; }
+.yl-prose p, .yl-prose li { font-size: 16.5px; line-height: 1.7; color: var(--muted); text-wrap: pretty; }
+.yl-prose p { margin: 0 0 14px; }
+.yl-prose ul { margin: 0 0 14px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.yl-prose li { position: relative; padding-left: 22px; }
+.yl-prose li::before { content: ""; position: absolute; left: 4px; top: .78em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.yl-prose strong { color: var(--text); font-weight: 700; }
+.yl-prose a { color: var(--accent-text); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 3px; transition: text-decoration-color .2s; }
+.yl-prose a:hover { text-decoration-color: var(--accent); }
+.yl-prose .yl-toc a { color: var(--muted); text-decoration: none; }
+.yl-prose .yl-toc a:hover { color: var(--text); }
+.yl-prose code { padding: 2px 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font-family: var(--font-mono); font-size: .86em; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .yl-toc ol { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 404 ---------- */
+.yl-404 { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: clamp(56px, 10vw, 120px) clamp(16px, 4vw, 40px); text-align: center; }
+.yl-404 h1 { margin: 8px 0 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.02; font-weight: 800; letter-spacing: -0.05em; text-wrap: balance; }
+.yl-404 p { margin: 0; font-size: 17px; line-height: 1.6; color: var(--muted); }
+.yl-404-code { font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); }
+.yl-404-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 10px; }

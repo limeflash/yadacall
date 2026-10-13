@@ -1,0 +1,22 @@
+---
+// Mistgate LangToggle, "lang" variant of Segmented, as two plain links between the RU and EN pages.
+import { href } from '../lib/site';
+import type { Lang } from '../lib/i18n';
+
+interface Props {
+  lang: Lang;
+  label: string;
+  paths: { ru: string; en: string };
+  current: Lang;
+}
+const { label, paths, current } = Astro.props;
+const items: { l: Lang; text: string }[] = [
+  { l: 'ru', text: 'RU' },
+  { l: 'en', text: 'EN' },
+];
+---
+<div role="group" aria-label={label} class="mg-seg mg-seg--lang">
+  {items.map((i) => (
+    <a class="mg-seg__item" href={href(paths[i.l])} hreflang={i.l} lang={i.l} aria-current={i.l === current ? 'true' : undefined} aria-label={i.l === 'ru' ? 'Русский' : 'English'}>{i.text}</a>
+  ))}
+</div>
