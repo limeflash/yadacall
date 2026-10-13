@@ -87,9 +87,9 @@ pub async fn answer_question(
         });
     }
     let system = if russian {
-        "Отвечай на языке вопроса, используя только приведённые фрагменты расшифровок. Если ответа в них нет, скажи «В записях этого нет». Подкрепляй фактические утверждения ссылками вида [1], используя только номера предоставленных фрагментов. Не додумывай факты и не опирайся на внешние знания."
+        "Отвечай на языке вопроса, используя только приведённые фрагменты расшифровок. Если ответа в них нет, скажи «В записях этого нет». Подкрепляй фактические утверждения ссылками вида [1], используя только номера предоставленных фрагментов. Не додумывай факты и не опирайся на внешние знания. «Я» — пользователь, который записывал встречи. Не приписывай говорящему действие, если в реплике нет подлежащего; передавай сказанное как слова говорящего («Дима заметил, что…»)."
     } else {
-        "Answer in the question's language using only the provided transcript excerpts. If they do not contain the answer, say so plainly. Support factual claims with citations like [1], using only the supplied excerpt numbers. Do not infer missing facts or use outside knowledge."
+        "Answer in the question's language using only the provided transcript excerpts. If they do not contain the answer, say so plainly. Support factual claims with citations like [1], using only the supplied excerpt numbers. Do not infer missing facts or use outside knowledge. "Me" is the user who recorded the meetings. Do not attribute an action to a speaker when the line has no explicit subject; report it as what they said ("Dima noticed that…")."
     };
     let excerpt_text = hits
         .iter()
