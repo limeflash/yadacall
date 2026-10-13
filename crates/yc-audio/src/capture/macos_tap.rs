@@ -140,6 +140,15 @@ impl Backend for TapBackend {
         let agg = ca::AggregateDevice::with_desc(&dict).map_err(dev("create aggregate device"))?;
 
         let mut ctx = Box::new(TapCtx { sink });
+        // The IOProc is clocked by the aggregate device, i.e. by the output device — not by what the
+        // tap format claims. They disagree while a Bluetooth headset sits in HFP (tap says 48 kHz,
+        // buffers arrive at 24 kHz). The ingest rate watch still arbitrates by measurement.
+        let sample_rate = agg
+            .nominal_sample_rate()
+            .map(|r| r as u32)
+            .ok()
+            .filter(|r| *r > 0)
+            .unwrap_or(asbd.sample_rate as u32);
         let proc_id = agg
             .create_io_proc_id(io_proc, Some(&mut *ctx))
             .map_err(dev("create IOProc"))?;
@@ -148,7 +157,8 @@ impl Backend for TapBackend {
 
         let info = OpenInfo {
             device: format!("System audio ({out_name})"),
-            sample_rate: asbd.sample_rate as u32,
+            sample_rate,
+            substituted_for: None,
         };
         Ok((
             TapStream {
@@ -160,11 +170,12 @@ impl Backend for TapBackend {
         ))
     }
 
+    /// `<output uid>@<nominal rate>`: a Bluetooth headset switching A2DP ↔ HFP keeps its uid but
+    /// changes its rate, and the tap must be rebuilt to pick up the new format.
     fn target(&self) -> Option<String> {
-        ca::System::default_output_device()
-            .ok()?
-            .uid()
-            .ok()
-            .map(|u| u.to_string())
+        let dev = ca::System::default_output_device().ok()?;
+        let uid = dev.uid().ok()?.to_string();
+        let rate = dev.nominal_sample_rate().map_or(0, |r| r as u32);
+        Some(format!("{uid}@{rate}"))
     }
 }

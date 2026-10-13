@@ -257,6 +257,7 @@ impl Engine {
             MicChoice::Device(d) => Some(DeviceSel::Named(d.clone())),
             MicChoice::Configured => Some(resolve_mic(&settings)),
         };
+        config.prefer_builtin_mic = settings.prefer_builtin_mic;
         config.system = opts.system_audio;
         config.prevent_sleep = self.cfg.prevent_sleep;
         config.skip_disk_check = self.cfg.skip_disk_check;
@@ -635,24 +636,14 @@ fn default_title(at: DateTime<Utc>, russian: bool) -> String {
     }
 }
 
-/// Picks the microphone: the configured one; the built-in mic instead of a Bluetooth headset's when
-/// the user prefers that (a headset mic drops the headphones to call-quality audio).
+/// Picks the microphone: the configured one, else the system default. Swapping a Bluetooth
+/// headset's microphone for the built-in one (a headset mic drops the headphones to call-quality
+/// audio) is done by the recorder itself, driven by `RecorderConfig::prefer_builtin_mic`.
 fn resolve_mic(settings: &crate::settings::Settings) -> DeviceSel {
-    if let Some(d) = &settings.mic_device {
-        return DeviceSel::Named(d.clone());
+    match &settings.mic_device {
+        Some(d) => DeviceSel::Named(d.clone()),
+        None => DeviceSel::Default,
     }
-    if settings.prefer_builtin_mic
-        && yc_audio::input_is_bluetooth() == Some(true)
-        && let Ok(devices) = yc_audio::list_input_devices()
-        && let Some(d) = devices.iter().find(|d| {
-            d.transport
-                .as_deref()
-                .is_some_and(|t| t.contains("builtin") || t.contains("built-in"))
-        })
-    {
-        return DeviceSel::Named(d.id.clone());
-    }
-    DeviceSel::Default
 }
 
 /// Per-track thread: frames → VAD → closed regions → ASR queue.
@@ -853,6 +844,30 @@ impl Monitor {
                         format!("Recording error ({}): {message}", who(track))
                     },
                 );
+            }
+            RecorderEvent::MicSubstituted { bluetooth, using } => {
+                (self.notify)(
+                    NoticeLevel::Info,
+                    if ru {
+                        format!(
+                            "{bluetooth} остаются в хорошем качестве: пишем встроенный микрофон ({using})."
+                        )
+                    } else {
+                        format!(
+                            "{bluetooth} stays in high quality: recording the built-in microphone ({using})."
+                        )
+                    },
+                );
+            }
+            RecorderEvent::RateChanged {
+                track,
+                from_hz,
+                to_hz,
+            } => {
+                tracing::warn!(?track, from_hz, to_hz, "capture sample rate changed");
+            }
+            RecorderEvent::DriftCorrected { track, drift_ms } => {
+                tracing::warn!(?track, drift_ms, "track drift corrected");
             }
             RecorderEvent::Overrun { .. } | RecorderEvent::FramesDropped { .. } => {
                 if !self.warned_drop {

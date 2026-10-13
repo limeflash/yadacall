@@ -112,6 +112,7 @@ impl Backend for MonitorBackend {
             OpenInfo {
                 device: format!("System audio ({sink_name})"),
                 sample_rate: RATE,
+                substituted_for: None,
             },
         ))
     }

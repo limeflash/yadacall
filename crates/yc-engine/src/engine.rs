@@ -132,6 +132,12 @@ impl Engine {
         });
         crate::jobs::spawn_runner(&engine);
         crate::retention::spawn_sweeper(&engine);
+        let migrating = Arc::clone(&engine);
+        tokio::spawn(async move {
+            if let Err(e) = migrating.migrate_flac_headers().await {
+                tracing::warn!("FLAC header migration failed: {e}");
+            }
+        });
         engine.jobs_notify.notify_one();
         Ok(engine)
     }
