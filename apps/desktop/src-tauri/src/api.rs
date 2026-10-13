@@ -256,11 +256,114 @@ pub struct ModelEntry {
     pub verdict: Verdict,
     /// One-line estimate: "≈ 40× faster than real time", "≈ 25 tok/s · 6.1 of 16 GB".
     pub estimate: String,
+    /// Human-readable model vendor.
+    #[serde(default)]
+    pub vendor: String,
+    /// Family used for grouping and search.
+    #[serde(default)]
+    pub family: String,
+    /// Supported language groups from the catalog.
+    #[serde(default)]
+    pub languages: Vec<String>,
+    /// Machine-readable traits from the catalog.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Total model parameter count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<f64>,
+    /// Active parameter count for a mixture-of-experts model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_params: Option<f64>,
+    /// SPDX expression or a short upstream license name.
+    #[serde(default)]
+    pub license: String,
+    /// License text or terms URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_url: Option<String>,
+    /// Whether the license has custom or attribution terms.
+    #[serde(default)]
+    pub license_custom: bool,
+    /// Model project or card URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homepage: Option<String>,
+    /// Backend recommendation for this model kind and language group.
+    #[serde(default)]
+    pub recommended: bool,
+    /// Relative quality rank within the model kind.
+    #[serde(default)]
+    pub quality_rank: i32,
     /// Whether "measure" makes sense for this model (not for VAD or runtime bundles).
     #[serde(default = "yes")]
     pub benchmarkable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download: Option<ModelDownload>,
+}
+
+#[cfg(test)]
+mod model_entry_tests {
+    use super::*;
+
+    #[test]
+    fn model_entry_serializes_contract_fields_in_camel_case() {
+        let entry = ModelEntry {
+            id: "model-id".to_owned(),
+            kind: ModelKind::Llm,
+            name: "Model".to_owned(),
+            size_bytes: 10,
+            blurb: "Summary model".to_owned(),
+            installed: true,
+            active: false,
+            verdict: Verdict::Great,
+            estimate: "fast".to_owned(),
+            vendor: "Vendor".to_owned(),
+            family: "Family".to_owned(),
+            languages: vec!["ru".to_owned()],
+            tags: vec!["ru-tuned".to_owned()],
+            params: Some(4.0e9),
+            active_params: Some(1.8e9),
+            license: "MIT".to_owned(),
+            license_url: Some("https://example.com/license".to_owned()),
+            license_custom: true,
+            homepage: Some("https://example.com/model".to_owned()),
+            recommended: true,
+            quality_rank: 10,
+            benchmarkable: true,
+            download: None,
+        };
+        let value = serde_json::to_value(entry).expect("serialize model entry");
+        for field in [
+            "id",
+            "kind",
+            "name",
+            "sizeBytes",
+            "blurb",
+            "installed",
+            "active",
+            "verdict",
+            "estimate",
+            "benchmarkable",
+            "vendor",
+            "family",
+            "languages",
+            "tags",
+            "params",
+            "activeParams",
+            "license",
+            "licenseUrl",
+            "licenseCustom",
+            "homepage",
+            "recommended",
+            "qualityRank",
+        ] {
+            assert!(value.get(field).is_some(), "missing contract field {field}");
+        }
+        for field in ["size_bytes", "active_params", "license_url", "quality_rank"] {
+            assert!(
+                value.get(field).is_none(),
+                "unexpected snake-case field {field}"
+            );
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

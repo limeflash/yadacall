@@ -157,6 +157,10 @@ async fn anthropic_refusal_is_an_error_and_fallback_settings_are_sent() {
         messages: vec![ChatMessage::user("question")],
         max_tokens: 1_000,
         temperature: Some(0.1),
+        top_p: None,
+        top_k: None,
+        min_p: None,
+        presence_penalty: None,
         json_schema: None,
         stop: Vec::new(),
     };
@@ -198,6 +202,10 @@ async fn anthropic_structured_output_uses_strict_schema_and_medium_effort() {
         messages: vec![ChatMessage::user("summarize")],
         max_tokens: 8_000,
         temperature: Some(0.4),
+        top_p: None,
+        top_k: None,
+        min_p: None,
+        presence_penalty: None,
         json_schema: Some(yc_llm::JsonSchema {
             name: "sample".into(),
             schema: json!({ "type": "object", "properties": { "answer": { "type": "string" } } }),
@@ -232,6 +240,36 @@ async fn anthropic_structured_output_uses_strict_schema_and_medium_effort() {
             .contains("anthropic-beta: server-side-fallback-2026-07-01")
     );
     assert_eq!(body["fallbacks"], "default");
+}
+
+#[tokio::test]
+async fn local_openai_completion_sends_extended_sampling_options() {
+    let (base, server) = mock_server_with_replies(vec![json_reply(json!({
+        "choices": [{ "message": { "content": "ok" }, "finish_reason": "stop" }]
+    }))])
+    .await;
+    let provider =
+        OpenAiCompatibleProvider::new(&base, None, "local", "test-model").expect("provider");
+    let request = ChatRequest {
+        system: String::new(),
+        messages: vec![ChatMessage::user("summary")],
+        max_tokens: 100,
+        temperature: Some(0.3),
+        top_p: Some(0.9),
+        top_k: Some(20),
+        min_p: Some(0.01),
+        presence_penalty: Some(1.0),
+        json_schema: None,
+        stop: Vec::new(),
+    };
+    provider.complete(request).await.expect("completion");
+    let requests = server.await.expect("mock server task");
+    let body = &requests[0].body;
+    assert!((body["temperature"].as_f64().expect("temperature") - 0.3).abs() < 1e-6);
+    assert!((body["top_p"].as_f64().expect("top_p") - 0.9).abs() < 1e-6);
+    assert_eq!(body["top_k"], 20);
+    assert!((body["min_p"].as_f64().expect("min_p") - 0.01).abs() < 1e-6);
+    assert!((body["presence_penalty"].as_f64().expect("presence_penalty") - 1.0).abs() < 1e-6);
 }
 
 #[tokio::test]

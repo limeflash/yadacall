@@ -8,9 +8,12 @@ use yc_core::{
 
 use crate::{Backend, backend::AdaptiveSession};
 
-use super::common::{
-    Features, MAX_CHUNK_MS, Preprocessor, TokenTiming, Vocabulary, argmax, backend_summary,
-    create_session, ensure_vocab_logits, model_error, recognized_from_tokens, validate_audio,
+use super::{
+    AsrModelConfig,
+    common::{
+        Features, MAX_CHUNK_MS, Preprocessor, TokenTiming, Vocabulary, argmax, backend_summary,
+        create_session, ensure_vocab_logits, model_error, recognized_from_tokens, validate_audio,
+    },
 };
 
 const PREDICTOR_DIMS: usize = 320;
@@ -35,30 +38,53 @@ pub struct GigaAmRnnt {
 }
 
 impl GigaAmRnnt {
-    pub fn load(model_dir: &Path, backend: Backend) -> Result<Self> {
+    pub fn load_configured(
+        model_dir: &Path,
+        backend: Backend,
+        config: AsrModelConfig,
+    ) -> Result<Self> {
         let preprocessor = Preprocessor::gigaam(model_dir, backend)?;
         let encoder = create_session(
             model_dir,
             "gigaam-v3-e2e-rnnt-encoder",
-            "v3_e2e_rnnt_encoder.int8.onnx",
+            config
+                .files
+                .encoder
+                .as_deref()
+                .unwrap_or("v3_e2e_rnnt_encoder.int8.onnx"),
             backend,
         )?;
         let decoder = create_session(
             model_dir,
             "gigaam-v3-e2e-rnnt-decoder",
-            "v3_e2e_rnnt_decoder.int8.onnx",
+            config
+                .files
+                .decoder
+                .as_deref()
+                .unwrap_or("v3_e2e_rnnt_decoder.int8.onnx"),
             backend,
         )?;
         let joint = create_session(
             model_dir,
             "gigaam-v3-e2e-rnnt-joint",
-            "v3_e2e_rnnt_joint.int8.onnx",
+            config
+                .files
+                .joint
+                .as_deref()
+                .unwrap_or("v3_e2e_rnnt_joint.int8.onnx"),
             backend,
         )?;
-        let vocab_path = super::required_file(model_dir, "v3_e2e_rnnt_vocab.txt")?;
+        let vocab_path = super::required_file(
+            model_dir,
+            config
+                .files
+                .vocabulary
+                .as_deref()
+                .unwrap_or("v3_e2e_rnnt_vocab.txt"),
+        )?;
         let vocabulary = Vocabulary::load(&vocab_path)?;
         let info = ModelInfo {
-            id: "gigaam-v3-e2e-rnnt-int8".to_owned(),
+            id: config.id,
             backend: encoder.backend().to_string(),
         };
         Ok(Self {
@@ -241,18 +267,33 @@ pub struct GigaAmCtc {
 }
 
 impl GigaAmCtc {
-    pub fn load(model_dir: &Path, backend: Backend) -> Result<Self> {
+    pub fn load_configured(
+        model_dir: &Path,
+        backend: Backend,
+        config: AsrModelConfig,
+    ) -> Result<Self> {
         let preprocessor = Preprocessor::gigaam(model_dir, backend)?;
         let model = create_session(
             model_dir,
             "gigaam-v3-e2e-ctc",
-            "v3_e2e_ctc.int8.onnx",
+            config
+                .files
+                .model
+                .as_deref()
+                .unwrap_or("v3_e2e_ctc.int8.onnx"),
             backend,
         )?;
-        let vocab_path = super::required_file(model_dir, "v3_e2e_ctc_vocab.txt")?;
+        let vocab_path = super::required_file(
+            model_dir,
+            config
+                .files
+                .vocabulary
+                .as_deref()
+                .unwrap_or("v3_e2e_ctc_vocab.txt"),
+        )?;
         let vocabulary = Vocabulary::load(&vocab_path)?;
         let info = ModelInfo {
-            id: "gigaam-v3-e2e-ctc-int8".to_owned(),
+            id: config.id,
             backend: model.backend().to_string(),
         };
         Ok(Self {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-12T13:40:14Z",
+  "generatedAt": "2026-10-13T17:40:46Z",
   "models": [
     {
       "id": "gigaam-v3-e2e-rnnt-int8",
@@ -73,7 +73,17 @@
         "efficiency": 0.6,
         "bytes": 226430792
       },
-      "todo": "TODO: GigaAM v3 needs an ONNX preprocessor/featurizer from github.com/istupakov/onnx-asr; this catalog entry currently includes encoder, decoder, joint, and vocabulary only."
+      "todo": "TODO: GigaAM v3 needs an ONNX preprocessor/featurizer from github.com/istupakov/onnx-asr; this catalog entry currently includes encoder, decoder, joint, and vocabulary only.",
+      "vendor": "Сбер",
+      "family": "GigaAM",
+      "tags": [
+        "ru-tuned",
+        "tiny"
+      ],
+      "qualityRank": 100,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "engine": "gigaam-rnnt"
     },
     {
       "id": "gigaam-v3-e2e-ctc-int8",
@@ -122,7 +132,17 @@
         "efficiency": 0.6,
         "bytes": 224895354
       },
-      "todo": null
+      "todo": null,
+      "vendor": "Сбер",
+      "family": "GigaAM",
+      "tags": [
+        "ru-tuned",
+        "tiny"
+      ],
+      "qualityRank": 86,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "engine": "gigaam-ctc"
     },
     {
       "id": "parakeet-tdt-0.6b-v3-int8",
@@ -195,7 +215,237 @@
         "efficiency": 0.6,
         "bytes": 670619706
       },
-      "todo": null
+      "todo": null,
+      "vendor": "NVIDIA",
+      "family": "Parakeet",
+      "tags": [],
+      "qualityRank": 90,
+      "licenseCustom": true,
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "engine": "parakeet-tdt"
+    },
+    {
+      "id": "parakeet-tdt-0.6b-v2-int8",
+      "kind": "asr",
+      "name": "Parakeet TDT 0.6B v2 int8",
+      "descriptionRu": "Англоязычная модель распознавания речи; результат Open ASR лучше v3 по отчёту авторов.",
+      "descriptionEn": "English-only speech recognizer; its reported Open ASR score is better than v3.",
+      "languages": [
+        "en"
+      ],
+      "vendor": "NVIDIA",
+      "family": "Parakeet",
+      "tags": [
+        "english-only"
+      ],
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseCustom": true,
+      "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx",
+      "qualityRank": 94,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "encoder-model.int8.onnx",
+          "size": 652184014,
+          "sha256": "3e0581fda6ab843888b51e56d7ee78b6d5bc3237ec113af1f732d1d5286aa155",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/encoder-model.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/encoder-model.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v2-onnx",
+          "optional": false
+        },
+        {
+          "path": "decoder_joint-model.int8.onnx",
+          "size": 8998286,
+          "sha256": "a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/decoder_joint-model.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/decoder_joint-model.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v2-onnx",
+          "optional": false
+        },
+        {
+          "path": "nemo128.onnx",
+          "size": 139764,
+          "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v2-onnx",
+          "optional": false
+        },
+        {
+          "path": "vocab.txt",
+          "size": 9384,
+          "sha256": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d",
+          "urls": [
+            "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/vocab.txt?download=true",
+            "https://hf-mirror.com/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/main/vocab.txt?download=true"
+          ],
+          "hfRepo": "istupakov/parakeet-tdt-0.6b-v2-onnx",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 1073741824,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 600000000,
+        "bytes": 661331448,
+        "gflopPerAudioSec": 12.0,
+        "efficiency": 0.6
+      },
+      "engine": "parakeet-tdt"
+    },
+    {
+      "id": "parakeet-tdt-0.6b-v3-ultra-int8",
+      "kind": "asr",
+      "name": "Parakeet TDT 0.6B v3 Ultra int8",
+      "descriptionRu": "Порт ONNX от сообщества для fine-tune Moondream; авторы сообщают об улучшении русского FLEURS.",
+      "descriptionEn": "Community ONNX port of the Moondream fine-tune; its authors report a better Russian FLEURS score.",
+      "languages": [
+        "multilingual"
+      ],
+      "vendor": "Moondream",
+      "family": "Parakeet",
+      "tags": [],
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseCustom": true,
+      "homepage": "https://huggingface.co/moondream/parakeet-ultra",
+      "qualityRank": 96,
+      "defaultTiers": [
+        "multilingual"
+      ],
+      "files": [
+        {
+          "path": "encoder-model.int8.onnx",
+          "size": 649537325,
+          "sha256": "8a2b47169cf3f1b114010e12c0221bc6f07203289477a65a44847b9e3f1e01ed",
+          "urls": [
+            "https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/int8/encoder-model.int8.onnx?download=true",
+            "https://hf-mirror.com/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/int8/encoder-model.int8.onnx?download=true"
+          ],
+          "hfRepo": "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
+          "optional": false,
+          "hfPath": "int8/encoder-model.int8.onnx"
+        },
+        {
+          "path": "decoder_joint-model.int8.onnx",
+          "size": 18203490,
+          "sha256": "667ffde2242a560923cba6bc7f69ef03d736f8a36ca9588f2e6f9fa818cf2fc1",
+          "urls": [
+            "https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/int8/decoder_joint-model.int8.onnx?download=true",
+            "https://hf-mirror.com/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/int8/decoder_joint-model.int8.onnx?download=true"
+          ],
+          "hfRepo": "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
+          "optional": false,
+          "hfPath": "int8/decoder_joint-model.int8.onnx"
+        },
+        {
+          "path": "nemo128.onnx",
+          "size": 139764,
+          "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f",
+          "urls": [
+            "https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/nemo128.onnx?download=true",
+            "https://hf-mirror.com/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/nemo128.onnx?download=true"
+          ],
+          "hfRepo": "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
+          "optional": false
+        },
+        {
+          "path": "vocab.txt",
+          "size": 93939,
+          "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+          "urls": [
+            "https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/vocab.txt?download=true",
+            "https://hf-mirror.com/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main/vocab.txt?download=true"
+          ],
+          "hfRepo": "Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 1073741824,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 600000000,
+        "bytes": 667974518,
+        "gflopPerAudioSec": 12.0,
+        "efficiency": 0.6
+      },
+      "engine": "parakeet-tdt"
+    },
+    {
+      "id": "gigaam-multilingual-ctc-int8",
+      "kind": "asr",
+      "name": "GigaAM Multilingual CTC int8",
+      "descriptionRu": "Мультиязычная CTC-модель для русского, английского, казахского, кыргызского и узбекского.",
+      "descriptionEn": "Multilingual CTC recognizer for Russian, English, Kazakh, Kyrgyz and Uzbek.",
+      "languages": [
+        "multilingual"
+      ],
+      "vendor": "Сбер",
+      "family": "GigaAM",
+      "tags": [
+        "tiny"
+      ],
+      "license": "MIT",
+      "licenseUrl": "https://spdx.org/licenses/MIT.html",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/ai-sage/GigaAM-Multilingual",
+      "qualityRank": 93,
+      "defaultTiers": [
+        "multilingual"
+      ],
+      "files": [
+        {
+          "path": "multilingual_ctc.int8.onnx",
+          "size": 224762204,
+          "sha256": "e08e27ae5669b39f0c378fae101bbbb9a80505f74f9b66719c309bf5b894a480",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-multilingual-ctc-onnx/resolve/main/multilingual_ctc.int8.onnx?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-multilingual-ctc-onnx/resolve/main/multilingual_ctc.int8.onnx?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-multilingual-ctc-onnx",
+          "optional": false
+        },
+        {
+          "path": "multilingual_vocab.txt",
+          "size": 393,
+          "sha256": "4d130287892e1099fedfb3f93c4b4cf8a263151158801680b28977d1be4133f4",
+          "urls": [
+            "https://huggingface.co/istupakov/gigaam-multilingual-ctc-onnx/resolve/main/multilingual_vocab.txt?download=true",
+            "https://hf-mirror.com/istupakov/gigaam-multilingual-ctc-onnx/resolve/main/multilingual_vocab.txt?download=true"
+          ],
+          "hfRepo": "istupakov/gigaam-multilingual-ctc-onnx",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 536870912,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "params": 220000000,
+        "bytes": 224762597,
+        "gflopPerAudioSec": 3.5,
+        "efficiency": 0.6
+      },
+      "engine": "gigaam-ctc",
+      "engineFiles": {
+        "model": "multilingual_ctc.int8.onnx",
+        "vocabulary": "multilingual_vocab.txt"
+      }
     },
     {
       "id": "silero-vad-v5",
@@ -217,8 +467,10 @@
           "size": 2327524,
           "sha256": "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f",
           "urls": [
-            "https://raw.githubusercontent.com/snakers4/silero-vad/v5.1.2/src/silero_vad/data/silero_vad.onnx"
+            "https://raw.githubusercontent.com/snakers4/silero-vad/v5.1.2/src/silero_vad/data/silero_vad.onnx",
+            "https://huggingface.co/deepghs/silero-vad-onnx/resolve/main/silero_vad.onnx?download=true"
           ],
+          "hfRepo": "deepghs/silero-vad-onnx",
           "optional": false
         }
       ],
@@ -230,7 +482,15 @@
       "cost": {
         "params": 1000000,
         "bytes": 2327524
-      }
+      },
+      "vendor": "Silero",
+      "family": "Silero VAD",
+      "tags": [
+        "tiny"
+      ],
+      "qualityRank": 50,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/MIT.html"
     },
     {
       "id": "speaker-campplus-zh-en-16k",
@@ -239,8 +499,7 @@
       "descriptionRu": "Эмбеддинги голосов для разделения участников группового звонка.",
       "descriptionEn": "Speaker embeddings for diarising group calls.",
       "languages": [
-        "zh",
-        "en"
+        "multilingual"
       ],
       "license": "Apache-2.0",
       "homepage": "https://github.com/k2-fsa/sherpa-onnx",
@@ -253,8 +512,10 @@
           "size": 28281164,
           "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
           "urls": [
-            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+            "https://huggingface.co/bitsydarel/campplus-onnx/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx?download=true"
           ],
+          "hfRepo": "bitsydarel/campplus-onnx",
           "optional": false
         }
       ],
@@ -266,7 +527,15 @@
       "cost": {
         "params": 20000000,
         "bytes": 28281164
-      }
+      },
+      "vendor": "3D-Speaker",
+      "family": "CAM++",
+      "tags": [
+        "tiny"
+      ],
+      "qualityRank": 75,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html"
     },
     {
       "id": "multilingual-e5-small-int8",
@@ -316,7 +585,15 @@
         "gflopPerPassage": 25.0,
         "efficiency": 0.65,
         "bytes": 135137323
-      }
+      },
+      "vendor": "intfloat",
+      "family": "E5",
+      "tags": [
+        "tiny"
+      ],
+      "qualityRank": 90,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/MIT.html"
     },
     {
       "id": "embeddinggemma-300m-q4f16",
@@ -410,7 +687,15 @@
         "gflopPerPassage": 110.0,
         "efficiency": 0.65,
         "bytes": 202286378
-      }
+      },
+      "vendor": "Google",
+      "family": "EmbeddingGemma",
+      "tags": [
+        "tiny"
+      ],
+      "qualityRank": 89,
+      "licenseCustom": true,
+      "licenseUrl": "https://ai.google.dev/gemma/terms"
     },
     {
       "id": "qwen3-embedding-0.6b-int8",
@@ -460,7 +745,13 @@
         "gflopPerPassage": 470.0,
         "efficiency": 0.65,
         "bytes": 624951244
-      }
+      },
+      "vendor": "Qwen · Alibaba",
+      "family": "Qwen3 Embedding",
+      "tags": [],
+      "qualityRank": 94,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html"
     },
     {
       "id": "gemma-4-e2b-q4-0",
@@ -508,7 +799,21 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8285714285714286,
         "globalLayerFraction": 0.17142857142857143,
-        "bytes": 2841481184
+        "bytes": 2841481184,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [
+        "moe"
+      ],
+      "qualityRank": 72,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
       }
     },
     {
@@ -555,7 +860,21 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8285714285714286,
         "globalLayerFraction": 0.17142857142857143,
-        "bytes": 4967497152
+        "bytes": 4967497152,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [
+        "moe"
+      ],
+      "qualityRank": 74,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
       }
     },
     {
@@ -604,7 +923,21 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8333333333333334,
         "globalLayerFraction": 0.16666666666666666,
-        "bytes": 4590807392
+        "bytes": 4590807392,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [
+        "moe"
+      ],
+      "qualityRank": 82,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
       }
     },
     {
@@ -651,7 +984,21 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8333333333333334,
         "globalLayerFraction": 0.16666666666666666,
-        "bytes": 8031242688
+        "bytes": 8031242688,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [
+        "moe"
+      ],
+      "qualityRank": 84,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
       }
     },
     {
@@ -689,7 +1036,7 @@
       "cost": {
         "totalParams": 25200000000.0,
         "activeParams": 3800000000.0,
-        "bytesPerToken": 14618145824,
+        "bytesPerToken": 2204323577,
         "nLayers": 30,
         "kvHeads": 8,
         "headDim": 512,
@@ -700,7 +1047,21 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8,
         "globalLayerFraction": 0.2,
-        "bytes": 14618145824
+        "bytes": 14618145824,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [
+        "moe"
+      ],
+      "qualityRank": 94,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
       }
     },
     {
@@ -747,7 +1108,19 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8333333333333334,
         "globalLayerFraction": 0.16666666666666666,
-        "bytes": 17992313088
+        "bytes": 17992313088,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [],
+      "qualityRank": 100,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
       }
     },
     {
@@ -794,7 +1167,607 @@
         "efficiency": 0.55,
         "localLayerFraction": 0.8333333333333334,
         "globalLayerFraction": 0.16666666666666666,
-        "bytes": 7219673216
+        "bytes": 7219673216,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "vendor": "Google",
+      "family": "Gemma 4",
+      "tags": [],
+      "qualityRank": 96,
+      "licenseCustom": false,
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "llm": {
+        "reasoning": "default"
+      }
+    },
+    {
+      "id": "qwen3.5-2b-q4-k-m",
+      "kind": "llm",
+      "name": "Qwen3.5 2B Q4_K_M",
+      "descriptionRu": "Компактная мультиязычная модель для черновых сводок и простых вопросов.",
+      "descriptionEn": "Compact multilingual model for draft summaries and straightforward questions.",
+      "languages": [
+        "multilingual"
+      ],
+      "vendor": "Qwen · Alibaba",
+      "family": "Qwen3.5",
+      "tags": [
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://huggingface.co/Qwen/Qwen3.5-2B/blob/main/LICENSE",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF",
+      "qualityRank": 76,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "Qwen3.5-2B-Q4_K_M.gguf",
+          "size": 1280835840,
+          "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+          "urls": [
+            "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "unsloth/Qwen3.5-2B-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 2051756780,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 1881825088.0,
+        "activeParams": 1881825088.0,
+        "bytesPerToken": 1280835840,
+        "nLayers": 24,
+        "kvHeads": 2,
+        "headDim": 256,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "hybrid",
+          "fullAttentionLayers": 6,
+          "linearStateBytes": 20643840
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.7,
+          "topP": 0.8,
+          "topK": 20,
+          "minP": 0.0,
+          "presencePenalty": 1.5
+        }
+      }
+    },
+    {
+      "id": "qwen3.5-4b-q4-k-m",
+      "kind": "llm",
+      "name": "Qwen3.5 4B Q4_K_M",
+      "descriptionRu": "Сбалансированная мультиязычная модель для подробных сводок и вопросов по встречам.",
+      "descriptionEn": "Balanced multilingual model for detailed meeting summaries and questions.",
+      "languages": [
+        "multilingual"
+      ],
+      "vendor": "Qwen · Alibaba",
+      "family": "Qwen3.5",
+      "tags": [
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/LICENSE",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF",
+      "qualityRank": 88,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "Qwen3.5-4B-Q4_K_M.gguf",
+          "size": 2740937888,
+          "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+          "urls": [
+            "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "unsloth/Qwen3.5-4B-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 3900369343,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 4205751296.0,
+        "activeParams": 4205751296.0,
+        "bytesPerToken": 2740937888,
+        "nLayers": 32,
+        "kvHeads": 4,
+        "headDim": 256,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "hybrid",
+          "fullAttentionLayers": 8,
+          "linearStateBytes": 53477376
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.7,
+          "topP": 0.8,
+          "topK": 20,
+          "minP": 0.0,
+          "presencePenalty": 1.5
+        }
+      }
+    },
+    {
+      "id": "qwen3.5-9b-q4-k-m",
+      "kind": "llm",
+      "name": "Qwen3.5 9B Q4_K_M",
+      "descriptionRu": "Более ёмкая мультиязычная модель для длинных сводок и сложных вопросов.",
+      "descriptionEn": "Larger multilingual model for detailed summaries and harder questions.",
+      "languages": [
+        "multilingual"
+      ],
+      "vendor": "Qwen · Alibaba",
+      "family": "Qwen3.5",
+      "tags": [
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://huggingface.co/Qwen/Qwen3.5-9B/blob/main/LICENSE",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF",
+      "qualityRank": 95,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "Qwen3.5-9B-Q4_K_M.gguf",
+          "size": 5680522464,
+          "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+          "urls": [
+            "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "unsloth/Qwen3.5-9B-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 6984745702,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 8953803264.0,
+        "activeParams": 8953803264.0,
+        "bytesPerToken": 5680522464,
+        "nLayers": 32,
+        "kvHeads": 4,
+        "headDim": 256,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "hybrid",
+          "fullAttentionLayers": 8,
+          "linearStateBytes": 53477376
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.7,
+          "topP": 0.8,
+          "topK": 20,
+          "minP": 0.0,
+          "presencePenalty": 1.5
+        }
+      }
+    },
+    {
+      "id": "gigachat3.1-lightning-q4-k-m",
+      "kind": "llm",
+      "name": "GigaChat 3.1 Lightning Q4_K_M",
+      "descriptionRu": "Русско-английская MoE-модель для быстрых кратких сводок.",
+      "descriptionEn": "Russian-English MoE model for fast, concise summaries.",
+      "languages": [
+        "ru",
+        "en"
+      ],
+      "vendor": "Сбер",
+      "family": "GigaChat",
+      "tags": [
+        "moe",
+        "ru-tuned"
+      ],
+      "license": "MIT",
+      "licenseUrl": "https://spdx.org/licenses/MIT.html",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF",
+      "qualityRank": 94,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "GigaChat3.1-10B-A1.8B-q4_K_M.gguf",
+          "size": 6474702976,
+          "sha256": "68a8732fb5cee04f83ebffd7924e15c534d4442c5a43d2ba9e2041fe310b8deb",
+          "urls": [
+            "https://huggingface.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF/resolve/main/GigaChat3.1-10B-A1.8B-q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/ai-sage/GigaChat3.1-10B-A1.8B-GGUF/resolve/main/GigaChat3.1-10B-A1.8B-q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "ai-sage/GigaChat3.1-10B-A1.8B-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 7771844916,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 10672535616.0,
+        "activeParams": 1800000000.0,
+        "bytesPerToken": 1092005291,
+        "nLayers": 26,
+        "kvHeads": 0,
+        "headDim": 0,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "mla",
+          "kvLoraRank": 512,
+          "qkRopeHeadDim": 64
+        }
+      },
+      "llm": {
+        "reasoning": "default",
+        "sampling": {
+          "temperature": 0.0
+        }
+      }
+    },
+    {
+      "id": "t-lite-it-2.1-q4-k-m",
+      "kind": "llm",
+      "name": "T-lite-it-2.1 Q4_K_M",
+      "descriptionRu": "По данным Т-Банка, показывает сильные результаты на русскоязычных тестах.",
+      "descriptionEn": "T-Bank reports strong results on Russian-language benchmarks.",
+      "languages": [
+        "ru"
+      ],
+      "vendor": "Т-Банк",
+      "family": "T-lite",
+      "tags": [
+        "ru-tuned",
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/t-tech/T-lite-it-2.1-GGUF",
+      "qualityRank": 100,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "T-lite-it-2.1-Q4_K_M.gguf",
+          "size": 5027750240,
+          "sha256": "68c75f5940c36baca18113058ad3d55f6d1d3e1123a8053bb4bba8481805c960",
+          "urls": [
+            "https://huggingface.co/t-tech/T-lite-it-2.1-GGUF/resolve/main/T-lite-it-2.1-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/t-tech/T-lite-it-2.1-GGUF/resolve/main/T-lite-it-2.1-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "t-tech/T-lite-it-2.1-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 8191954519,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 8188711936.0,
+        "activeParams": 8188711936.0,
+        "bytesPerToken": 5027750240,
+        "nLayers": 36,
+        "kvHeads": 8,
+        "headDim": 128,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.7,
+          "topP": 0.8,
+          "topK": 20,
+          "presencePenalty": 1.0
+        }
+      }
+    },
+    {
+      "id": "yandexgpt-5-lite-8b-q4-k-m",
+      "kind": "llm",
+      "name": "YandexGPT 5 Lite 8B Q4_K_M",
+      "descriptionRu": "Русско-английская instruct-модель для сводок и вопросов по встречам.",
+      "descriptionEn": "Russian-English instruct model for summaries and meeting questions.",
+      "languages": [
+        "ru",
+        "en"
+      ],
+      "vendor": "Яндекс",
+      "family": "YandexGPT",
+      "tags": [
+        "ru-tuned"
+      ],
+      "license": "YandexGPT-5-Lite",
+      "licenseUrl": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct/blob/main/LICENSE",
+      "licenseCustom": true,
+      "homepage": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
+      "qualityRank": 97,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "YandexGPT-5-Lite-8B-instruct-Q4_K_M.gguf",
+          "size": 4920741184,
+          "sha256": "d9ff5b826f20fbcc2f898f9f2349ac21241579f8fbb79cd32148a333623ba228",
+          "urls": [
+            "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF/resolve/main/YandexGPT-5-Lite-8B-instruct-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/yandex/YandexGPT-5-Lite-8B-instruct-GGUF/resolve/main/YandexGPT-5-Lite-8B-instruct-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 7787562793,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 8036552704.0,
+        "activeParams": 8036552704.0,
+        "bytesPerToken": 4920741184,
+        "nLayers": 32,
+        "kvHeads": 8,
+        "headDim": 128,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "llm": {
+        "reasoning": "default",
+        "sampling": {
+          "temperature": 0.3,
+          "topP": 0.9
+        }
+      }
+    },
+    {
+      "id": "qvikhr-3-4b-q4-k-m",
+      "kind": "llm",
+      "name": "QVikhr-3 4B Q4_K_M",
+      "descriptionRu": "Русско-английская модель с сильным результатом на Ru Arena; отключаем рассуждения для сводок.",
+      "descriptionEn": "Russian-English model with a strong Ru Arena result; reasoning is disabled for summaries.",
+      "languages": [
+        "ru",
+        "en"
+      ],
+      "vendor": "Vikhr",
+      "family": "QVikhr",
+      "tags": [
+        "ru-tuned",
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/Vikhrmodels/QVikhr-3-4B-Instruction-GGUF",
+      "qualityRank": 90,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "QVikhr-3-4B-Instruction-Q4_K_M.gguf",
+          "size": 2497281088,
+          "sha256": "9d131e93d5c4841346a6965610daebb698218a1cec83c36f6b1d4829c25d6425",
+          "urls": [
+            "https://huggingface.co/Vikhrmodels/QVikhr-3-4B-Instruction-GGUF/resolve/main/QVikhr-3-4B-Instruction-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/Vikhrmodels/QVikhr-3-4B-Instruction-GGUF/resolve/main/QVikhr-3-4B-Instruction-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "Vikhrmodels/QVikhr-3-4B-Instruction-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 5595026251,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 4022468096.0,
+        "activeParams": 4022468096.0,
+        "bytesPerToken": 2497281088,
+        "nLayers": 36,
+        "kvHeads": 8,
+        "headDim": 128,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.3,
+          "topP": 0.95,
+          "topK": 50
+        }
+      }
+    },
+    {
+      "id": "qvikhr-3-1.7b-q4-k-m",
+      "kind": "llm",
+      "name": "QVikhr-3 1.7B Q4_K_M",
+      "descriptionRu": "Компактная русско-английская instruct-модель без режима рассуждений.",
+      "descriptionEn": "Compact Russian-English instruct model with reasoning disabled.",
+      "languages": [
+        "ru",
+        "en"
+      ],
+      "vendor": "Vikhr",
+      "family": "QVikhr",
+      "tags": [
+        "ru-tuned",
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/Vikhrmodels/QVikhr-3-1.7B-Instruction-noreasoning-GGUF",
+      "qualityRank": 75,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "QVikhr-3-1.7B-Instruction-noreasoning-Q4_K_M.gguf",
+          "size": 1107408608,
+          "sha256": "425495de8462e63c98aae4e18561fa1fc7e153fa218e3067a5b39753258b48f2",
+          "urls": [
+            "https://huggingface.co/Vikhrmodels/QVikhr-3-1.7B-Instruction-noreasoning-GGUF/resolve/main/QVikhr-3-1.7B-Instruction-noreasoning-Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/Vikhrmodels/QVikhr-3-1.7B-Instruction-noreasoning-GGUF/resolve/main/QVikhr-3-1.7B-Instruction-noreasoning-Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "Vikhrmodels/QVikhr-3-1.7B-Instruction-noreasoning-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 3636070604,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 1720574976.0,
+        "activeParams": 1720574976.0,
+        "bytesPerToken": 1107408608,
+        "nLayers": 28,
+        "kvHeads": 8,
+        "headDim": 128,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.3,
+          "topP": 0.95,
+          "topK": 50
+        }
+      }
+    },
+    {
+      "id": "ruadapt-qwen3-4b-q4-k-m",
+      "kind": "llm",
+      "name": "RuadaptQwen3 4B Q4_K_M",
+      "descriptionRu": "Qwen3-4B с расширенным русским токенизатором для русскоязычных сводок.",
+      "descriptionEn": "Qwen3-4B with an expanded Russian tokenizer for Russian-language summaries.",
+      "languages": [
+        "ru",
+        "en"
+      ],
+      "vendor": "RefalMachine",
+      "family": "Ruadapt",
+      "tags": [
+        "ru-tuned",
+        "reasoning-off"
+      ],
+      "license": "Apache-2.0",
+      "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+      "licenseCustom": false,
+      "homepage": "https://huggingface.co/RefalMachine/RuadaptQwen3-4B-Instruct-GGUF",
+      "qualityRank": 84,
+      "defaultTiers": [],
+      "files": [
+        {
+          "path": "Q4_K_M.gguf",
+          "size": 2486507648,
+          "sha256": "1abbf99e0e6d7a7cdb04888807b39da6b5993f02a6bd363aa551ed95e7e088bb",
+          "urls": [
+            "https://huggingface.co/RefalMachine/RuadaptQwen3-4B-Instruct-GGUF/resolve/main/Q4_K_M.gguf?download=true",
+            "https://hf-mirror.com/RefalMachine/RuadaptQwen3-4B-Instruct-GGUF/resolve/main/Q4_K_M.gguf?download=true"
+          ],
+          "hfRepo": "RefalMachine/RuadaptQwen3-4B-Instruct-GGUF",
+          "optional": false
+        }
+      ],
+      "requires": {
+        "minRamBytes": 5584252811,
+        "os": [],
+        "arch": []
+      },
+      "cost": {
+        "totalParams": 4007937536.0,
+        "activeParams": 4007937536.0,
+        "bytesPerToken": 2486507648,
+        "nLayers": 36,
+        "kvHeads": 8,
+        "headDim": 128,
+        "context": 32768,
+        "bufferFraction": 0.12,
+        "efficiency": 0.55,
+        "localLayerFraction": 0.0,
+        "globalLayerFraction": 1.0,
+        "attention": {
+          "type": "standard"
+        }
+      },
+      "llm": {
+        "reasoning": "off",
+        "sampling": {
+          "temperature": 0.3,
+          "topP": 0.9
+        }
       }
     }
   ],

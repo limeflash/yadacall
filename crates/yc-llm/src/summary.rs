@@ -260,6 +260,10 @@ fn summary_request(system: String, prompt: String, max_tokens: usize) -> ChatReq
         messages: vec![ChatMessage::user(prompt)],
         max_tokens: u32::try_from(max_tokens).unwrap_or(u32::MAX),
         temperature: None,
+        top_p: None,
+        top_k: None,
+        min_p: None,
+        presence_penalty: None,
         json_schema: Some(summary_schema()),
         stop: Vec::new(),
     }

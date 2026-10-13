@@ -23,6 +23,10 @@ pub struct Measurement {
     pub model_id: String,
     /// Model category being calibrated.
     pub kind: ModelKind,
+    /// Measurement path. Missing values in old calibration files mean the primary throughput
+    /// (decode for LLMs, normal throughput for other model kinds).
+    #[serde(default)]
+    pub metric: CalibrationMetric,
     /// Runtime backend name, such as `metal`, `cuda`, or `cpu`.
     pub backend: String,
     /// Estimate before calibration, in the same unit as `measured`.
@@ -31,6 +35,17 @@ pub struct Measurement {
     pub measured: f64,
     /// Unix time when the benchmark completed.
     pub measured_at_unix: u64,
+}
+
+/// Throughput path represented by one calibration sample.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CalibrationMetric {
+    /// Main model throughput: decode tokens/s for LLMs and the existing metric for other kinds.
+    #[default]
+    Primary,
+    /// LLM prompt-processing tokens/s.
+    Prefill,
 }
 
 impl Calibration {
@@ -55,10 +70,19 @@ impl Calibration {
 
     /// Return a bounded median measured/predicted factor for a model category/backend.
     pub fn factor(&self, kind: ModelKind, backend: &str) -> Option<f64> {
+        self.factor_for(kind, backend, CalibrationMetric::Primary)
+    }
+
+    /// Return the bounded median prefill calibration factor for an LLM backend.
+    pub fn prefill_factor(&self, kind: ModelKind, backend: &str) -> Option<f64> {
+        self.factor_for(kind, backend, CalibrationMetric::Prefill)
+    }
+
+    fn factor_for(&self, kind: ModelKind, backend: &str, metric: CalibrationMetric) -> Option<f64> {
         let mut factors = self
             .measurements
             .iter()
-            .filter(|item| item.kind == kind && item.backend == backend)
+            .filter(|item| item.kind == kind && item.backend == backend && item.metric == metric)
             .filter(|item| item.predicted > 0.0 && item.measured > 0.0)
             .map(|item| item.measured / item.predicted)
             .filter(|factor| factor.is_finite())
@@ -88,5 +112,51 @@ impl Calibration {
         std::fs::write(&temp, data)?;
         std::fs::rename(temp, path)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_calibration_measurements_default_to_primary_throughput() {
+        let data = r#"{
+            "measurements": [{
+                "modelId": "gemma",
+                "kind": "llm",
+                "backend": "metal",
+                "predicted": 40.0,
+                "measured": 50.0,
+                "measuredAtUnix": 1
+            }]
+        }"#;
+        let calibration: Calibration = serde_json::from_str(data).unwrap();
+        assert_eq!(calibration.factor(ModelKind::Llm, "metal"), Some(1.25));
+        assert_eq!(calibration.prefill_factor(ModelKind::Llm, "metal"), None);
+    }
+
+    #[test]
+    fn prefill_and_primary_factors_are_independent() {
+        let mut calibration = Calibration::default();
+        for (metric, predicted, measured) in [
+            (CalibrationMetric::Primary, 10.0, 20.0),
+            (CalibrationMetric::Prefill, 100.0, 150.0),
+        ] {
+            calibration.record(Measurement {
+                model_id: "gemma".to_owned(),
+                kind: ModelKind::Llm,
+                metric,
+                backend: "metal".to_owned(),
+                predicted,
+                measured,
+                measured_at_unix: 1,
+            });
+        }
+        assert_eq!(calibration.factor(ModelKind::Llm, "metal"), Some(2.0));
+        assert_eq!(
+            calibration.prefill_factor(ModelKind::Llm, "metal"),
+            Some(1.5)
+        );
     }
 }

@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     benchmark::Benchmarks,
     calibration::Calibration,
-    catalog::{ModelKind, ModelSpec},
-    hw::HardwareProfile,
+    catalog::{AttentionCost, ModelCost, ModelKind, ModelSpec},
+    hw::{GpuInfo, HardwareProfile},
 };
 
 /// Coarse fit tier shown before a model download.
@@ -154,54 +154,35 @@ pub fn predict(
             let bandwidth = benchmarks
                 .memory_bandwidth_gbps
                 .max(hardware.memory_bandwidth_gbps.unwrap_or(0.0));
-            let bytes_per_token = model.cost.bytes_per_token.max(1) as f64;
+            let weights = model.files.iter().map(|file| file.size).sum::<u64>();
+            let (bytes_per_token, using_weight_fallback) = decode_bytes_per_token(model, weights);
             let raw = bandwidth * 1_000_000_000.0 * model.cost.efficiency / bytes_per_token;
             let factor = calibration.factor(ModelKind::Llm, &backend).unwrap_or(1.0);
             let mut speed = raw * factor;
-            let params_b = model
-                .cost
-                .active_params
-                .max(model.cost.total_params)
-                .max(0.1);
-            let prefill_speed = (benchmarks.gemm_gflops / (2.0 * params_b)).max(0.1);
-            let weights = model.files.iter().map(|file| file.size).sum::<u64>();
-            let context = u64::from(model.cost.context.max(1));
-            let sliding = u64::from(model.cost.sliding_window);
-            let local_fraction = model.cost.local_layer_fraction.clamp(0.0, 1.0);
-            let global_fraction = if model.cost.global_layer_fraction > 0.0 {
-                model.cost.global_layer_fraction.clamp(0.0, 1.0)
+            let (params_b, parameter_basis) = if model.cost.active_params > 0.0 {
+                (
+                    model.cost.active_params / 1_000_000_000.0,
+                    "active parameters",
+                )
             } else {
-                1.0 - local_fraction
+                (
+                    model.cost.total_params / 1_000_000_000.0,
+                    "total parameters because activeParams is unset",
+                )
             };
-            let local_layers = model.cost.n_layers as f64 * local_fraction;
-            let global_layers = model.cost.n_layers as f64 * global_fraction;
-            let local_context = if sliding > 0 {
-                context.min(sliding)
-            } else {
-                context
-            };
-            let local_head_dim = if model.cost.local_head_dim > 0 {
-                model.cost.local_head_dim
-            } else {
-                model.cost.head_dim
-            };
-            let kv_bytes = (2.0
-                * f64::from(model.cost.kv_heads)
-                * 2.0
-                * (local_layers * f64::from(local_head_dim) * local_context as f64
-                    + global_layers * f64::from(model.cost.head_dim) * context as f64))
-                .ceil() as u64;
-            let effective_context = if model.cost.n_layers > 0 {
-                ((local_layers * local_context as f64 + global_layers * context as f64)
-                    / f64::from(model.cost.n_layers))
-                .ceil() as u64
-            } else {
-                context
-            };
+            let params_b = params_b.max(0.1);
+            let (prefill_gflops, prefill_method) =
+                prefill_throughput_gflops(hardware, benchmarks.gemm_gflops, &backend);
+            let raw_prefill = (prefill_gflops / (2.0 * params_b)).max(0.1);
+            let prefill_factor = calibration
+                .prefill_factor(ModelKind::Llm, &backend)
+                .unwrap_or(1.0);
+            let prefill_speed = raw_prefill * prefill_factor;
+            let cache = estimate_kv_cache(&model.cost);
             let compute_buffer =
                 ((weights as f64 * model.cost.buffer_fraction.max(0.0)) as u64).max(512 * MIB);
             mem_needed = weights
-                .saturating_add(kv_bytes)
+                .saturating_add(cache.total_bytes)
                 .saturating_add(compute_buffer);
             if mem_needed > mem_available && backend != "cpu" && hardware.apple.is_none() {
                 let cpu_available = (hardware.available_ram_bytes as f64 * 0.75) as u64;
@@ -232,20 +213,34 @@ pub fn predict(
                 "decode estimate = {:.0} GB/s memory bandwidth × {:.0}% efficiency ÷ {:.2} GB read per generated token",
                 bandwidth, model.cost.efficiency * 100.0, bytes_per_token / 1_000_000_000.0
             ));
+            if using_weight_fallback {
+                reasons.push(format!(
+                    "catalog has no bytesPerToken estimate; decode falls back to {:.2} GB total model files",
+                    bytes_per_token / 1_000_000_000.0
+                ));
+            }
             reasons.push(format!(
-                "memory = {:.2} GB weights + {:.2} GB KV cache at {} tokens + {:.2} GB execution buffer",
+                "memory = {:.2} GB total weights + {:.2} GB {} + {:.2} GB execution buffer",
                 weights as f64 / GIB,
-                kv_bytes as f64 / GIB,
-                effective_context,
+                cache.total_bytes as f64 / GIB,
+                cache.description,
                 compute_buffer as f64 / GIB
             ));
             reasons.push(format!(
-                "prefill estimate uses {:.1} GFLOP/s GEMM and {:.1}B active parameters",
-                benchmarks.gemm_gflops, params_b
+                "prefill estimate uses {prefill_method}, 2 FLOP per parameter per token, and {params_b:.1}B {parameter_basis}"
+            ));
+            reasons.push(format!(
+                "one-hour summary estimate uses 9,000 prompt tokens ÷ {prefill_speed:.1} prefill tok/s + 800 output tokens ÷ {:.1} decode tok/s",
+                speed.max(0.1)
             ));
             if factor != 1.0 {
                 reasons.push(format!(
                     "measured LLM calibration scales decode estimate by {factor:.2}×"
+                ));
+            }
+            if prefill_factor != 1.0 {
+                reasons.push(format!(
+                    "measured LLM prefill calibration scales estimate by {prefill_factor:.2}×"
                 ));
             }
         }
@@ -307,6 +302,213 @@ pub fn predict(
 
 const MIB: u64 = 1024 * 1024;
 const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+const Q8_CACHE_BYTES_PER_ELEMENT: f64 = 1.06;
+const APPLE_GPU_EFFICIENCY: f64 = 0.55;
+
+fn decode_bytes_per_token(model: &ModelSpec, total_weights: u64) -> (f64, bool) {
+    if model.cost.bytes_per_token > 0 {
+        (model.cost.bytes_per_token as f64, false)
+    } else if total_weights > 0 {
+        (total_weights as f64, true)
+    } else {
+        (1.0, true)
+    }
+}
+
+struct KvCacheEstimate {
+    total_bytes: u64,
+    description: String,
+}
+
+fn estimate_kv_cache(cost: &ModelCost) -> KvCacheEstimate {
+    let context = u64::from(cost.context.max(1));
+    let (context_cache_bytes, fixed_state_bytes, description) = match &cost.attention {
+        AttentionCost::Standard => {
+            let sliding = u64::from(cost.sliding_window);
+            let local_fraction = cost.local_layer_fraction.clamp(0.0, 1.0);
+            let global_fraction = if cost.global_layer_fraction > 0.0 {
+                cost.global_layer_fraction.clamp(0.0, 1.0)
+            } else {
+                1.0 - local_fraction
+            };
+            let local_layers = f64::from(cost.n_layers) * local_fraction;
+            let global_layers = f64::from(cost.n_layers) * global_fraction;
+            let local_context = if sliding > 0 {
+                context.min(sliding)
+            } else {
+                context
+            };
+            let local_head_dim = if cost.local_head_dim > 0 {
+                cost.local_head_dim
+            } else {
+                cost.head_dim
+            };
+            let element_count = f64::from(cost.kv_heads)
+                * (local_layers * f64::from(local_head_dim) * local_context as f64
+                    + global_layers * f64::from(cost.head_dim) * context as f64);
+            let bytes = (2.0 * Q8_CACHE_BYTES_PER_ELEMENT * element_count).ceil() as u64;
+            let effective_context = if cost.n_layers > 0 {
+                ((local_layers * local_context as f64 + global_layers * context as f64)
+                    / f64::from(cost.n_layers))
+                .ceil() as u64
+            } else {
+                context
+            };
+            (
+                bytes,
+                0,
+                format!(
+                    "q8_0 K/V cache at {effective_context} effective context tokens (1.06 bytes per element)"
+                ),
+            )
+        }
+        AttentionCost::Mla {
+            kv_lora_rank,
+            qk_rope_head_dim,
+        } => {
+            let elements_per_token = u64::from(*kv_lora_rank + *qk_rope_head_dim);
+            let bytes = (f64::from(cost.n_layers)
+                * elements_per_token as f64
+                * context as f64
+                * Q8_CACHE_BYTES_PER_ELEMENT)
+                .ceil() as u64;
+            (
+                bytes,
+                0,
+                format!(
+                    "q8_0 MLA cache at {context} tokens across {} layers ({} latent + {} RoPE elements per token)",
+                    cost.n_layers, kv_lora_rank, qk_rope_head_dim
+                ),
+            )
+        }
+        AttentionCost::Hybrid {
+            full_attention_layers,
+            linear_state_bytes,
+        } => {
+            let full_layers = if cost.n_layers > 0 {
+                full_attention_layers.min(&cost.n_layers)
+            } else {
+                full_attention_layers
+            };
+            let elements = f64::from(*full_layers)
+                * f64::from(cost.kv_heads)
+                * f64::from(cost.head_dim)
+                * context as f64;
+            let bytes = (2.0 * Q8_CACHE_BYTES_PER_ELEMENT * elements).ceil() as u64;
+            (
+                bytes,
+                *linear_state_bytes,
+                format!(
+                    "q8_0 full-attention cache at {context} tokens across {full_layers} layers plus {:.2} GB fixed linear state",
+                    *linear_state_bytes as f64 / GIB
+                ),
+            )
+        }
+    };
+    KvCacheEstimate {
+        total_bytes: context_cache_bytes.saturating_add(fixed_state_bytes),
+        description,
+    }
+}
+
+/// Return effective f16 throughput, using broad sustained-throughput tiers rather than marketing
+/// peak rates for CUDA/Vulkan devices. Metal uses a peak estimate with an explicit efficiency.
+fn prefill_throughput_gflops(
+    hardware: &HardwareProfile,
+    cpu_gemm_gflops: f64,
+    backend: &str,
+) -> (f64, String) {
+    if backend == "metal"
+        && let Some(gpu_cores) = hardware.apple.as_ref().and_then(|apple| apple.gpu_cores)
+    {
+        let peak = gpu_cores as f64 * 128.0 * 2.0 * 1.3;
+        let effective = peak * APPLE_GPU_EFFICIENCY;
+        return (
+            effective,
+            format!(
+                "Metal f16 estimate uses {gpu_cores} GPU cores × 128 ALUs × 2 FLOP × 1.3 GHz × {:.0}% efficiency = {effective:.0} GFLOP/s",
+                APPLE_GPU_EFFICIENCY * 100.0
+            ),
+        );
+    }
+    if matches!(backend, "cuda" | "vulkan")
+        && let Some(gpu) = hardware.gpus.iter().find(|gpu| gpu.backend_hint == backend)
+        && let Some(effective) = gpu_prefill_tier(gpu)
+    {
+        return (
+            effective,
+            format!(
+                "conservative {backend} f16 tier for {} {} = {effective:.0} GFLOP/s",
+                gpu.vendor, gpu.name
+            ),
+        );
+    }
+    let effective = cpu_gemm_gflops.max(0.1);
+    (
+        effective,
+        format!("CPU f32 GEMM probe = {effective:.1} GFLOP/s"),
+    )
+}
+
+/// Conservative effective f16 GFLOP/s tiers keyed by reported vendor, VRAM, and GPU name.
+fn gpu_prefill_tier(gpu: &GpuInfo) -> Option<f64> {
+    let name = gpu.name.to_ascii_lowercase();
+    let vram_gb = gpu.vram_bytes.unwrap_or_default() as f64 / 1_000_000_000.0;
+    match gpu.vendor.as_str() {
+        "nvidia" => Some(if name.contains("rtx 50") {
+            18_000.0
+        } else if name.contains("rtx 40") {
+            12_000.0
+        } else if name.contains("rtx 30") {
+            7_000.0
+        } else if name.contains("rtx") {
+            5_000.0
+        } else if name.contains("gtx") {
+            1_800.0
+        } else if vram_gb >= 24.0 {
+            14_000.0
+        } else if vram_gb >= 12.0 {
+            9_000.0
+        } else if vram_gb >= 8.0 {
+            6_000.0
+        } else if vram_gb >= 4.0 {
+            2_500.0
+        } else {
+            1_200.0
+        }),
+        "amd" => Some(if name.contains("rx 9") || name.contains("rx 7") {
+            8_000.0
+        } else if name.contains("rx 6") {
+            4_500.0
+        } else if name.contains("rx") {
+            2_000.0
+        } else if vram_gb >= 16.0 {
+            8_000.0
+        } else if vram_gb >= 8.0 {
+            5_000.0
+        } else if vram_gb >= 4.0 {
+            2_200.0
+        } else {
+            900.0
+        }),
+        "intel" => Some(if name.contains("arc") {
+            3_000.0
+        } else if name.contains("iris") {
+            800.0
+        } else if name.contains("uhd") {
+            350.0
+        } else if vram_gb >= 16.0 {
+            4_000.0
+        } else if vram_gb >= 8.0 {
+            2_500.0
+        } else if vram_gb >= 4.0 {
+            1_200.0
+        } else {
+            550.0
+        }),
+        _ => None,
+    }
+}
 
 fn select_backend(hardware: &HardwareProfile, kind: ModelKind) -> String {
     if hardware.apple.is_some() {
@@ -424,5 +626,259 @@ fn headline(inputs: HeadlineInputs) -> String {
                 "will run".to_owned()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        benchmark::Benchmarks,
+        catalog::{self, AttentionCost},
+        hw::AppleChipInfo,
+    };
+
+    const RAM_16_GIB: u64 = 16 * 1024 * 1024 * 1024;
+
+    fn model(id: &str) -> ModelSpec {
+        catalog::embedded()
+            .expect("embedded catalog")
+            .models
+            .into_iter()
+            .find(|model| model.id == id)
+            .expect("catalog model")
+    }
+
+    fn m1_pro_profile() -> HardwareProfile {
+        HardwareProfile {
+            cpu_brand: "Apple M1 Pro".to_owned(),
+            physical_cores: 8,
+            logical_cores: 16,
+            total_ram_bytes: RAM_16_GIB,
+            available_ram_bytes: RAM_16_GIB,
+            apple: Some(AppleChipInfo {
+                chip_name: "Apple M1 Pro".to_owned(),
+                gpu_cores: Some(16),
+                memory_bandwidth_gbps: Some(200.0),
+                recommended_max_working_set_bytes: Some(RAM_16_GIB),
+                neural_engine_present: true,
+            }),
+            memory_bandwidth_gbps: Some(200.0),
+            ..HardwareProfile::default()
+        }
+    }
+
+    fn cpu_windows_profile() -> HardwareProfile {
+        HardwareProfile {
+            cpu_brand: "8-core Windows CPU".to_owned(),
+            physical_cores: 8,
+            logical_cores: 8,
+            total_ram_bytes: RAM_16_GIB,
+            available_ram_bytes: RAM_16_GIB,
+            os: "windows".to_owned(),
+            arch: "x86_64".to_owned(),
+            ..HardwareProfile::default()
+        }
+    }
+
+    #[test]
+    fn gemma_e2b_prefill_uses_m1_pro_gpu_and_decode_stays_in_band() {
+        let model = model("gemma-4-e2b-q4-0");
+        let benchmarks = Benchmarks {
+            memory_bandwidth_gbps: 200.0,
+            gemm_gflops: 278.0,
+            ..Benchmarks::default()
+        };
+        let prediction = predict(
+            &model,
+            &m1_pro_profile(),
+            &benchmarks,
+            &Calibration::default(),
+        );
+
+        let prefill = prediction.est_prefill_tok_s.expect("prefill estimate");
+        assert!((315.0..=1_260.0).contains(&prefill), "prefill={prefill}");
+        assert!(
+            (35.0..=48.0).contains(&prediction.est_tok_s.expect("decode estimate")),
+            "decode={:?}",
+            prediction.est_tok_s
+        );
+        assert_eq!(prediction.backend, "metal");
+    }
+
+    #[test]
+    fn gemma_e2b_cpu_profile_has_a_sane_slower_prefill_estimate() {
+        let model = model("gemma-4-e2b-q4-0");
+        let prediction = predict(
+            &model,
+            &cpu_windows_profile(),
+            &Benchmarks {
+                memory_bandwidth_gbps: 27.0,
+                gemm_gflops: 81.0,
+                ..Benchmarks::default()
+            },
+            &Calibration::default(),
+        );
+        let prefill = prediction.est_prefill_tok_s.expect("prefill estimate");
+        assert!((10.0..30.0).contains(&prefill), "prefill={prefill}");
+        assert!(prefill < 630.0);
+        assert_eq!(prediction.backend, "cpu");
+    }
+
+    #[test]
+    fn gemma_moe_decode_uses_active_weight_bytes_but_memory_uses_all_weights() {
+        let moe = model("gemma-4-26b-a4b-q4-0");
+        assert_eq!(moe.cost.bytes_per_token, 2_204_323_577);
+        let mut dense = moe.clone();
+        dense.cost.active_params = dense.cost.total_params;
+        dense.cost.bytes_per_token = dense.files.iter().map(|file| file.size).sum();
+        let hardware = m1_pro_profile();
+        let benchmarks = Benchmarks {
+            memory_bandwidth_gbps: 200.0,
+            gemm_gflops: 278.0,
+            ..Benchmarks::default()
+        };
+        let moe_prediction = predict(&moe, &hardware, &benchmarks, &Calibration::default());
+        let dense_prediction = predict(&dense, &hardware, &benchmarks, &Calibration::default());
+        assert!(
+            moe_prediction.est_tok_s > dense_prediction.est_tok_s,
+            "MoE={:?}, dense={:?}",
+            moe_prediction.est_tok_s,
+            dense_prediction.est_tok_s
+        );
+        assert_eq!(moe_prediction.mem_needed, dense_prediction.mem_needed);
+        assert!(moe_prediction.mem_needed > moe.files[0].size);
+    }
+
+    #[test]
+    fn gigachat_lightning_decode_is_faster_than_tlite_on_m1_pro_profile() {
+        let hardware = m1_pro_profile();
+        let benchmarks = Benchmarks {
+            memory_bandwidth_gbps: 200.0,
+            gemm_gflops: 278.0,
+            ..Benchmarks::default()
+        };
+        let gigachat = predict(
+            &model("gigachat3.1-lightning-q4-k-m"),
+            &hardware,
+            &benchmarks,
+            &Calibration::default(),
+        );
+        let tlite = predict(
+            &model("t-lite-it-2.1-q4-k-m"),
+            &hardware,
+            &benchmarks,
+            &Calibration::default(),
+        );
+        assert!(
+            gigachat.est_tok_s > tlite.est_tok_s,
+            "GigaChat={:?}, T-lite={:?}",
+            gigachat.est_tok_s,
+            tlite.est_tok_s
+        );
+    }
+
+    #[test]
+    fn qwen35_four_b_hybrid_cache_is_well_below_dense_four_b_cache() {
+        let hybrid = model("qwen3.5-4b-q4-k-m");
+        let hybrid_bytes = estimate_kv_cache(&hybrid.cost).total_bytes;
+        let mut dense_cost = hybrid.cost.clone();
+        dense_cost.attention = AttentionCost::Standard;
+        dense_cost.global_layer_fraction = 1.0;
+        dense_cost.local_layer_fraction = 0.0;
+        let dense_bytes = estimate_kv_cache(&dense_cost).total_bytes;
+        assert!(
+            hybrid_bytes < dense_bytes / 2,
+            "hybrid={hybrid_bytes}, dense={dense_bytes}"
+        );
+    }
+
+    #[test]
+    fn yandex_and_tlite_memory_is_weights_plus_kv_and_execution_buffer() {
+        let hardware = m1_pro_profile();
+        let benchmarks = Benchmarks {
+            memory_bandwidth_gbps: 200.0,
+            gemm_gflops: 278.0,
+            ..Benchmarks::default()
+        };
+        for id in ["yandexgpt-5-lite-8b-q4-k-m", "t-lite-it-2.1-q4-k-m"] {
+            let model = model(id);
+            let weights = model.files.iter().map(|file| file.size).sum::<u64>();
+            let buffer = ((weights as f64 * model.cost.buffer_fraction) as u64).max(512 * MIB);
+            let expected = weights + estimate_kv_cache(&model.cost).total_bytes + buffer;
+            let prediction = predict(&model, &hardware, &benchmarks, &Calibration::default());
+            assert_eq!(prediction.mem_needed, expected, "{id}");
+            assert_eq!(model.requires.min_ram_bytes, expected, "{id} minimum RAM");
+        }
+    }
+
+    #[test]
+    fn mla_and_hybrid_cache_sizes_match_their_layouts() {
+        let mla = ModelCost {
+            n_layers: 2,
+            context: 100,
+            attention: AttentionCost::Mla {
+                kv_lora_rank: 512,
+                qk_rope_head_dim: 64,
+            },
+            ..ModelCost::default()
+        };
+        assert_eq!(estimate_kv_cache(&mla).total_bytes, 122_112);
+
+        let hybrid = ModelCost {
+            n_layers: 6,
+            kv_heads: 2,
+            head_dim: 16,
+            context: 100,
+            attention: AttentionCost::Hybrid {
+                full_attention_layers: 2,
+                linear_state_bytes: 4_096,
+            },
+            ..ModelCost::default()
+        };
+        assert_eq!(estimate_kv_cache(&hybrid).total_bytes, 17_664);
+    }
+
+    #[test]
+    fn dense_gemma_memory_uses_total_weights_and_q8_kv_size() {
+        let model = model("gemma-4-e2b-q4-0");
+        let weights = model.files.iter().map(|file| file.size).sum::<u64>();
+        let cost = &model.cost;
+        let context = f64::from(cost.context.max(1));
+        let local_fraction = cost.local_layer_fraction.clamp(0.0, 1.0);
+        let global_fraction = if cost.global_layer_fraction > 0.0 {
+            cost.global_layer_fraction.clamp(0.0, 1.0)
+        } else {
+            1.0 - local_fraction
+        };
+        let local_context = if cost.sliding_window > 0 {
+            context.min(f64::from(cost.sliding_window))
+        } else {
+            context
+        };
+        let local_dim = if cost.local_head_dim > 0 {
+            cost.local_head_dim
+        } else {
+            cost.head_dim
+        };
+        let cached_elements = f64::from(cost.kv_heads)
+            * (f64::from(cost.n_layers) * local_fraction * f64::from(local_dim) * local_context
+                + f64::from(cost.n_layers) * global_fraction * f64::from(cost.head_dim) * context);
+        let expected_kv_bytes = (2.0 * 1.06 * cached_elements).ceil() as u64;
+        let compute_buffer = ((weights as f64 * cost.buffer_fraction) as u64).max(512 * MIB);
+        let prediction = predict(
+            &model,
+            &m1_pro_profile(),
+            &Benchmarks {
+                memory_bandwidth_gbps: 200.0,
+                gemm_gflops: 278.0,
+                ..Benchmarks::default()
+            },
+            &Calibration::default(),
+        );
+        assert_eq!(
+            prediction.mem_needed,
+            weights + expected_kv_bytes + compute_buffer
+        );
     }
 }

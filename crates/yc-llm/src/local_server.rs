@@ -28,6 +28,10 @@ pub struct LocalServerConfig {
     pub model_path: PathBuf,
     /// KV-cache context size. Defaults to 32768 tokens.
     pub context_size: u32,
+    /// Pass `--reasoning off` when supported by this llama-server build.
+    pub reasoning_off: bool,
+    /// Defaults applied to local completion requests when a prompt has no override.
+    pub sampling: LocalSampling,
     /// Time to wait for `/health` after process start.
     pub startup_timeout: Duration,
     /// Stop the server after no provider calls for this duration. Defaults to five minutes.
@@ -41,10 +45,27 @@ impl LocalServerConfig {
             runtime_dir: runtime_dir.into(),
             model_path: model_path.into(),
             context_size: 32_768,
+            reasoning_off: false,
+            sampling: LocalSampling::default(),
             startup_timeout: Duration::from_secs(120),
             idle_timeout: Duration::from_secs(5 * 60),
         }
     }
+}
+
+/// Optional sampling defaults applied only by the local llama-server provider.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LocalSampling {
+    /// Sampling temperature.
+    pub temperature: Option<f32>,
+    /// Nucleus sampling probability.
+    pub top_p: Option<f32>,
+    /// Top-k sampling limit.
+    pub top_k: Option<u32>,
+    /// Minimum probability cutoff.
+    pub min_p: Option<f32>,
+    /// Presence penalty.
+    pub presence_penalty: Option<f32>,
 }
 
 /// Startup state suitable for showing runtime progress in the UI.
@@ -131,6 +152,7 @@ impl LocalServer {
         Ok(Box::new(ActivityProvider {
             inner: self.inner.clone(),
             provider,
+            sampling: self.inner.config.sampling,
         }))
     }
 
@@ -155,18 +177,23 @@ impl Drop for LocalServer {
 struct ActivityProvider {
     inner: Arc<Inner>,
     provider: OpenAiCompatibleProvider,
+    sampling: LocalSampling,
 }
 
 #[async_trait::async_trait]
 impl ChatProvider for ActivityProvider {
     async fn complete(&self, request: ChatRequest) -> Result<ChatResponse> {
         touch(&self.inner);
-        self.provider.complete(request).await
+        self.provider
+            .complete(with_local_sampling(request, self.sampling))
+            .await
     }
 
     async fn stream(&self, request: ChatRequest) -> Result<ChatStream> {
         touch(&self.inner);
-        self.provider.stream(request).await
+        self.provider
+            .stream(with_local_sampling(request, self.sampling))
+            .await
     }
 
     fn provider_id(&self) -> &str {
@@ -186,6 +213,15 @@ fn touch(inner: &Inner) {
     if let Ok(mut last_activity) = inner.last_activity.lock() {
         *last_activity = Instant::now();
     }
+}
+
+fn with_local_sampling(mut request: ChatRequest, sampling: LocalSampling) -> ChatRequest {
+    request.temperature = request.temperature.or(sampling.temperature);
+    request.top_p = request.top_p.or(sampling.top_p);
+    request.top_k = request.top_k.or(sampling.top_k);
+    request.min_p = request.min_p.or(sampling.min_p);
+    request.presence_penalty = request.presence_penalty.or(sampling.presence_penalty);
+    request
 }
 
 async fn supervise(inner: Arc<Inner>, help: String) {
@@ -270,6 +306,9 @@ async fn spawn_server(inner: &Inner, help: &str) -> Result<Child> {
     add_optional_flag(&mut command, help, &["--cache-type-v"], Some("q8_0"));
     add_optional_flag(&mut command, help, &["--parallel"], Some("1"));
     add_optional_flag(&mut command, help, &["--no-webui"], None);
+    if inner.config.reasoning_off {
+        add_optional_flag(&mut command, help, &["--reasoning"], Some("off"));
+    }
     let mut child = command.spawn().map_err(|error| Error::Model {
         model: "llama-server".to_owned(),
         message: format!("could not spawn {}: {error}", inner.executable.display()),
@@ -492,18 +531,20 @@ fn attach_job(inner: &Inner, child: &Child) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::add_optional_flag;
+    use super::{LocalSampling, add_optional_flag, with_local_sampling};
+    use crate::{ChatMessage, ChatRequest};
     use tokio::process::Command;
 
     #[test]
     fn includes_supported_optional_flags_and_drops_unknown_ones() {
         let mut command = Command::new("fake");
-        let help = "-ngl N --jinja --flash-attn TYPE --no-webui";
+        let help = "-ngl N --jinja --flash-attn TYPE --no-webui --reasoning [on|off|auto]";
         add_optional_flag(&mut command, help, &["-ngl", "--n-gpu-layers"], Some("999"));
         add_optional_flag(&mut command, help, &["--jinja"], None);
         add_optional_flag(&mut command, help, &["-fa", "--flash-attn"], Some("auto"));
         add_optional_flag(&mut command, help, &["--cache-type-k"], Some("q8_0"));
         add_optional_flag(&mut command, help, &["--no-webui"], None);
+        add_optional_flag(&mut command, help, &["--reasoning"], Some("off"));
         assert_eq!(
             command
                 .as_std()
@@ -516,8 +557,48 @@ mod tests {
                 "--jinja",
                 "--flash-attn",
                 "auto",
-                "--no-webui"
+                "--no-webui",
+                "--reasoning",
+                "off"
             ]
         );
+    }
+
+    #[test]
+    fn local_sampling_fills_only_unspecified_request_values() {
+        let request = ChatRequest {
+            system: String::new(),
+            messages: vec![ChatMessage::user("summary")],
+            max_tokens: 100,
+            temperature: Some(0.2),
+            top_p: None,
+            top_k: None,
+            min_p: None,
+            presence_penalty: None,
+            json_schema: None,
+            stop: Vec::new(),
+        };
+        let applied = with_local_sampling(
+            request,
+            LocalSampling {
+                temperature: Some(0.7),
+                top_p: Some(0.8),
+                top_k: Some(20),
+                min_p: Some(0.0),
+                presence_penalty: Some(1.5),
+            },
+        );
+        assert_eq!(applied.temperature, Some(0.2));
+        assert_eq!(applied.top_p, Some(0.8));
+        assert_eq!(applied.top_k, Some(20));
+        assert_eq!(applied.min_p, Some(0.0));
+        assert_eq!(applied.presence_penalty, Some(1.5));
+    }
+
+    #[test]
+    fn reasoning_flag_is_omitted_for_older_runtimes() {
+        let mut command = tokio::process::Command::new("fake");
+        add_optional_flag(&mut command, "--jinja", &["--reasoning"], Some("off"));
+        assert_eq!(command.as_std().get_args().count(), 0);
     }
 }

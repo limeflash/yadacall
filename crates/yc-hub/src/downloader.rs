@@ -2429,8 +2429,14 @@ mod tests {
             description_ru: String::new(),
             description_en: String::new(),
             languages: Vec::new(),
+            vendor: "Fixture".to_owned(),
+            family: "Fixture".to_owned(),
+            tags: Vec::new(),
             license: "MIT".to_owned(),
+            license_url: None,
+            license_custom: false,
             homepage: String::new(),
+            quality_rank: 1,
             default_tiers: Vec::new(),
             files: vec![
                 spec_for(
@@ -2448,6 +2454,9 @@ mod tests {
             ],
             requires: Requirements::default(),
             cost: ModelCost::default(),
+            engine: None,
+            engine_files: None,
+            llm: None,
             todo: None,
         };
         let downloader = Downloader::with_options(&root, DownloadOptions { connections: 3 })
@@ -3155,6 +3164,7 @@ mod tests {
             sha256,
             urls,
             hf_repo: None,
+            hf_path: None,
             github_release_api: None,
             github_asset: None,
             optional: false,

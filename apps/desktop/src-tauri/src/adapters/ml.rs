@@ -6,25 +6,44 @@ use std::sync::Arc;
 use yc_core::ports::{SpeakerEmbedder, SpeechRecognizer, TextEmbedder, VoiceActivityDetector};
 use yc_core::{Error, Result};
 use yc_engine::ports::{AsrFactory, SpeakerEmbedderFactory, TextEmbedderFactory, VadFactory};
+use yc_hub::catalog::{ModelEngine, ModelSpec};
 use yc_ml::{
-    AsrEngine, AsrKind, Backend, CampPlusEmbedder, OnnxTextEmbedder, Pooling, SileroVad,
-    TextEmbeddingConfig,
+    AsrEngine, AsrFileNames, AsrKind, AsrModelConfig, Backend, CampPlusEmbedder, OnnxTextEmbedder,
+    Pooling, SileroVad, TextEmbeddingConfig,
 };
 
 use super::SharedPrefs;
-use super::hub::{
-    ASR_GIGAAM, ASR_GIGAAM_CTC, ASR_PARAKEET, EMBED_E5_SMALL, ModelHub, SPEAKER_CAMPPLUS,
-};
+use super::hub::{EMBED_E5_SMALL, ModelHub, SPEAKER_CAMPPLUS};
 use super::read_prefs;
 
-/// Maps a catalog ASR id to the recogniser implementation.
-pub fn asr_kind(id: &str) -> Option<AsrKind> {
-    match id {
-        ASR_GIGAAM => Some(AsrKind::GigaAm),
-        ASR_GIGAAM_CTC => Some(AsrKind::GigaAmCtc),
-        ASR_PARAKEET => Some(AsrKind::Parakeet),
-        _ => None,
+/// Maps a catalog engine value to the recogniser implementation.
+pub fn asr_kind(engine: ModelEngine) -> AsrKind {
+    match engine {
+        ModelEngine::GigaAmRnnt => AsrKind::GigaAm,
+        ModelEngine::GigaAmCtc => AsrKind::GigaAmCtc,
+        ModelEngine::ParakeetTdt => AsrKind::Parakeet,
     }
+}
+
+/// Builds the recognizer kind and loader settings from one catalog entry.
+pub fn asr_config(spec: &ModelSpec) -> Result<(AsrKind, AsrModelConfig)> {
+    let engine = spec
+        .engine
+        .ok_or_else(|| Error::Invalid(format!("no engine configured for `{}`", spec.id)))?;
+    let catalog_files = spec.engine_files.as_ref();
+    let config = AsrModelConfig {
+        id: spec.id.clone(),
+        files: AsrFileNames {
+            preprocessor: catalog_files.and_then(|files| files.preprocessor.clone()),
+            encoder: catalog_files.and_then(|files| files.encoder.clone()),
+            decoder: catalog_files.and_then(|files| files.decoder.clone()),
+            joint: catalog_files.and_then(|files| files.joint.clone()),
+            decoder_joint: catalog_files.and_then(|files| files.decoder_joint.clone()),
+            model: catalog_files.and_then(|files| files.model.clone()),
+            vocabulary: catalog_files.and_then(|files| files.vocabulary.clone()),
+        },
+    };
+    Ok((asr_kind(engine), config))
 }
 
 /// Loads GigaAM v3 for `ru` and Parakeet v3 for everything else, unless the user chose a model.
@@ -43,9 +62,8 @@ impl AsrFactory for Asr {
     fn load(&self, language: &str) -> Result<Box<dyn SpeechRecognizer>> {
         let chosen = read_prefs(&self.prefs).asr;
         let spec = self.hub.pick_asr(language, chosen.as_deref())?;
-        let kind = asr_kind(&spec.id)
-            .ok_or_else(|| Error::Invalid(format!("no recogniser for `{}`", spec.id)))?;
-        AsrEngine::load(kind, &self.hub.dir(spec)?, Backend::Auto)
+        let (kind, config) = asr_config(spec)?;
+        AsrEngine::load_configured(kind, &self.hub.dir(spec)?, Backend::Auto, config)
     }
 }
 

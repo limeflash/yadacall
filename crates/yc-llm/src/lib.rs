@@ -13,7 +13,7 @@ mod types;
 
 pub use anthropic::AnthropicProvider;
 pub use config::{OLLAMA_CLOUD_ACCOUNT, ProviderConfig};
-pub use local_server::{LocalServer, LocalServerConfig, LocalServerProgress};
+pub use local_server::{LocalSampling, LocalServer, LocalServerConfig, LocalServerProgress};
 pub use ollama::{
     CLOUD_URL as OLLAMA_CLOUD_URL, LOCAL_URL as OLLAMA_LOCAL_URL, OllamaModel, OllamaProbe,
     OllamaProvider,

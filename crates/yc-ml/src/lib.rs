@@ -10,7 +10,7 @@ pub mod speaker;
 pub mod text_embedding;
 pub mod vad;
 
-pub use asr::{AsrEngine, AsrKind};
+pub use asr::{AsrEngine, AsrFileNames, AsrKind, AsrModelConfig};
 pub use backend::Backend;
 pub use speaker::CampPlusEmbedder;
 pub use text_embedding::{OnnxTextEmbedder, Pooling, TextEmbeddingConfig};

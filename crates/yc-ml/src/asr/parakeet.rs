@@ -8,9 +8,12 @@ use yc_core::{
 
 use crate::{Backend, backend::AdaptiveSession};
 
-use super::common::{
-    MAX_CHUNK_MS, Preprocessor, TokenTiming, Vocabulary, argmax, backend_summary, create_session,
-    model_error, recognized_from_tokens, validate_audio,
+use super::{
+    AsrModelConfig,
+    common::{
+        MAX_CHUNK_MS, Preprocessor, TokenTiming, Vocabulary, argmax, backend_summary,
+        create_session, model_error, recognized_from_tokens, validate_audio,
+    },
 };
 
 const ENCODER_DIMS: usize = 1024;
@@ -29,25 +32,44 @@ pub struct ParakeetTdt {
 }
 
 impl ParakeetTdt {
-    /// Loads the int8 Parakeet TDT model files from a Hugging Face repository directory.
-    pub fn load(model_dir: &Path, backend: Backend) -> Result<Self> {
-        let preprocessor = Preprocessor::parakeet(model_dir, backend)?;
+    pub fn load_configured(
+        model_dir: &Path,
+        backend: Backend,
+        config: AsrModelConfig,
+    ) -> Result<Self> {
+        let preprocessor_name = config
+            .files
+            .preprocessor
+            .as_deref()
+            .unwrap_or("nemo128.onnx");
+        let preprocessor = Preprocessor::parakeet(model_dir, backend, preprocessor_name)?;
         let encoder = create_session(
             model_dir,
             "parakeet-tdt-v3-encoder",
-            "encoder-model.int8.onnx",
+            config
+                .files
+                .encoder
+                .as_deref()
+                .unwrap_or("encoder-model.int8.onnx"),
             backend,
         )?;
         let decoder_joint = create_session(
             model_dir,
             "parakeet-tdt-v3-decoder-joint",
-            "decoder_joint-model.int8.onnx",
+            config
+                .files
+                .decoder_joint
+                .as_deref()
+                .unwrap_or("decoder_joint-model.int8.onnx"),
             backend,
         )?;
-        let vocab_path = super::required_file(model_dir, "vocab.txt")?;
+        let vocab_path = super::required_file(
+            model_dir,
+            config.files.vocabulary.as_deref().unwrap_or("vocab.txt"),
+        )?;
         let vocabulary = Vocabulary::load(&vocab_path)?;
         let info = ModelInfo {
-            id: "parakeet-tdt-0.6b-v3-int8".to_owned(),
+            id: config.id,
             backend: encoder.backend().to_string(),
         };
         Ok(Self {

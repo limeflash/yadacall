@@ -5,13 +5,13 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use yc_core::ports::{EmbedKind, SpeakerEmbedder, SpeechRecognizer};
 use yc_core::{Error, Result};
-use yc_hub::calibration::Measurement;
+use yc_hub::calibration::{CalibrationMetric, Measurement};
 use yc_hub::catalog::{ModelKind, ModelSpec};
 use yc_hub::runtime;
 use yc_ml::{AsrEngine, Backend, CampPlusEmbedder};
 
 use super::hub::{Insights, ModelHub, runtime_backend};
-use super::ml::{asr_kind, load_text_embedder};
+use super::ml::{asr_config, load_text_embedder};
 use super::runtime_keeper::RuntimeKeeper;
 
 /// 12 s of Russian speech (the same clip `yadacall bench-asr` uses).
@@ -76,12 +76,12 @@ fn decode_sample(tmp: &std::path::Path) -> Result<Vec<f32>> {
 
 async fn asr(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<Measured> {
     let predicted = insights.predict_uncalibrated(spec).await?;
-    let kind = asr_kind(&spec.id).ok_or_else(|| Error::Invalid(spec.id.clone()))?;
+    let (kind, config) = asr_config(spec)?;
     let dir = hub.dir(spec)?;
     let tmp = hub.root().join("tmp");
     let x = tokio::task::spawn_blocking(move || -> Result<f64> {
         let pcm = decode_sample(&tmp)?;
-        let mut asr = AsrEngine::load(kind, &dir, Backend::Auto)?;
+        let mut asr = AsrEngine::load_configured(kind, &dir, Backend::Auto, config)?;
         recognise_all(asr.as_mut(), &pcm)?; // warm-up (graph optimisation, caches)
         let started = Instant::now();
         for _ in 0..RUNS {
@@ -95,6 +95,7 @@ async fn asr(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<Me
     insights.record(Measurement {
         model_id: spec.id.clone(),
         kind: ModelKind::Asr,
+        metric: CalibrationMetric::Primary,
         backend: predicted.backend.clone(),
         predicted: predicted.est_realtime_x.unwrap_or_default(),
         measured: x,
@@ -134,6 +135,7 @@ async fn embed(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<
     insights.record(Measurement {
         model_id: spec.id.clone(),
         kind: ModelKind::Embed,
+        metric: CalibrationMetric::Primary,
         backend: predicted.backend.clone(),
         predicted: predicted_rate,
         measured: passages,
@@ -186,6 +188,7 @@ async fn speaker(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Resul
     insights.record(Measurement {
         model_id: spec.id.clone(),
         kind: ModelKind::Speaker,
+        metric: CalibrationMetric::Primary,
         backend: "auto".to_owned(),
         predicted: 0.0,
         measured: x,

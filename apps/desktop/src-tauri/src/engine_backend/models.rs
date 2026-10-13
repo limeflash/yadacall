@@ -119,6 +119,64 @@ fn map_kind(k: CatKind) -> Option<ModelKind> {
     }
 }
 
+fn recommendation_group(model: &ModelEntry) -> Option<String> {
+    if model.kind != ModelKind::Asr {
+        return Some(format!("{:?}", model.kind));
+    }
+    if model
+        .languages
+        .iter()
+        .any(|language| language == "multilingual")
+    {
+        Some("asr:multilingual".to_owned())
+    } else if model.languages.iter().any(|language| language == "ru") {
+        Some("asr:ru".to_owned())
+    } else if model.languages.iter().any(|language| language == "en")
+        && model.tags.iter().any(|tag| tag == "english-only")
+    {
+        Some("asr:en".to_owned())
+    } else {
+        None
+    }
+}
+
+fn mark_recommended(models: &mut [ModelEntry]) {
+    let mut groups = std::collections::BTreeSet::new();
+    for model in models.iter() {
+        if let Some(group) = recommendation_group(model) {
+            groups.insert(group);
+        }
+    }
+    for group in groups {
+        let candidates = models
+            .iter()
+            .enumerate()
+            .filter(|(_, model)| recommendation_group(model).as_deref() == Some(group.as_str()));
+        let great = candidates
+            .clone()
+            .filter(|(_, model)| model.verdict == Verdict::Great);
+        let eligible = great.collect::<Vec<_>>();
+        let candidates = if eligible.is_empty() {
+            models
+                .iter()
+                .enumerate()
+                .filter(|(_, model)| recommendation_group(model).as_deref() == Some(group.as_str()))
+                .filter(|(_, model)| model.verdict == Verdict::Ok)
+                .collect::<Vec<_>>()
+        } else {
+            eligible
+        };
+        let best = candidates.into_iter().max_by(|(_, left), (_, right)| {
+            left.quality_rank
+                .cmp(&right.quality_rank)
+                .then_with(|| right.size_bytes.cmp(&left.size_bytes))
+        });
+        if let Some((index, _)) = best {
+            models[index].recommended = true;
+        }
+    }
+}
+
 impl EngineBackend {
     /// Catalog id of the model of `kind` in use (explicit choice, else the automatic one).
     pub(super) async fn active_id(&self, kind: CatKind) -> Option<String> {
@@ -171,10 +229,31 @@ impl EngineBackend {
                 } else {
                     pred.headline_en
                 },
+                vendor: spec.vendor.clone(),
+                family: spec.family.clone(),
+                languages: spec.languages.clone(),
+                tags: spec.tags.clone(),
+                params: if spec.cost.total_params > 0.0 {
+                    Some(spec.cost.total_params)
+                } else if spec.cost.params > 0.0 {
+                    Some(spec.cost.params)
+                } else {
+                    None
+                },
+                active_params: (spec.cost.active_params > 0.0
+                    && spec.cost.active_params < spec.cost.total_params)
+                    .then_some(spec.cost.active_params),
+                license: spec.license.clone(),
+                license_url: spec.license_url.clone(),
+                license_custom: spec.license_custom,
+                homepage: Some(spec.homepage.clone()),
+                recommended: false,
+                quality_rank: spec.quality_rank,
                 benchmarkable: bench::benchmarkable(spec.kind),
                 download,
             });
         }
+        mark_recommended(&mut models);
         let backend = match runtime_backend(Some(&hardware)) {
             runtime::RuntimeBackend::Metal => "Metal",
             runtime::RuntimeBackend::Vulkan => "Vulkan",
@@ -540,4 +619,103 @@ fn prune_empty(dir: &Path) {
         }
     }
     let _ = std::fs::remove_dir(dir); // only succeeds when empty
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mark_recommended;
+    use crate::api::{ModelEntry, ModelKind, Verdict};
+
+    fn entry(
+        id: &str,
+        kind: ModelKind,
+        verdict: Verdict,
+        rank: i32,
+        languages: &[&str],
+        tags: &[&str],
+    ) -> ModelEntry {
+        ModelEntry {
+            id: id.to_owned(),
+            kind,
+            name: id.to_owned(),
+            size_bytes: 1,
+            blurb: String::new(),
+            installed: false,
+            active: false,
+            verdict,
+            estimate: String::new(),
+            vendor: String::new(),
+            family: String::new(),
+            languages: languages.iter().map(|value| (*value).to_owned()).collect(),
+            tags: tags.iter().map(|value| (*value).to_owned()).collect(),
+            params: None,
+            active_params: None,
+            license: String::new(),
+            license_url: None,
+            license_custom: false,
+            homepage: None,
+            recommended: false,
+            quality_rank: rank,
+            benchmarkable: true,
+            download: None,
+        }
+    }
+
+    #[test]
+    fn recommendation_uses_rank_within_kind_and_asr_language_group() {
+        let mut models = vec![
+            entry("llm-ok", ModelKind::Llm, Verdict::Ok, 100, &[], &[]),
+            entry(
+                "llm-great-low",
+                ModelKind::Llm,
+                Verdict::Great,
+                10,
+                &[],
+                &[],
+            ),
+            entry(
+                "llm-great-high",
+                ModelKind::Llm,
+                Verdict::Great,
+                20,
+                &[],
+                &[],
+            ),
+            entry("asr-ru", ModelKind::Asr, Verdict::Ok, 30, &["ru"], &[]),
+            entry(
+                "asr-multilingual",
+                ModelKind::Asr,
+                Verdict::Great,
+                40,
+                &["multilingual"],
+                &[],
+            ),
+            entry(
+                "asr-en",
+                ModelKind::Asr,
+                Verdict::Ok,
+                50,
+                &["en"],
+                &["english-only"],
+            ),
+            entry(
+                "asr-no-group",
+                ModelKind::Asr,
+                Verdict::Great,
+                99,
+                &["en"],
+                &[],
+            ),
+        ];
+        mark_recommended(&mut models);
+        let recommended = models
+            .iter()
+            .filter(|model| model.recommended)
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            recommended,
+            ["llm-great-high", "asr-ru", "asr-multilingual", "asr-en"]
+        );
+    }
 }

@@ -497,7 +497,23 @@
    "installed": true,
    "active": true,
    "verdict": "great",
-   "estimate": "≈ 40× быстрее реального времени"
+   "estimate": "≈ 40× быстрее реального времени",
+   "vendor": "Сбер",
+   "family": "GigaAM",
+   "languages": [
+    "ru"
+   ],
+   "tags": [
+    "ru-tuned",
+    "tiny"
+   ],
+   "params": 200000000,
+   "license": "Apache-2.0",
+   "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+   "licenseCustom": false,
+   "homepage": "https://huggingface.co/istupakov/gigaam-v3-onnx",
+   "recommended": true,
+   "qualityRank": 100
   },
   {
    "id": "parakeet-tdt-v3",
@@ -516,7 +532,20 @@
     "doneBytes": 615000000,
     "totalBytes": 670000000,
     "bytesPerSec": 5400000
-   }
+   },
+   "vendor": "NVIDIA",
+   "family": "Parakeet",
+   "languages": [
+    "multilingual"
+   ],
+   "tags": [],
+   "params": 600000000,
+   "license": "CC-BY-4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "licenseCustom": true,
+   "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+   "recommended": true,
+   "qualityRank": 90
   },
   {
    "id": "voice-embed",
@@ -527,7 +556,22 @@
    "installed": true,
    "active": true,
    "verdict": "great",
-   "estimate": "≈ 200× быстрее реального времени"
+   "estimate": "≈ 200× быстрее реального времени",
+   "vendor": "3D-Speaker",
+   "family": "CAM++",
+   "languages": [
+    "multilingual"
+   ],
+   "tags": [
+    "tiny"
+   ],
+   "params": 20000000,
+   "license": "Apache-2.0",
+   "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+   "licenseCustom": false,
+   "homepage": "https://github.com/k2-fsa/sherpa-onnx",
+   "recommended": true,
+   "qualityRank": 75
   },
   {
    "id": "text-embed-small",
@@ -538,7 +582,22 @@
    "installed": true,
    "active": true,
    "verdict": "great",
-   "estimate": "≈ 900 фраз/с"
+   "estimate": "≈ 900 фраз/с",
+   "vendor": "intfloat",
+   "family": "E5",
+   "languages": [
+    "multilingual"
+   ],
+   "tags": [
+    "tiny"
+   ],
+   "params": 118000000,
+   "license": "MIT",
+   "licenseUrl": "https://spdx.org/licenses/MIT.html",
+   "licenseCustom": false,
+   "homepage": "https://huggingface.co/intfloat/multilingual-e5-small",
+   "recommended": true,
+   "qualityRank": 90
   },
   {
    "id": "gemma-4-e4b",
@@ -559,7 +618,23 @@
     "doneBytes": 1054000000,
     "totalBytes": 3100000000,
     "bytesPerSec": 0
-   }
+   },
+   "vendor": "Google",
+   "family": "Gemma 4",
+   "languages": [
+    "multilingual"
+   ],
+   "tags": [
+    "moe"
+   ],
+   "params": 8000000000,
+   "activeParams": 4500000000,
+   "license": "Apache-2.0",
+   "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+   "licenseCustom": false,
+   "homepage": "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF",
+   "recommended": true,
+   "qualityRank": 84
   },
   {
    "id": "gemma-4-e2b",
@@ -570,7 +645,23 @@
    "installed": false,
    "active": false,
    "verdict": "great",
-   "estimate": "≈ 48 ток/с · 3,2 из 16 ГБ"
+   "estimate": "≈ 48 ток/с · 3,2 из 16 ГБ",
+   "vendor": "Google",
+   "family": "Gemma 4",
+   "languages": [
+    "multilingual"
+   ],
+   "tags": [
+    "moe"
+   ],
+   "params": 5100000000,
+   "activeParams": 2300000000,
+   "license": "Apache-2.0",
+   "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+   "licenseCustom": false,
+   "homepage": "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF",
+   "recommended": false,
+   "qualityRank": 74
   },
   {
    "id": "gemma-4-27b",
@@ -581,7 +672,23 @@
    "installed": false,
    "active": false,
    "verdict": "wontRun",
-   "estimate": "не хватит памяти: нужно 19 ГБ из 16"
+   "estimate": "не хватит памяти: нужно 19 ГБ из 16",
+   "vendor": "Google",
+   "family": "Gemma 4",
+   "languages": [
+    "multilingual"
+   ],
+   "tags": [
+    "moe"
+   ],
+   "params": 27000000000,
+   "activeParams": 4000000000,
+   "license": "Apache-2.0",
+   "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
+   "licenseCustom": false,
+   "homepage": "https://huggingface.co/ggml-org/gemma-4-26B-A4B-it-GGUF",
+   "recommended": false,
+   "qualityRank": 94
   }
  ],
  "hardware": {

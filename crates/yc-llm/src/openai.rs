@@ -143,6 +143,18 @@ impl OpenAiCompatibleProvider {
         if let Some(temperature) = request.temperature {
             payload["temperature"] = json!(temperature);
         }
+        if let Some(top_p) = request.top_p {
+            payload["top_p"] = json!(top_p);
+        }
+        if let Some(top_k) = request.top_k {
+            payload["top_k"] = json!(top_k);
+        }
+        if let Some(min_p) = request.min_p {
+            payload["min_p"] = json!(min_p);
+        }
+        if let Some(presence_penalty) = request.presence_penalty {
+            payload["presence_penalty"] = json!(presence_penalty);
+        }
         if !request.stop.is_empty() {
             payload["stop"] = json!(request.stop);
         }
