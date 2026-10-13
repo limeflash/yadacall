@@ -152,10 +152,12 @@ async fn get_update(app: &AppHandle) -> Result<Option<Update>> {
     let updater = app
         .updater()
         .map_err(|error| Error::Network(error.to_string()))?;
-    updater
-        .check()
-        .await
-        .map_err(|error| Error::Network(error.to_string()))
+    match updater.check().await {
+        Ok(update) => Ok(update),
+        // No published release (or no manifest for this platform yet): nothing to update to.
+        Err(tauri_plugin_updater::Error::ReleaseNotFound) => Ok(None),
+        Err(error) => Err(Error::Network(error.to_string())),
+    }
 }
 
 async fn ensure_no_recording(backend: &dyn Backend) -> Result<()> {
