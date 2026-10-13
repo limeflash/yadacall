@@ -60,7 +60,9 @@ pub fn build_turns(segments: &[Segment]) -> Vec<Turn> {
                 previous.text.push(' ');
             }
             previous.text.push_str(&segment.text);
-            previous.corrections.extend(segment.corrections.iter().cloned());
+            previous
+                .corrections
+                .extend(segment.corrections.iter().cloned());
             continue;
         }
         turns.push(Turn {

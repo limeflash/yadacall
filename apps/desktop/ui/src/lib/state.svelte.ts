@@ -175,7 +175,8 @@ function onIntegration(e: IntegrationEvent) {
         });
         break;
       case "callDetected":
-        toast(t("Ты в звонке {p} — записать его?", { p: e.call.platform }), {
+        // A generic browser call has no URL, only a title like "Звонок в Brave".
+        toast(!e.call.url && e.call.title ? `${e.call.title} — ${t("записать?")}` : t("Ты в звонке {p} — записать его?", { p: e.call.platform }), {
           actionLabel: t("Записать"),
           onAction: () => { integrations.resolveDetectedCall(e.call.id, true).then(() => go({ name: "record" })).catch((er) => toast.error(er)); },
         });

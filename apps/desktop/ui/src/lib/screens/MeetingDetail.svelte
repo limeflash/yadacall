@@ -106,10 +106,27 @@
     if (p < text.length) out.push({ s: text.slice(p), hit: false });
     return out;
   }
-  function words(tr: Turn): { w: string; c: string }[] {
+  const norm = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  /** Word index -> what the recogniser heard before the term dictionary fixed it. */
+  function wasMap(tr: Turn): Map<number, string> {
+    const out = new Map<number, string>();
+    if (!tr.corrections?.length) return out;
+    const toks = tr.text.split(" ").map(norm);
+    let from = 0;
+    for (const c of tr.corrections) {
+      const rep = c.replacement.split(/\s+/).map(norm).filter(Boolean);
+      if (!rep.length) continue;
+      for (let i = from; i + rep.length <= toks.length; i++) {
+        if (rep.every((r, j) => toks[i + j] === r)) { rep.forEach((_, j) => out.set(i + j, c.original)); from = i + rep.length; break; }
+      }
+    }
+    return out;
+  }
+  function words(tr: Turn): { w: string; c: string; was?: string }[] {
     const active = player?.playing && player.pos >= tr.startMs && player.pos < tr.endMs;
     const said = Math.floor((((player?.pos ?? 0) - tr.startMs) / 1000) / 0.42);
-    return tr.text.split(" ").map((w, k) => ({ w, c: active && k >= said ? "var(--muted)" : "var(--text)" }));
+    const was = wasMap(tr);
+    return tr.text.split(" ").map((w, k) => ({ w, was: was.get(k), c: active && k >= said ? "var(--muted)" : "var(--text)" }));
   }
 
   async function scrollToTurn(i: number) {
@@ -179,7 +196,13 @@
   }
   function openNames() { menuOpen = false; inviteQuery = ""; activeKey = ""; nameDrafts = Object.fromEntries(speakers.filter((s) => s.key !== "me").map((s) => [s.key, s.named ? s.name : ""])); namesOpen = true; }
   async function saveNames() {
-    for (const [k, v] of Object.entries(nameDrafts)) if (v.trim() && v.trim() !== (m ? speakerName(m, k) : "")) await api.renameSpeaker(id, k, v.trim());
+    for (const [k, v] of Object.entries(nameDrafts)) {
+      if (!v.trim() || v.trim() === (m ? speakerName(m, k) : "")) continue;
+      try {
+        const out = await api.renameSpeaker(id, k, v.trim());
+        if (out?.mergedInto) toast(t("Объединил с {name}", { name: out.mergedInto.name }));
+      } catch (e) { toast.error(e); }
+    }
     namesOpen = false; await load();
   }
   function askAbout(e: SubmitEvent) { e.preventDefault(); go({ name: "ask", q: question.trim() || undefined }); }
@@ -390,7 +413,7 @@
                         <span class="who2"><span>{t("Гость")}</span><Button size="xs" onclick={openNames}>{t("кто это?")}</Button></span>
                       {/if}
                       <p class="yc-pretty txt">
-                        {#if ws}{#each ws as w, wi (wi)}<span style="color: {w.c}; transition: color 0.15s">{w.w}</span>{" "}{/each}
+                        {#if ws}{#each ws as w, wi (wi)}<span class:corr={!!w.was} title={w.was ? t("было: {was}", { was: w.was }) : undefined} style="color: {w.c}; transition: color 0.15s">{w.w}</span>{" "}{/each}
                         {:else}{#each parts(tr.text, needle) as p, pi (pi)}{#if p.hit}<mark class="yc-hit">{p.s}</mark>{:else}{p.s}{/if}{/each}{/if}
                       </p>
                       <span class="tc">
@@ -446,6 +469,7 @@
   .pick.used { opacity: 0.45; }
   .invites .picks { max-height: 96px; overflow-y: auto; }
   .ngroup.active .nrow input { border-color: var(--accent-line); }
+  .corr { text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; cursor: help; }
   .ngroup { display: flex; flex-direction: column; gap: 6px; }
   .picks { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 36px; }
   .pick { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; }

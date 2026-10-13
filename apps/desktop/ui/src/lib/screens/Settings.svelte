@@ -24,6 +24,19 @@
   let perms = $state<Permissions | null>(null);
   let capturing = $state<null | "hotkeyRecord" | "hotkeyBookmark">(null);
 
+  // ---- term dictionary ----------------------------------------------------------------------------
+  let termDraft = $state("");
+  function addTerms(raw: string) {
+    const add = raw.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+    termDraft = "";
+    if (!add.length) return;
+    const have = s.terms ?? [];
+    const lower = new Set(have.map((x) => x.toLowerCase()));
+    const fresh = add.filter((x, i) => !lower.has(x.toLowerCase()) && add.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i);
+    if (fresh.length) saveSettings({ terms: [...have, ...fresh] });
+  }
+  function removeTerm(term: string) { saveSettings({ terms: (s.terms ?? []).filter((x) => x !== term) }); }
+
   async function loadModels() { asr = (await api.modelsOverview()).models.filter((m) => m.kind === "asr"); }
   let meet = $state<Connection | null>(null);
   onMount(() => {
@@ -135,6 +148,18 @@
           <span class="two"><span style="font-size: 14px">{t("Узнавать голоса")}</span><span class="sub">{t("Подписывает знакомых по прошлым встречам")}</span></span>
           <Switch checked={s.recognizeVoices} onchange={(v) => saveSettings({ recognizeVoices: v })} />
         </label>
+        <div class="grow bt terms">
+          <span class="two" style="flex: none"><span style="font-size: 14px">{t("Словарь терминов")}</span><span class="sub">{t("Названия продуктов, имена, жаргон — расшифровка поправит написание, например «Google Mit» → «Google Meet»")}</span></span>
+          <div class="chips">
+            {#each s.terms ?? [] as term (term)}
+              <span class="chip">{term}<button type="button" aria-label={t("Убрать {term}", { term })} onclick={() => removeTerm(term)}><Icon name="x" size={10} /></button></span>
+            {/each}
+            <input class="tin" bind:value={termDraft} placeholder={t("Добавить термин")} aria-label={t("Добавить термин")}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTerms(termDraft); } else if (e.key === "Backspace" && !termDraft && (s.terms ?? []).length) removeTerm(s.terms[s.terms.length - 1]); }}
+              onpaste={(e) => { const txt = e.clipboardData?.getData("text") ?? ""; if (/[,\n;]/.test(txt)) { e.preventDefault(); addTerms(txt); } }}
+              onblur={() => addTerms(termDraft)} />
+          </div>
+        </div>
       </div>
 
       <SummarySection />
@@ -188,6 +213,7 @@
           {:else if update.phase === "none"}{t("последняя версия")}
           {:else if update.phase === "available" || update.phase === "installing"}<button type="button" class="uplink" onclick={() => (update.sheet = true)}>{t("доступна {v}", { v: update.version ?? "" })}</button>
           {:else}<button type="button" class="uplink" onclick={checkForUpdates}>{t("Проверить обновления")}</button>{/if}
+          · <button type="button" class="uplink" onclick={() => api.revealLogs().catch((e) => toast.error(e))}>{t("Открыть логи")}</button>
         </span>
         {#if update.phase === "error" && update.error}<span class="sub" role="alert" style="color: var(--danger-text)">{update.error}</span>{/if}
       </div>
@@ -244,6 +270,12 @@
   .kbtn:hover { background: var(--surface-2); }
   .cap { font-size: 12px; color: var(--accent-text); padding: 0 6px; }
   .foot { flex-wrap: wrap; }
+  .terms { flex-direction: column; align-items: stretch; gap: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); font-size: 12px; font-weight: 600; }
+  .chip button { display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); }
+  .chip button:hover { color: var(--text); background: var(--surface); }
+  .tin { flex: 1; min-width: 120px; height: 26px; box-sizing: border-box; padding: 0 6px; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; outline: none; }
   .uplink { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-text); text-decoration: underline; }
   .veil { position: fixed; inset: 0; z-index: 6; background: var(--backdrop); }
   .usheet { position: fixed; z-index: 7; left: 50%; top: 18vh; transform: translateX(-50%); width: min(400px, calc(100% - 32px)); box-sizing: border-box; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; gap: 10px; }

@@ -12,7 +12,7 @@ import { demoAsk, demoMeetings, demoModels, LIVE_SCRIPT, type DemoMeeting } from
 const SETTINGS_KEY = "yadacall.mock.settings";
 const defaults: Settings = {
   theme: "dark", accent: "#7dd3a0", uiLanguage: "ru", meetingLanguage: "auto", keepAudio: "30d", libraryDir: "~/YadaCall",
-  hotkeyRecord: "Alt+Shift+R", hotkeyBookmark: "Alt+Shift+M", launchAtLogin: false, recordingReminder: true, recognizeVoices: true, miniPlayer: true,
+  hotkeyRecord: "Alt+Shift+R", hotkeyBookmark: "Alt+Shift+M", launchAtLogin: false, recordingReminder: true, recognizeVoices: true, terms: [], miniPlayer: true,
   summaries: { mode: "local", model: "", keysSet: { ...noKeys, anthropic: true } }, onboarded: true,
 };
 
@@ -117,7 +117,10 @@ export function createMockApi(): Api {
     async retranscribeMeeting() { await sleep(600); },
     async renameSpeaker(id, key, name) {
       const m = find(id); const p = m.meeting.participants.find((x) => x.key === key);
+      const other = m.meeting.participants.find((x) => x.key !== key && x.name === name);
+      if (other) { m.turns.forEach((t) => { if (t.speaker === key) t.speaker = other.key; }); m.meeting.participants = m.meeting.participants.filter((x) => x.key !== key); return { mergedInto: { key: other.key, name } }; }
       if (p) p.name = name; else m.meeting.participants.push({ key, name });
+      return {};
     },
     async setTaskDone(id, index, done) { const t = find(id).summary?.tasks[index]; if (t) t.done = done; },
     async regenerateSummary(id) { await sleep(900); return find(id).summary ?? summaryFor([]); },
@@ -245,6 +248,8 @@ export function createMockApi(): Api {
     async hidePopover() {},
     async quit() {},
     async onNavigate() { return () => {}; },
+    async revealLogs() {},
+    async openAutomationSettings() {},
     async checkUpdate() { await sleep(400); return { available: false }; },
     async installUpdate() { throw new Error("no update in the browser mock"); },
     async onUpdate() { return () => {}; },

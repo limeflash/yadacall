@@ -8,7 +8,7 @@
   import Switch from "../kit/Switch.svelte";
   import StatusDot from "../kit/StatusDot.svelte";
   import SectionLabel from "../kit/SectionLabel.svelte";
-  import { integrations } from "../api";
+  import { api, integrations } from "../api";
   import type { CalendarAccount, Connection, RecordPolicy, ReminderSettings } from "../api";
   import { onIntegrationEvent } from "../state.svelte";
   import { t, plural } from "../i18n/index.svelte";
@@ -207,6 +207,12 @@
               <Button size="sm" variant="secondary" onclick={() => saveReminders({ browserAccess: true })}>{t("Разрешить")}</Button>
             {/if}
           </div>
+          {#if settings.browserAccess && settings.browserAutomationPermissionRequired}
+            <div class="grow bt" style="flex-wrap: wrap; gap: 8px 16px" role="status">
+              <span class="subtext" style="flex: 1 1 220px; color: var(--warning-text)">{t("macOS не даёт читать вкладки {browser}: разреши YadaCall в «Автоматизация».", { browser: settings.browserAutomationPermissionRequired })}</span>
+              <Button size="sm" variant="secondary" onclick={() => api.openAutomationSettings().catch((e) => toast.error(e))}>{t("Открыть настройки")}</Button>
+            </div>
+          {/if}
         {/if}
       </div>
 
