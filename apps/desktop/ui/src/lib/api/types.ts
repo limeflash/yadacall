@@ -37,7 +37,7 @@ export interface Meeting {
   status: MeetingStatus;
 }
 
-export interface Segment { startMs: Ms; endMs: Ms; track: TrackKind; speaker: string; text: string; confidence?: number }
+export interface Segment { startMs: Ms; endMs: Ms; track: TrackKind; speaker: string; text: string; confidence?: number; corrections?: TextCorrection[] }
 export interface TextCorrection { original: string; replacement: string }
 export interface Turn { speaker: string; startMs: Ms; endMs: Ms; text: string; /** Term-dictionary replacements inside this turn. */ corrections?: TextCorrection[] }
 

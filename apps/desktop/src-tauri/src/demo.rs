@@ -485,7 +485,7 @@ impl DemoBackend {
             if tick.is_multiple_of(6) {
                 for m in g.meetings.iter_mut() {
                     if let MeetingStatus::Processing { progress, .. } = m.meeting.status.clone() {
-                        let step = if m.looping { 0.01 } else { 0.05 };
+                        let step = if m.looping { 0.01 } else { 0.015 };
                         let mut next = progress + step;
                         if m.looping && next >= 0.99 {
                             next = 0.12;
@@ -498,10 +498,11 @@ impl DemoBackend {
                                     m.summary.as_ref().and_then(|s| s.about.first().cloned());
                             }
                         } else {
-                            let stage = if next > 0.6 {
-                                Stage::Summarize
-                            } else {
-                                Stage::Transcribe
+                            let stage = match next {
+                                n if n > 0.8 => Stage::Summarize,
+                                n if n > 0.65 => Stage::Index,
+                                n if n > 0.45 => Stage::Diarize,
+                                _ => Stage::Transcribe,
                             };
                             m.meeting.status = MeetingStatus::Processing {
                                 stage,

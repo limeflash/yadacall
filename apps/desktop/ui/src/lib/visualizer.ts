@@ -5,8 +5,10 @@
  */
 import { levels } from "./state.svelte";
 import { isVisible } from "./visibility";
+import { ProcField, type WordSource } from "./procfield";
+export type { WordSource } from "./procfield";
 
-export interface VisState { phase: "idle" | "rec" | "proc" | "done"; paused: boolean; job: number; hover: boolean }
+export interface VisState { phase: "idle" | "rec" | "proc" | "done"; paused: boolean; job: number; hover: boolean; /** Pipeline stage while processing; a change pulses the ring. */ stage?: string }
 export interface VisColors { acc: string; dark: boolean }
 
 const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -26,7 +28,18 @@ export class Visualizer {
   /** Milliseconds since the previous frame; the easing below is tuned for 60 fps and scaled by this. */
   private dt = 16.7;
 
-  constructor(private orb: HTMLCanvasElement, private bg: HTMLCanvasElement, private state: () => VisState, private colors: () => VisColors) {}
+  /** Eased progress (a lightly damped spring towards the reported value), 0..1. */
+  private pj = 0;
+  private pv = 0;
+  private stage: string | undefined;
+  private pulse = 0;
+  private proc: ProcField;
+  private beatPending = false;
+
+  constructor(private orb: HTMLCanvasElement, private bg: HTMLCanvasElement, private state: () => VisState, private colors: () => VisColors, words?: WordSource) {
+    this.proc = new ProcField(words);
+    this.proc.reduced = this.reduced;
+  }
 
   /**
    * Draws at most 30 fps (10 with reduced motion), and not at all while the window is hidden, minimised or
@@ -42,7 +55,7 @@ export class Visualizer {
     document.removeEventListener("visibilitychange", this.onVis);
     cancelAnimationFrame(this.raf); this.raf = 0;
   }
-  private onMotion = () => { this.reduced = this.motion?.matches ?? false; };
+  private onMotion = () => { this.reduced = this.motion?.matches ?? false; this.proc.reduced = this.reduced; };
   private onVis = () => {
     if (!isVisible()) { cancelAnimationFrame(this.raf); this.raf = 0; return; }
     if (this.raf) return;
@@ -58,7 +71,7 @@ export class Visualizer {
       this.last = ts;
       this.draw(ts);
       // The dotted background changes slowly and costs the most: every other frame is enough.
-      if ((this.frame++ & 1) === 0) this.drawBg(ts);
+      if ((this.frame++ & 1) === 0 || this.a.proc > 0.02) this.drawBg(ts);
     }
     this.raf = requestAnimationFrame(this.loop);
   };
@@ -69,7 +82,9 @@ export class Visualizer {
   private drawBg(tsRaw: number) {
     const c = this.bg;
     const ts = this.reduced ? 0 : tsRaw;
-    const W = c.clientWidth || 792, H = 520, dpr = 1; // faint dots: no need for retina pixels
+    const W = c.clientWidth || 792, H = 520;
+    // Faint dots need no retina pixels; the glyph field of the processing screen does (crisp letters).
+    const dpr = this.a.proc > 0.02 || this.state().phase === "proc" ? Math.min(2, window.devicePixelRatio || 1) : 1;
     if (c.width !== Math.round(W * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
     const ctx = c.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
@@ -79,16 +94,15 @@ export class Visualizer {
     const ink = dark ? [255, 255, 255] : [20, 20, 26];
     const cx = W / 2, cy = 112, G = 16;
     const nowT = tsRaw / 1000;
+    if (this.beatPending) { this.beatPending = false; this.proc.stageBeat(tsRaw, cx, cy); }
     if (s.phase === "rec" && !s.paused && tsRaw - this.lastRip > 260 && Math.max(a.lm, a.lt) > 0.3) {
       this.ripples.push({ t0: nowT, me: a.lm >= a.lt, amp: Math.max(a.lm, a.lt) }); this.lastRip = tsRaw;
     }
     this.ripples = this.ripples.filter((r) => nowT - r.t0 < 3.2);
     const idle = 1 - Math.max(a.rec, a.proc);
-    const p = s.job / 100;
-    const sweep = -Math.PI / 2 + p * Math.PI * 2;
-    const CH = "абвгдеёжзиклмнопрстуфхцчшэюя";
-    ctx.font = "600 9px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    for (let gy = G / 2; gy < H; gy += G) for (let gx = G / 2; gx < W; gx += G) {
+    const gridA = 1 - a.proc;   // the dotted grid gives way to the glyph field while processing
+    ctx.globalAlpha = gridA;
+    if (gridA > 0.02) for (let gy = G / 2; gy < H; gy += G) for (let gx = G / 2; gx < W; gx += G) {
       const dx = gx - cx, dy = gy - cy, d = Math.hypot(dx, dy);
       if (d < 92) continue;
       const fall = Math.max(0, 1 - d / 360);
@@ -103,21 +117,14 @@ export class Visualizer {
       const side = dx < 0;
       if (rip > 0.02) glow = Math.max(glow, rip * (ripMe === side ? 1 : 0.35));
       const size = 1.1 + glow * 1.4;
-      if (a.proc > 0.02) {
-        let ang = Math.atan2(dy, dx); if (ang < -Math.PI / 2) ang += Math.PI * 2;
-        const behind = sweep - ang;
-        const h = ((gx * 73856093) ^ (gy * 19349663)) >>> 0;
-        if (behind > 0 && fall > 0.05) {
-          const fresh = Math.exp(-behind * 2.2);
-          const flick = fresh > 0.3 ? Math.floor(nowT * 14 + h) : h;
-          const chA = (0.1 + fresh * 0.8) * fall * 1.6 * a.proc;
-          if (chA > 0.03) { ctx.fillStyle = css(fresh > 0.3 ? acc : ink, Math.min(1, chA)); ctx.fillText(CH[flick % CH.length], gx, gy); continue; }
-        }
-      }
       const cc = glow > 0.05 ? (rip > 0.02 && !side ? them : acc) : ink;
       ctx.fillStyle = css(cc, Math.min(1, al + glow));
       ctx.fillRect(gx - size / 2, gy - size / 2, size, size);
     }
+    ctx.globalAlpha = 1;
+    // Processing: glyph field, waves from the ring, words of the meeting.
+    this.proc.draw(ctx, W, H, cx, cy, tsRaw, dpr, { acc, ink: dark ? [226, 226, 234] : [34, 34, 44], dark }, a.proc, s.phase === "proc" && a.proc > 0.5);
+    if (a.proc <= 0.02 && s.phase !== "proc") this.proc.stop();
     // Fade the grid out towards the bottom here instead of with a CSS mask, which forces the GPU to
     // re-composite this animating canvas through an offscreen layer every frame.
     const fade = ctx.createLinearGradient(0, 0, 0, H);
@@ -141,6 +148,19 @@ export class Visualizer {
     const tt = live ? 0.04 + Math.min(1, levels.system.peak) * 0.96 : 0.04;
     a.lm += (tm - a.lm) * this.k(0.18); a.lt += (tt - a.lt) * this.k(0.18);
     a.burst *= Math.pow(0.955, this.dt / 16.7);
+    // Eased progress: a lightly damped spring, so a jump from 25% to 40% glides (with a hint of overshoot).
+    {
+      const f = this.dt / 16.7, target = s.phase === "done" ? 1 : s.phase === "proc" ? s.job / 100 : 0;
+      if (s.phase !== "proc" && s.phase !== "done") { this.pj = 0; this.pv = 0; this.stage = undefined; }
+      else {
+        this.pv += (target - this.pj) * 0.012 * f; this.pv *= Math.pow(0.84, f); this.pj = Math.min(1, Math.max(0, this.pj + this.pv * f));
+      }
+      if (s.phase === "proc") {
+        if (this.stage !== undefined && s.stage !== this.stage) { this.pulse = 1; this.beatPending = true; }
+        this.stage = s.stage;
+      }
+      this.pulse *= Math.pow(0.93, f);
+    }
     const { acc: accHex, dark } = this.colors();
     const acc = rgb(accHex);
     const them = dark ? [215, 215, 225] : [80, 80, 92];
@@ -193,22 +213,42 @@ export class Visualizer {
       }
     }
     if (a.proc > 0.01) {
-      const p = s.job / 100;
-      ctx.lineCap = "round"; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.arc(cx, cy, 84, 0, Math.PI * 2); ctx.strokeStyle = css(acc, 0.12 * a.proc); ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx, cy, 84, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p); ctx.strokeStyle = css(acc, a.proc); ctx.stroke();
-      for (let k = 0; k < 3; k++) {
-        const th = t * (1.6 + k * 0.5) + k * 2.1, rr = 100 + k * 6;
-        ctx.beginPath(); ctx.arc(cx + Math.cos(th) * rr, cy + Math.sin(th) * rr, 2.5 - k * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = css(acc, 0.7 * a.proc); ctx.fill();
+      const p = this.pj, kick = Math.max(this.proc.kick, this.pulse);
+      ctx.lineCap = "round";
+      // track, soft halo, progress arc; a word wave or a stage change makes the ring flare for a moment
+      ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, 84, 0, Math.PI * 2); ctx.strokeStyle = css(acc, 0.12 * a.proc); ctx.stroke();
+      if (p > 0.005) {
+        const end = -Math.PI / 2 + Math.PI * 2 * p;
+        if (kick > 0.03) { ctx.lineWidth = 5 + 9 * kick; ctx.beginPath(); ctx.arc(cx, cy, 84, -Math.PI / 2, end); ctx.strokeStyle = css(acc, 0.16 * kick * a.proc); ctx.stroke(); }
+        ctx.lineWidth = 5 + 1.5 * kick; ctx.beginPath(); ctx.arc(cx, cy, 84, -Math.PI / 2, end);
+        ctx.strokeStyle = css(mixc(acc, [255, 255, 255], 0.35 * kick), a.proc); ctx.stroke();
+        // a bright head on the arc
+        ctx.beginPath(); ctx.arc(cx + Math.cos(end) * 84, cy + Math.sin(end) * 84, 3.2 + 2 * kick, 0, Math.PI * 2);
+        ctx.fillStyle = css(mixc(acc, [255, 255, 255], 0.5), a.proc); ctx.fill();
+      }
+      if (this.pulse > 0.02) {   // a stage changed: two soft rings spread outwards
+        for (let k = 0; k < 2; k++) {
+          const u = Math.max(0, 1 - this.pulse - k * 0.12);
+          if (u <= 0 || u >= 1) continue;
+          ctx.lineWidth = 2.2 - k * 0.8; ctx.beginPath(); ctx.arc(cx, cy, 84 + u * 34, 0, Math.PI * 2);
+          ctx.strokeStyle = css(acc, 0.6 * (1 - u) * a.proc); ctx.stroke();
+        }
+      }
+      // Five particles on their own orbits (speed, radius, direction differ).
+      for (let k = 0; k < 5; k++) {
+        const th = t * (1.1 + k * 0.37) * (k % 2 ? -1 : 1) + k * 1.3, rr = 96 + k * 7;
+        ctx.beginPath(); ctx.arc(cx + Math.cos(th) * rr, cy + Math.sin(th) * rr, 2.7 - k * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = css(acc, (0.8 - k * 0.1) * a.proc); ctx.fill();
       }
     }
     if (kc > 0.99) return;
     ctx.globalAlpha = Math.min(1, (1 - kc) * 1.4);
     const ek = kc * kc * (3 - 2 * kc);
-    const R = (1 - ek) * 60 - 6 * a.rec - 6 * a.proc + 3 * a.hov * idle + (a.lm + a.lt) * 3 * a.rec + Math.sin(t * 1.6) * 0.8 * idle;
+    let R = (1 - ek) * 60 - 6 * a.rec - 6 * a.proc + 3 * a.hov * idle + (a.lm + a.lt) * 3 * a.rec + Math.sin(t * 1.6) * 0.8 * idle;
+    const breathe = 1 + Math.sin(t * 2.3) * 0.02 * a.proc;   // 0.98 .. 1.02 while processing
     const deep = dark ? [29, 29, 34] : [22, 22, 26];
     const col = mixc(acc, deep, a.rec);
+    R *= breathe * (1 + 0.03 * this.proc.kick * a.proc);
     if (R <= 0.5) { ctx.globalAlpha = 1; return; }
     const g = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.45, R * 0.1, cx, cy, R * 1.1);
     g.addColorStop(0, css(mixc(col, [255, 255, 255], 0.28 * (1 - a.rec) + 0.06 * a.rec))); g.addColorStop(1, css(col));

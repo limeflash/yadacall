@@ -288,4 +288,6 @@ export const en: Record<string, string> = {
   "Добавить термин": "Add a term", "Убрать {term}": "Remove {term}", "Объединил с {name}": "Merged with {name}", "было: {was}": "was: {was}", "Открыть логи": "Open logs",
   "macOS не даёт читать вкладки {browser}: разреши YadaCall в «Автоматизация».": "macOS blocks reading {browser} tabs: allow YadaCall under Automation.",
   "записать?": "record?",
+  "делю по голосам": "splitting voices", "индексирую": "indexing", "пишу итоги": "writing the summary", "ещё ~{s}": "~{s} left",
+  "расшифровка": "transcript", "задачи": "tasks", "спикеры": "speakers", "поиск": "search", "локально": "on-device",
 };

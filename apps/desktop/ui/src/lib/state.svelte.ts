@@ -6,6 +6,7 @@ import { toast } from "./toast.svelte";
 import { errText } from "./api/error";
 import { mergeSummaries } from "./api/summaries";
 import { visibleInterval, installVisibilityFlag } from "./visibility";
+import { meetingWords } from "./words";
 
 /** Global reactive app state. Components read from here; engine events and API calls write to it. */
 export const app = $state({
@@ -132,7 +133,8 @@ function onEvent(e: EngineEvent) {
     case "levels":
       levels.mic = e.mic; levels.system = e.system; break;
     case "liveSegment":
-      app.live = [...app.live, e.segment].slice(-40); app.silentTrack = null; break;
+      app.live = [...app.live, e.segment].slice(-40); app.silentTrack = null;
+      meetingWords.add(e.segment.text, (e.segment.corrections ?? []).map((c) => c.replacement)); break;
     case "trackSilent":
       app.silentTrack = e.track; break;
     case "status":
@@ -190,6 +192,7 @@ function onIntegration(e: IntegrationEvent) {
 }
 
 export async function startRecording(opts: { title?: string; expectedSpeakers?: number; micDevice?: string } = {}) {
+  meetingWords.clear();
   try {
     setRecorder(await api.recorderStart(opts));
     app.rev++;
