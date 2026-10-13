@@ -132,6 +132,8 @@ export interface ImportJob { id: string; fileName: string; state: ImportState; p
 // ---- models --------------------------------------------------------------------------------------
 export type ModelKind = "asr" | "voice" | "embed" | "llm";
 export type Verdict = "great" | "ok" | "slow" | "wontRun";
+/** Languages a model is good at; "multilingual" means many, Russian included, unless tags say otherwise. */
+export type ModelLang = "ru" | "en" | "multilingual";
 export interface ModelEntry {
   id: string;
   kind: ModelKind;
@@ -148,6 +150,28 @@ export interface ModelEntry {
   benchmarkable?: boolean;
   /** Present while a download is queued / running / paused / failed. */
   download?: ModelDownload;
+
+  /** Who made it, short and human ("Сбер", "NVIDIA", "Qwen · Alibaba"). Shown as-is, not translated. */
+  vendor: string;
+  /** Model family for grouping and search ("GigaAM", "Gemma 4", "QVikhr"). */
+  family: string;
+  languages: ModelLang[];
+  /** Machine-readable traits: "ru-tuned", "moe", "english-only", "reasoning-off", "streaming", "tiny". Unknown ones are ignored. */
+  tags: string[];
+  /** Total parameters, e.g. 4.0e9. */
+  params?: number;
+  /** Active parameters (mixture-of-experts only). */
+  activeParams?: number;
+  /** SPDX-ish id or a custom name: "Apache-2.0", "MIT", "YandexGPT-5-Lite". */
+  license: string;
+  licenseUrl?: string;
+  /** Not a standard permissive license (custom terms, usage thresholds): the UI flags it. */
+  licenseCustom?: boolean;
+  homepage?: string;
+  /** The backend's pick for this machine within its kind (ASR: one per language group). */
+  recommended?: boolean;
+  /** Relative quality inside its kind, higher is better. */
+  qualityRank?: number;
 }
 export interface ModelDownload {
   state: DownloadState;
