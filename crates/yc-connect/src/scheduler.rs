@@ -418,8 +418,11 @@ mod tests {
         DetectedCall {
             app: DetectedApp::GoogleMeet,
             meet_code: Some(code.into()),
+            code: Some(code.into()),
             url: None,
             browser: None,
+            title: "Google Meet".into(),
+            automation_permission_required: None,
             matched_event_id: None,
             certain: true,
         }

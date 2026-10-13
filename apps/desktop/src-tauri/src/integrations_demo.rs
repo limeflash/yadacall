@@ -184,7 +184,9 @@ impl DemoIntegrations {
             let call = DetectedCall {
                 id: "call-detected-1".into(),
                 platform: self.raw.detected_call.platform.clone(),
-                url: self.raw.detected_call.url.clone(),
+                url: Some(self.raw.detected_call.url.clone()),
+                code: None,
+                title: format!("Звонок в {}", self.raw.detected_call.platform),
                 detected_at: Utc::now(),
             };
             st.detected = Some(call.clone());
@@ -469,11 +471,18 @@ impl Integrations for DemoIntegrations {
             return Ok(None);
         };
         Ok(record.then(|| JoinOutcome {
-            title: format!(
-                "{} · {}",
-                call.platform,
-                call.url.rsplit('/').next().unwrap_or("")
-            ),
+            title: if call.title.is_empty() {
+                format!(
+                    "{} · {}",
+                    call.platform,
+                    call.url
+                        .as_deref()
+                        .and_then(|url| url.rsplit('/').next())
+                        .unwrap_or("")
+                )
+            } else {
+                call.title
+            },
             meet_url: None,
             account_email: String::new(),
             record: true,
@@ -590,7 +599,9 @@ mod tests {
         lock(&d.state).detected = Some(DetectedCall {
             id: "c".into(),
             platform: "Google Meet".into(),
-            url: "meet.google.com/kqv-tdre-xmn".into(),
+            url: Some("meet.google.com/kqv-tdre-xmn".into()),
+            code: Some("kqv-tdre-xmn".into()),
+            title: "Google Meet · kqv-tdre-xmn".into(),
             detected_at: Utc::now(),
         });
         let out = d.resolve_detected_call("c", true).await.unwrap().unwrap();

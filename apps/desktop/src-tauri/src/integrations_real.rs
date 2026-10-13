@@ -60,13 +60,16 @@ struct Prefs {
 
 impl Prefs {
     fn load(path: &Path) -> Self {
-        match std::fs::read_to_string(path) {
+        let mut prefs = match std::fs::read_to_string(path) {
             Ok(text) => serde_json::from_str(&text).unwrap_or_else(|e| {
                 tracing::warn!("{}: {e}; starting with defaults", path.display());
                 Self::default()
             }),
             Err(_) => Self::default(),
-        }
+        };
+        // This is runtime state; do not restore a stale Automation denial from a prior launch.
+        prefs.reminder.browser_automation_permission_required = None;
+        prefs
     }
 
     fn save(&self, path: &Path) {
@@ -93,6 +96,7 @@ pub struct RealIntegrations {
     open: OpenUrl,
     prefs_path: PathBuf,
     prefs: Mutex<Prefs>,
+    browser_automation_permission_required: Arc<Mutex<Option<String>>>,
     /// Sign-in in progress (add or re-auth); cancelled by `cancel_add_account`.
     signing_in: Mutex<Option<CancellationToken>>,
     connecting: Mutex<HashSet<String>>,
@@ -143,6 +147,7 @@ impl RealIntegrations {
             open,
             prefs_path,
             prefs: Mutex::new(prefs),
+            browser_automation_permission_required: Arc::new(Mutex::new(None)),
             signing_in: Mutex::new(None),
             connecting: Mutex::new(HashSet::new()),
             overrides: Mutex::new(HashMap::new()),
@@ -286,14 +291,21 @@ impl RealIntegrations {
             ),
             platform: platform_name(&call.app),
             url: detected_url(call),
+            code: call.code.clone(),
+            title: call.title.clone(),
             detected_at: self.clock.now(),
         };
+        tracing::info!(
+            platform = %dto.platform,
+            browser = ?call.browser,
+            "unscheduled call detected"
+        );
         *lock(&self.detected) = Some(dto.clone());
         self.emit(IntegrationEvent::CallDetected { call: dto });
     }
 
-    /// (Re)starts call detection according to the settings. Browser tabs are only inspected after the user pressed
-    /// "Разрешить"; without it the detector sees the microphone state, window titles and running call apps.
+    /// (Re)starts detection. A browser tab is inspected only when that browser holds the microphone and the user
+    /// enabled browser access.
     fn apply_detection(&self) {
         let settings = lock(&self.prefs).reminder.clone();
         let mut slot = lock(&self.detection);
@@ -302,14 +314,29 @@ impl RealIntegrations {
         }
         if !settings.detect_unscheduled {
             *lock(&self.detected) = None;
+            *lock(&self.browser_automation_permission_required) = None;
             self.svc.report_detection(None);
             return;
         }
+        if !settings.browser_access {
+            *lock(&self.browser_automation_permission_required) = None;
+        }
         let token = self.shutdown.child_token();
-        self.svc.start_detection(
+        let permission_state = self.browser_automation_permission_required.clone();
+        self.svc.start_detection_with_status(
             system_detector(settings.browser_access),
             DETECT_EVERY,
             token.clone(),
+            move |browser| {
+                let mut current = lock(&permission_state);
+                if *current != browser {
+                    tracing::info!(
+                        browser = ?browser,
+                        "browser Automation permission state changed"
+                    );
+                    *current = browser;
+                }
+            },
         );
         *slot = Some(token);
     }
@@ -641,24 +668,29 @@ impl Integrations for RealIntegrations {
     }
 
     async fn reminder_settings(&self) -> CResult<ReminderSettings> {
-        Ok(lock(&self.prefs).reminder.clone())
+        let mut settings = lock(&self.prefs).reminder.clone();
+        settings.browser_automation_permission_required =
+            lock(&self.browser_automation_permission_required).clone();
+        Ok(settings)
     }
 
-    async fn set_reminder_settings(&self, s: ReminderSettings) -> CResult<ReminderSettings> {
+    async fn set_reminder_settings(&self, mut s: ReminderSettings) -> CResult<ReminderSettings> {
         if !matches!(s.remind_minutes, 1 | 2 | 5) {
             return Err(Error::Invalid("remind_minutes must be 1, 2 or 5".into()));
         }
+        // The permission state is runtime-only; ignore client values and do not persist it.
+        s.browser_automation_permission_required = None;
         let before = lock(&self.prefs).reminder.clone();
         self.save_prefs(|p| p.reminder = s.clone());
         self.svc.set_reminder_settings(scheduler_settings(&s));
         if s.detect_unscheduled != before.detect_unscheduled
             || s.browser_access != before.browser_access
         {
+            *lock(&self.browser_automation_permission_required) = None;
             self.apply_detection();
         }
-        if s.browser_access && !before.browser_access {
-            request_browser_access();
-        }
+        s.browser_automation_permission_required =
+            lock(&self.browser_automation_permission_required).clone();
         Ok(s)
     }
 
@@ -685,9 +717,17 @@ impl Integrations for RealIntegrations {
         let Some(call) = call.filter(|_| record) else {
             return Ok(None);
         };
-        let room = call.url.rsplit('/').next().unwrap_or_default();
+        let room = call
+            .code
+            .as_deref()
+            .or_else(|| call.url.as_deref().and_then(|url| url.rsplit('/').next()))
+            .unwrap_or_default();
         Ok(Some(JoinOutcome {
-            title: format!("{} · {room}", call.platform),
+            title: if call.title.is_empty() {
+                format!("{} · {room}", call.platform)
+            } else {
+                call.title
+            },
             meet_url: None,
             account_email: String::new(),
             record: true,
@@ -700,16 +740,6 @@ impl Integrations for RealIntegrations {
 }
 
 // ---- helpers -------------------------------------------------------------------------------------------------
-
-/// The one-off probe behind "Разрешить": reading Chrome/Safari tabs makes macOS ask for Automation access. It runs
-/// only when the user turns browser access on, never at start-up.
-fn request_browser_access() {
-    #[cfg(target_os = "macos")]
-    tokio::task::spawn_blocking(|| {
-        use yc::detect::CallSources as _;
-        let _ = yc::detect::macos::MacSources::default().meet_tabs();
-    });
-}
 
 fn scheduler_settings(s: &ReminderSettings) -> yc::ReminderSettings {
     yc::ReminderSettings {
@@ -783,14 +813,18 @@ fn platform_name(app: &yc::types::DetectedApp) -> String {
         Zoom => "Zoom".into(),
         Teams => "Microsoft Teams".into(),
         Telegram => "Telegram".into(),
+        Slack => "Slack".into(),
+        Discord => "Discord".into(),
+        Telemost => "Yandex Telemost".into(),
+        Jitsi => "Jitsi".into(),
         Other(name) => name.clone(),
     }
 }
 
-/// `meet.google.com/kqv-tdre-xmn`, or empty when only "some call app plus microphone" was seen.
-fn detected_url(call: &yc::DetectedCall) -> String {
+/// A readable call address, or `None` when only the active app is known.
+fn detected_url(call: &yc::DetectedCall) -> Option<String> {
     if let Some(code) = &call.meet_code {
-        return format!("meet.google.com/{code}");
+        return Some(format!("meet.google.com/{code}"));
     }
     call.url
         .as_deref()
@@ -799,7 +833,6 @@ fn detected_url(call: &yc::DetectedCall) -> String {
                 .trim_start_matches("http://")
                 .to_owned()
         })
-        .unwrap_or_default()
 }
 
 struct CatalogEntry {
@@ -1155,6 +1188,7 @@ mod tests {
             open_in_account: false,
             detect_unscheduled: false,
             browser_access: false,
+            browser_automation_permission_required: None,
         };
         r.real.set_reminder_settings(s.clone()).await.unwrap();
         assert_eq!(Prefs::load(&r.real.prefs_path).reminder, s);
@@ -1230,8 +1264,11 @@ mod tests {
         yc::DetectedCall {
             app: yc::types::DetectedApp::GoogleMeet,
             meet_code: Some("kqv-tdre-xmn".into()),
+            code: Some("kqv-tdre-xmn".into()),
             url: Some("https://meet.google.com/kqv-tdre-xmn".into()),
             browser: Some("Google Chrome".into()),
+            title: "Weekly sync".into(),
+            automation_permission_required: None,
             matched_event_id: None,
             certain: true,
         }
@@ -1245,7 +1282,9 @@ mod tests {
             .handle(yc::ConnectEvent::CallDetected { call: meet_call() }, &auto);
         let call = r.real.detected_call().await.unwrap().unwrap();
         assert_eq!(call.platform, "Google Meet");
-        assert_eq!(call.url, "meet.google.com/kqv-tdre-xmn");
+        assert_eq!(call.url.as_deref(), Some("meet.google.com/kqv-tdre-xmn"));
+        assert_eq!(call.code.as_deref(), Some("kqv-tdre-xmn"));
+        assert_eq!(call.title, "Weekly sync");
         assert!(matches!(
             lock(&r.events).last(),
             Some(IntegrationEvent::CallDetected { .. })
@@ -1265,7 +1304,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(out.record && out.meet_url.is_none());
-        assert_eq!(out.title, "Google Meet · kqv-tdre-xmn");
+        assert_eq!(out.title, "Weekly sync");
         assert!(r.real.detected_call().await.unwrap().is_none());
     }
 

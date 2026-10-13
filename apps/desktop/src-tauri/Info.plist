@@ -8,6 +8,8 @@
   <string>YadaCall записывает ваш голос с микрофона во время встречи. Запись и текст остаются на этом компьютере. / YadaCall records your voice from the microphone during a meeting. Recordings and text stay on this computer.</string>
   <key>NSAudioCaptureUsageDescription</key>
   <string>YadaCall записывает звук собеседников из системы (Zoom, Meet, Telegram…), чтобы расшифровать встречу. Всё остаётся на этом компьютере. / YadaCall captures system audio (Zoom, Meet, Telegram…) to transcribe the meeting. Everything stays on this computer.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>YadaCall читает только адрес активной вкладки со звонком в выбранном браузере, чтобы определить сервис и комнату. / YadaCall reads only the address of the active call tab in the selected browser to identify the service and room.</string>
   <key>CFBundleLocalizations</key>
   <array><string>ru</string><string>en</string></array>
   <key>CFBundleDevelopmentRegion</key>

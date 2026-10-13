@@ -219,11 +219,10 @@ pub fn reminder_notice(
 pub fn detected_notice(call: &DetectedCall) -> Notice {
     Notice {
         title: format!("Ты в звонке {}", call.platform),
-        body: if call.url.is_empty() {
-            "Записать его?".to_string()
-        } else {
-            format!("Записать его?\n{}", call.url)
-        },
+        body: call.url.as_deref().map_or_else(
+            || "Записать его?".to_string(),
+            |url| format!("Записать его?\n{url}"),
+        ),
         actions: vec!["Записать", "Не сейчас"],
     }
 }
@@ -426,7 +425,9 @@ mod tests {
         let c = detected_notice(&DetectedCall {
             id: "c".into(),
             platform: "Zoom".into(),
-            url: String::new(),
+            url: None,
+            code: None,
+            title: "Звонок в Zoom".into(),
             detected_at: now(),
         });
         assert_eq!(c.body, "Записать его?");
@@ -444,7 +445,9 @@ mod tests {
         let c = detected_notice(&DetectedCall {
             id: "c".into(),
             platform: "Google Meet".into(),
-            url: "meet.google.com/kqv-tdre-xmn".into(),
+            url: Some("meet.google.com/kqv-tdre-xmn".into()),
+            code: Some("kqv-tdre-xmn".into()),
+            title: "Google Meet · kqv-tdre-xmn".into(),
             detected_at: now(),
         });
         assert_eq!(c.title, "Ты в звонке Google Meet");

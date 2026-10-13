@@ -445,11 +445,28 @@ impl ConnectService {
     where
         S: CallSources + 'static,
     {
+        self.start_detection_with_status(detector, interval, cancel, |_| {})
+    }
+
+    /// Starts call detection and reports changes in the browser Automation permission state.
+    pub fn start_detection_with_status<S, F>(
+        &self,
+        detector: Detector<S>,
+        interval: Duration,
+        cancel: CancellationToken,
+        status_changed: F,
+    ) -> tokio::task::JoinHandle<()>
+    where
+        S: CallSources + 'static,
+        F: Fn(Option<String>) + Send + Sync + 'static,
+    {
         let svc = self.clone();
         let detector = Arc::new(Mutex::new(detector));
         tokio::spawn(async move {
             let mut timer = tokio::time::interval(interval);
             timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let mut last_call: Option<DetectedCall> = None;
+            let mut last_permission: Option<String> = None;
             loop {
                 tokio::select! {
                     () = cancel.cancelled() => break,
@@ -459,13 +476,36 @@ impl ConnectService {
                     continue;
                 }
                 let detector = detector.clone();
-                let call = tokio::task::spawn_blocking(move || {
-                    detector.lock().ok().and_then(|d| d.detect())
+                let scan = tokio::task::spawn_blocking(move || {
+                    detector.lock().ok().map(|d| d.scan())
                 })
                 .await
                 .ok()
                 .flatten();
-                svc.report_detection(call);
+                let Some(scan) = scan else {
+                    continue;
+                };
+                let permission = scan
+                    .call
+                    .as_ref()
+                    .and_then(|call| call.automation_permission_required.clone());
+                if permission != last_permission {
+                    status_changed(permission.clone());
+                    last_permission = permission;
+                }
+                if scan.call != last_call {
+                    if let Some(call) = &scan.call {
+                        tracing::info!(
+                            app = ?call.app,
+                            browser = ?call.browser,
+                            "microphone call state detected"
+                        );
+                    } else if last_call.is_some() {
+                        tracing::info!("microphone call state cleared");
+                    }
+                    last_call.clone_from(&scan.call);
+                }
+                svc.report_detection(scan.call);
             }
         })
     }

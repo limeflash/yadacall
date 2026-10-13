@@ -3,8 +3,7 @@
 use std::time::Duration;
 
 use clap::Args;
-use yc_connect::detect::{MicState, system_detector};
-use yc_connect::types::DetectedCall;
+use yc_connect::detect::{DetectionScan, MicState, system_detector};
 
 /// `detect-call` options.
 #[derive(Debug, Args)]
@@ -32,12 +31,12 @@ pub async fn run(args: DetectArgs) -> anyhow::Result<()> {
         let detector = detector.clone();
         move || {
             let d = detector.clone();
-            tokio::task::spawn_blocking(move || (d.mic_state(), d.detect()))
+            tokio::task::spawn_blocking(move || d.scan())
         }
     };
     if !args.watch {
-        let (mic, call) = probe().await?;
-        report(mic, call.as_ref(), json)?;
+        let scan = probe().await?;
+        report(&scan, json)?;
         return Ok(());
     }
     if !args.no_tabs && !json {
@@ -46,30 +45,52 @@ pub async fn run(args: DetectArgs) -> anyhow::Result<()> {
              (macOS may ask once for Automation permission per browser; use --no-tabs to avoid it)"
         );
     }
-    let mut last: Option<DetectedCall> = None;
+    let mut last: Option<DetectionScan> = None;
     let mut timer = tokio::time::interval(Duration::from_secs(args.interval.max(1)));
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => return Ok(()),
             _ = timer.tick() => {}
         }
-        let (mic, call) = probe().await?;
-        if call != last {
-            report(mic, call.as_ref(), json)?;
-            last = call;
+        let scan = probe().await?;
+        if Some(&scan) != last.as_ref() {
+            report(&scan, json)?;
+            last = Some(scan);
         }
     }
 }
 
-fn report(mic: MicState, call: Option<&DetectedCall>, json: bool) -> anyhow::Result<()> {
+fn report(scan: &DetectionScan, json: bool) -> anyhow::Result<()> {
     if json {
         println!(
             "{}",
-            serde_json::json!({ "microphone": format!("{mic:?}"), "call": call })
+            serde_json::json!({
+                "microphone": format!("{:?}", scan.microphone),
+                "microphoneUsers": scan.microphone_users,
+                "call": scan.call,
+            })
         );
         return Ok(());
     }
-    match call {
+    for user in &scan.microphone_users {
+        let mut details = Vec::new();
+        if let Some(bundle_id) = &user.bundle_id {
+            details.push(bundle_id.clone());
+        }
+        if let Some(pid) = user.pid {
+            details.push(format!("pid {pid}"));
+        }
+        println!(
+            "microphone held by {}{}",
+            user.process_name,
+            if details.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", details.join(", "))
+            }
+        );
+    }
+    match scan.call.as_ref() {
         Some(c) => println!(
             "call detected: {:?}{}{}{}",
             c.app,
@@ -89,7 +110,7 @@ fn report(mic: MicState, call: Option<&DetectedCall>, json: bool) -> anyhow::Res
         ),
         None => println!(
             "no call detected (microphone: {})",
-            match mic {
+            match scan.microphone {
                 MicState::InUse => "in use, but no known call app or Meet tab found",
                 MicState::Idle => "idle",
                 MicState::Unknown => "unknown on this system",

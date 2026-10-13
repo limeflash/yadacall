@@ -18,6 +18,7 @@ pub mod shell;
 pub mod updates;
 
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
@@ -99,6 +100,7 @@ pub const INTEGRATION_COMMANDS: &[&str] = &[
 ];
 
 pub fn run() {
+    let _log_guard = init_file_logging();
     let builder = tauri::Builder::default()
         // must be first: a second launch just focuses the running instance
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -305,4 +307,82 @@ pub fn run() {
             }
             let _ = (app, event);
         });
+}
+
+fn init_file_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    use tracing_appender::rolling::{Builder, Rotation};
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let Some(directory) = log_directory() else {
+        init_stderr_logging(filter);
+        return None;
+    };
+    if let Err(error) = std::fs::create_dir_all(&directory) {
+        eprintln!("could not create YadaCall log directory {}: {error}", directory.display());
+        init_stderr_logging(filter);
+        return None;
+    }
+    let appender = match Builder::new()
+        .rotation(Rotation::DAILY)
+        .filename_prefix("yadacall.log")
+        .max_log_files(7)
+        .build(&directory)
+    {
+        Ok(appender) => appender,
+        Err(error) => {
+            eprintln!("could not open YadaCall log files: {error}");
+            init_stderr_logging(filter);
+            return None;
+        }
+    };
+    let (writer, guard) = tracing_appender::non_blocking(appender);
+    if let Err(error) = tracing_subscriber::fmt()
+        .with_env_filter(filter.clone())
+        .with_writer(writer)
+        .with_ansi(false)
+        .try_init()
+    {
+        eprintln!("could not initialize YadaCall file logging: {error}");
+        init_stderr_logging(filter);
+        return None;
+    }
+    Some(guard)
+}
+
+fn init_stderr_logging(filter: tracing_subscriber::EnvFilter) {
+    if let Err(error) = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .try_init()
+    {
+        eprintln!("could not initialize YadaCall logging: {error}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn log_directory() -> Option<PathBuf> {
+    Some(paths::home_dir().join("Library/Logs/YadaCall"))
+}
+
+#[cfg(target_os = "windows")]
+fn log_directory() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| Some(paths::home_dir().join("AppData/Local")))
+        .map(|base| base.join("YadaCall").join("logs"))
+}
+
+#[cfg(target_os = "linux")]
+fn log_directory() -> Option<PathBuf> {
+    std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| Some(paths::home_dir().join(".local/state")))
+        .map(|base| base.join("yadacall"))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn log_directory() -> Option<PathBuf> {
+    None
 }
