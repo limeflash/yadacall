@@ -4,6 +4,7 @@
  * ripples with speech. Input levels come from real `Levels` events (the mock emits the same shape).
  */
 import { levels } from "./state.svelte";
+import { isVisible } from "./visibility";
 
 export interface VisState { phase: "idle" | "rec" | "proc" | "done"; paused: boolean; job: number; hover: boolean }
 export interface VisColors { acc: string; dark: boolean }
@@ -16,24 +17,54 @@ export class Visualizer {
   private a = { rec: 0, proc: 0, hov: 0, lm: 0, lt: 0, burst: 0, cat: 0 };
   private ripples: { t0: number; me: boolean; amp: number }[] = [];
   private lastRip = 0;
-  private bgT = 0;
   private raf = 0;
   private parts = Array.from({ length: 26 }, (_, i) => ({ ph: Math.random(), sp: 0.12 + Math.random() * 0.16, side: i % 2 ? 1 : -1, off: (Math.random() - 0.5) * 1.4, sz: 1.2 + Math.random() * 1.8 }));
-  private reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  private motion = typeof matchMedia !== "undefined" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+  private reduced = this.motion?.matches ?? false;
+  private last = 0;
+  /** Milliseconds since the previous frame; the easing below is tuned for 60 fps and scaled by this. */
+  private dt = 16.7;
 
   constructor(private orb: HTMLCanvasElement, private bg: HTMLCanvasElement, private state: () => VisState, private colors: () => VisColors) {}
 
+  /**
+   * Draws at most 30 fps (10 with reduced motion), and not at all while the window is hidden, minimised or
+   * covered (`visibilitychange`).
+   */
   start() {
-    const loop = (ts: number) => { this.draw(ts); this.drawBg(ts); this.raf = requestAnimationFrame(loop); };
-    this.raf = requestAnimationFrame(loop);
+    this.motion?.addEventListener("change", this.onMotion);
+    document.addEventListener("visibilitychange", this.onVis);
+    this.onVis();
   }
-  stop() { cancelAnimationFrame(this.raf); }
+  stop() {
+    this.motion?.removeEventListener("change", this.onMotion);
+    document.removeEventListener("visibilitychange", this.onVis);
+    cancelAnimationFrame(this.raf); this.raf = 0;
+  }
+  private onMotion = () => { this.reduced = this.motion?.matches ?? false; };
+  private onVis = () => {
+    if (!isVisible()) { cancelAnimationFrame(this.raf); this.raf = 0; return; }
+    if (this.raf) return;
+    this.last = 0;
+    this.raf = requestAnimationFrame(this.loop);
+  };
+  private loop = (ts: number) => {
+    this.raf = 0;
+    if (!isVisible()) return;
+    const every = this.reduced ? 100 : 1000 / 30;
+    if (this.last === 0 || ts - this.last >= every - 3) {
+      this.dt = this.last === 0 ? 16.7 : Math.min(100, ts - this.last);
+      this.last = ts;
+      this.draw(ts); this.drawBg(ts);
+    }
+    this.raf = requestAnimationFrame(this.loop);
+  };
+  /** Per-frame easing factor `f` (defined at 60 fps) for the current frame time. */
+  private k = (f: number) => 1 - Math.pow(1 - f, this.dt / 16.7);
   burst() { this.a.burst = 1; }
 
   private drawBg(tsRaw: number) {
     const c = this.bg;
-    if (tsRaw - this.bgT < 33) return;
-    this.bgT = tsRaw;
     const ts = this.reduced ? 0 : tsRaw;
     const W = c.clientWidth || 792, H = 520, dpr = window.devicePixelRatio || 1;
     if (c.width !== Math.round(W * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
@@ -94,18 +125,18 @@ export class Visualizer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, S, S);
     const s = this.state(), a = this.a, t = (this.reduced ? 0 : tsRaw) / 1000, cx = S / 2, cy = S / 2;
     const rec = s.phase === "rec", live = rec && !s.paused, proc = s.phase === "proc";
-    a.rec += ((rec ? 1 : 0) - a.rec) * 0.09;
-    a.proc += ((proc ? 1 : 0) - a.proc) * 0.08;
-    a.hov += ((s.hover ? 1 : 0) - a.hov) * 0.08;
+    a.rec += ((rec ? 1 : 0) - a.rec) * this.k(0.09);
+    a.proc += ((proc ? 1 : 0) - a.proc) * this.k(0.08);
+    a.hov += ((s.hover ? 1 : 0) - a.hov) * this.k(0.08);
     const tm = live ? 0.04 + Math.min(1, levels.mic.peak) * 0.96 : 0.04;
     const tt = live ? 0.04 + Math.min(1, levels.system.peak) * 0.96 : 0.04;
-    a.lm += (tm - a.lm) * 0.18; a.lt += (tt - a.lt) * 0.18;
-    a.burst *= 0.955;
+    a.lm += (tm - a.lm) * this.k(0.18); a.lt += (tt - a.lt) * this.k(0.18);
+    a.burst *= Math.pow(0.955, this.dt / 16.7);
     const { acc: accHex, dark } = this.colors();
     const acc = rgb(accHex);
     const them = dark ? [215, 215, 225] : [80, 80, 92];
     const idle = 1 - Math.max(a.rec, a.proc);
-    a.cat += ((s.phase === "idle" ? 1 : 0) - a.cat) * 0.075;
+    a.cat += ((s.phase === "idle" ? 1 : 0) - a.cat) * this.k(0.075);
     const kc = a.cat;
     if (kc > 0.01) {
       const tx = [cx - 38, cy + 4], tx2 = [cx + 40, cy + 6];

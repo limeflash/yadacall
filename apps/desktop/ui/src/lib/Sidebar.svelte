@@ -2,6 +2,7 @@
   import Icon from "./kit/Icon.svelte";
   import Mascot from "./kit/Mascot.svelte";
   import { t } from "./i18n/index.svelte";
+  import { visibleInterval } from "./visibility";
   import { nav, go } from "./router.svelte";
   import { app, theme, elapsedMs, stopRecording, levels } from "./state.svelte";
   import { clock, pct } from "./format";
@@ -19,11 +20,10 @@
   let bars = $state([3, 3, 3, 3, 3]);
   $effect(() => {
     if (!recording) return;
-    const iv = setInterval(() => {
+    return visibleInterval(() => {
       const lvl = Math.max(levels.mic.peak, levels.system.peak);
       bars = bars.map((_, i) => paused ? 3 : 3 + Math.round(Math.min(1, lvl * (0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 180 + i * 1.3)))) * 9));
     }, 100);
-    return () => clearInterval(iv);
   });
 
   function recClick() {

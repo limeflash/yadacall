@@ -10,6 +10,7 @@
   import { t } from "../i18n/index.svelte";
   import { clock, hhmm, mss } from "../format";
   import { isMac, prettyAccel } from "../platform";
+  import { visibleInterval } from "../visibility";
 
   let meetings = $state<MeetingListItem[]>([]);
   let micOn = $state(true), sysOn = $state(true);
@@ -53,7 +54,8 @@
     load(); loadCalls();
     const off = onIntegrationEvent((e) => { if (e.type !== "addProgress") loadCalls(); });
     const poll = setInterval(loadCalls, 15000);
-    const iv = setInterval(() => {
+    const stopBars = visibleInterval(() => {
+      if (!recording && hist.every((h) => h === 3)) return; // nothing moves while idle
       const lvl = Math.max(levels.mic.peak, levels.system.peak);
       hist.push(paused || !recording ? 3 : Math.round(4 + lvl * 20 + Math.random() * 6)); hist.shift();
       bars = [...hist];
@@ -62,7 +64,7 @@
     ro.observe(root);
     const onFocus = () => { load(); loadCalls(); };
     window.addEventListener("focus", onFocus);
-    return () => { clearInterval(iv); clearInterval(poll); off(); ro.disconnect(); window.removeEventListener("focus", onFocus); };
+    return () => { stopBars(); clearInterval(poll); off(); ro.disconnect(); window.removeEventListener("focus", onFocus); };
   });
   $effect(() => { void app.rev; load(); });
 

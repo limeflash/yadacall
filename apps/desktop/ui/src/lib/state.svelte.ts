@@ -4,6 +4,7 @@ import { i18n, plural, t } from "./i18n/index.svelte";
 import { go } from "./router.svelte";
 import { toast } from "./toast.svelte";
 import { errText } from "./api/error";
+import { visibleInterval, installVisibilityFlag } from "./visibility";
 
 /** Global reactive app state. Components read from here; engine events and API calls write to it. */
 export const app = $state({
@@ -212,7 +213,8 @@ export async function initApp() {
   if (started) return;
   started = true;
   if (typeof matchMedia !== "undefined") matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => { app.systemDark = e.matches; });
-  setInterval(() => { app.now = Date.now(); }, 200);
+  installVisibilityFlag();
+  visibleInterval(() => { app.now = Date.now(); }, 200);
   await api.onEngine(onEvent);
   await integrations.onIntegrations(onIntegration);
   await api.onNavigate((hash) => { location.hash = hash; });

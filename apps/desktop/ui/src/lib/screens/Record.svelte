@@ -14,6 +14,7 @@
   import { toast } from "../toast.svelte";
   import { Visualizer, type VisState } from "../visualizer";
   import { prettyAccel } from "../platform";
+  import { visibleInterval } from "../visibility";
 
   const PLACEHOLDERS = ["Как назовём встречу?", "Синк по онбордингу", "Интервью с кандидатом", "Один на один с Аней", "Звонок с подрядчиком"];
   const SPK = ["авто", "1", "2", "3+"];
@@ -48,7 +49,7 @@
     api.listInputDevices().then((d) => { devices = d; mic = d.find((x) => x.isDefault)?.id ?? d[0]?.id ?? ""; });
     vis = new Visualizer(orbCanvas, bgCanvas, () => ({ phase, paused, job, hover }), () => ({ acc: /^#[0-9a-f]{6}$/i.test(theme.accent) ? theme.accent : "#7dd3a0", dark: theme.resolved === "dark" }));
     vis.start();
-    const iv = setInterval(() => {
+    const iv = visibleInterval(() => {
       const live = recording && !paused;
       meBars = barsFor(live && micOn ? levels.mic.peak : 0);
       themBars = barsFor(live && sysOn ? levels.system.peak : 0);
@@ -60,7 +61,7 @@
         if (e.status.state === "ready") { job = 100; if (!done) { done = true; vis?.burst(); } }
       }
     });
-    return () => { clearInterval(iv); clearInterval(phIv); off(); };
+    return () => { iv(); clearInterval(phIv); off(); };
   });
   onDestroy(() => vis?.stop());
 

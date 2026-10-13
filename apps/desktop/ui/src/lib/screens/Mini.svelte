@@ -5,16 +5,16 @@
   import { app, elapsedMs, levels, togglePause, addBookmark, stopRecording } from "../state.svelte";
   import { t } from "../i18n/index.svelte";
   import { clock } from "../format";
+  import { visibleInterval } from "../visibility";
 
   const paused = $derived(app.recorder.phase === "paused");
   let bars = $state<number[]>(Array.from({ length: 14 }, () => 2));
   onMount(() => {
     api.popoverFit("mini", 64);
-    const iv = setInterval(() => {
+    return visibleInterval(() => {
       const lvl = Math.max(levels.mic.peak, levels.system.peak);
       bars = bars.map((_, j) => (paused ? 2 : Math.round(3 + lvl * (6 + 7 * Math.abs(Math.sin(performance.now() / 150 + j * 1.7))))));
     }, 80);
-    return () => clearInterval(iv);
   });
   async function stop() { const id = await stopRecording(); await api.openInMain(id ? `#/meeting/${id}/summary` : "#/"); }
 </script>

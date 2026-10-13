@@ -226,3 +226,6 @@ mark.yc-hit { background: var(--accent-soft); color: var(--text); border-bottom:
   .yc-in, .yc-in-2, .yc-in-3, .yc-rec, .yc-live, .yc-spin, .yc-pop, .yc-sheet, .yc-float, .yc-popin, .yc-caret::after, .ycm-anim, .ycm-anim * { animation: none !important; }
   .yc-lift:hover { transform: none; }
 }
+
+/* nothing animates in a window nobody can see (see visibility.ts) */
+html[data-hidden] *, html[data-hidden] *::before, html[data-hidden] *::after { animation-play-state: paused !important; }
