@@ -6,12 +6,12 @@
 pub mod procs;
 pub mod titles;
 
+#[cfg(target_os = "linux")]
+pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(target_os = "windows")]
 pub mod windows;
-#[cfg(target_os = "linux")]
-pub mod linux;
 
 use crate::types::{DetectedApp, DetectedCall};
 
@@ -162,10 +162,16 @@ impl<S: CallSources> Detector<S> {
         }
 
         let mut first_browser = None;
+        let mut seen: Vec<&str> = Vec::new();
         for user in users {
             let Some(browser) = browser_for_user(user) else {
                 continue;
             };
+            // A browser has many helper processes; inspect it once per pass.
+            if seen.contains(&browser.bundle_id) {
+                continue;
+            }
+            seen.push(browser.bundle_id);
             first_browser.get_or_insert((user, browser));
             if !self.inspect_browsers {
                 continue;
@@ -177,7 +183,10 @@ impl<S: CallSources> Detector<S> {
                     }
                 }
                 Err(TabAccessError::PermissionDenied { browser: denied }) => {
-                    tracing::debug!(browser = denied, "browser tab access requires Automation permission");
+                    tracing::debug!(
+                        browser = denied,
+                        "browser tab access requires Automation permission"
+                    );
                     if denied == browser.name {
                         return Some(generic_browser_call(browser, Some(denied)));
                     }
@@ -362,14 +371,18 @@ mod tests {
 
     #[test]
     fn idle_or_unknown_mic_short_circuits() {
-        assert!(Detector::new(fake(MicProbe::Known(vec![])), true)
-            .scan()
-            .call
-            .is_none());
-        assert!(Detector::new(fake(MicProbe::Unknown), true)
-            .scan()
-            .call
-            .is_none());
+        assert!(
+            Detector::new(fake(MicProbe::Known(vec![])), true)
+                .scan()
+                .call
+                .is_none()
+        );
+        assert!(
+            Detector::new(fake(MicProbe::Unknown), true)
+                .scan()
+                .call
+                .is_none()
+        );
     }
 
     #[test]
@@ -378,7 +391,10 @@ mod tests {
         let call = scan.call.expect("call tab");
         assert_eq!(call.app, DetectedApp::GoogleMeet);
         assert_eq!(call.meet_code.as_deref(), Some("abc-defg-hij"));
-        assert_eq!(call.url.as_deref(), Some("https://meet.google.com/abc-defg-hij"));
+        assert_eq!(
+            call.url.as_deref(),
+            Some("https://meet.google.com/abc-defg-hij")
+        );
         assert_eq!(call.title, "Weekly sync");
         assert_eq!(call.browser.as_deref(), Some("Brave"));
         assert_eq!(scan.microphone_users, vec![brave()]);
@@ -401,9 +417,14 @@ mod tests {
         fake.tab_error = Some(TabAccessError::PermissionDenied {
             browser: "Brave".into(),
         });
-        let call = Detector::new(fake, true).detect().expect("generic browser call");
+        let call = Detector::new(fake, true)
+            .detect()
+            .expect("generic browser call");
         assert_eq!(call.app, DetectedApp::Other("Brave".into()));
-        assert_eq!(call.automation_permission_required.as_deref(), Some("Brave"));
+        assert_eq!(
+            call.automation_permission_required.as_deref(),
+            Some("Brave")
+        );
     }
 
     #[test]
@@ -423,6 +444,73 @@ mod tests {
             .detect()
             .expect("Zoom call");
         assert_eq!(call.app, DetectedApp::Zoom);
+    }
+
+    #[test]
+    fn unreadable_or_call_free_tabs_fall_back_to_generic_browser_call() {
+        let mut unavailable = fake(MicProbe::Known(vec![brave()]));
+        unavailable.tab_error = Some(TabAccessError::Unavailable);
+        let call = Detector::new(unavailable, true)
+            .detect()
+            .expect("generic call");
+        assert_eq!(call.app, DetectedApp::Other("Brave".into()));
+        assert_eq!(call.automation_permission_required, None);
+
+        let mut no_call_tab = fake(MicProbe::Known(vec![brave()]));
+        no_call_tab.tabs.clear();
+        let call = Detector::new(no_call_tab, true)
+            .detect()
+            .expect("generic call");
+        assert_eq!(call.url, None);
+        assert_eq!(call.title, "Звонок в Brave");
+    }
+
+    #[test]
+    fn helper_processes_of_one_browser_are_inspected_once_and_native_app_wins() {
+        struct Counting(std::sync::atomic::AtomicUsize);
+        impl CallSources for Counting {
+            fn microphone_users(&self) -> MicProbe {
+                let helper = |pid| MicUser {
+                    process_name: "Brave".into(),
+                    bundle_id: Some("com.brave.Browser.helper".into()),
+                    pid: Some(pid),
+                };
+                MicProbe::Known(vec![helper(1), helper(2)])
+            }
+            fn call_tabs(&self, _: &MicUser) -> Result<Vec<titles::CallTab>, TabAccessError> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(TabAccessError::Unavailable)
+            }
+        }
+        let sources = Counting(Default::default());
+        let detector = Detector::new(sources, true);
+        assert!(detector.detect().is_some());
+        assert_eq!(
+            detector.sources.0.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+
+        let zoom = MicUser {
+            process_name: "zoom.us".into(),
+            bundle_id: Some("us.zoom.xos".into()),
+            pid: Some(9),
+        };
+        let call = Detector::new(fake(MicProbe::Known(vec![brave(), zoom])), true)
+            .detect()
+            .expect("call");
+        assert_eq!(call.app, DetectedApp::Zoom);
+    }
+
+    #[test]
+    fn non_call_microphone_holders_are_not_calls() {
+        let dictation = MicUser {
+            process_name: "Notes".into(),
+            bundle_id: Some("com.apple.Notes".into()),
+            pid: Some(5),
+        };
+        let scan = Detector::new(fake(MicProbe::Known(vec![dictation])), true).scan();
+        assert_eq!(scan.microphone, MicState::InUse);
+        assert!(scan.call.is_none());
     }
 
     #[test]

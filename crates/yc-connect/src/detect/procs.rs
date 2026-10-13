@@ -199,7 +199,10 @@ mod tests {
         }
         assert_eq!(classify_process("Slack"), Some(DetectedApp::Slack));
         assert_eq!(classify_process("Discord"), Some(DetectedApp::Discord));
-        assert_eq!(classify_process("Yandex Telemost"), Some(DetectedApp::Telemost));
+        assert_eq!(
+            classify_process("Yandex Telemost"),
+            Some(DetectedApp::Telemost)
+        );
     }
 
     #[test]

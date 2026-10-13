@@ -239,6 +239,7 @@ async fn agenda(
                     VideoProvider::Zoom => "Zoom",
                     VideoProvider::Teams => "Teams",
                     VideoProvider::Telemost => "Telemost",
+                    VideoProvider::Jitsi => "Jitsi",
                     VideoProvider::Meet => "Meet",
                     VideoProvider::Other => "link",
                 })

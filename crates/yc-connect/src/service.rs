@@ -476,12 +476,11 @@ impl ConnectService {
                     continue;
                 }
                 let detector = detector.clone();
-                let scan = tokio::task::spawn_blocking(move || {
-                    detector.lock().ok().map(|d| d.scan())
-                })
-                .await
-                .ok()
-                .flatten();
+                let scan =
+                    tokio::task::spawn_blocking(move || detector.lock().ok().map(|d| d.scan()))
+                        .await
+                        .ok()
+                        .flatten();
                 let Some(scan) = scan else {
                     continue;
                 };

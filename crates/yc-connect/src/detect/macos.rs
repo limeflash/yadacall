@@ -12,8 +12,8 @@ use super::procs::{self, BrowserApp};
 use super::titles::call_tabs_from_output;
 use super::{CallSources, MicProbe, MicUser, TabAccessError};
 
-/// A denied browser is not asked again for this long.
-const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(10 * 60);
+/// A browser whose tabs could not be read (no scripting support, timeout) is retried after this.
+const RETRY_AFTER_FAILURE: Duration = Duration::from_secs(60);
 const RETRY_AFTER_PERMISSION_DENIAL: Duration = Duration::from_secs(20);
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(4);
 
@@ -74,13 +74,19 @@ impl AppleScriptRunner for CommandRunner {
     }
 }
 
-/// AppleScript that reads only the active tab of one identified browser.
+/// AppleScript that lists the addresses of every tab of the browser. Only the URLs are read (no
+/// titles or page content); the caller keeps just the ones that are supported call pages.
 pub fn tabs_script(browser: BrowserApp) -> String {
     format!(
         "tell application id \"{}\"\n\
-         if (count of windows) is 0 then return \"\"\n\
-         set t to active tab of front window\n\
-         return URL of t\n\
+         set urls to {{}}\n\
+         repeat with w in windows\n\
+         try\n\
+         set urls to urls & (URL of every tab of w)\n\
+         end try\n\
+         end repeat\n\
+         set AppleScript's text item delimiters to linefeed\n\
+         return urls as text\n\
          end tell",
         browser.bundle_id
     )
@@ -106,7 +112,10 @@ impl MacSources {
         }
     }
 
-    fn read_tabs(&self, browser: BrowserApp) -> Result<Vec<super::titles::CallTab>, TabAccessError> {
+    fn read_tabs(
+        &self,
+        browser: BrowserApp,
+    ) -> Result<Vec<super::titles::CallTab>, TabAccessError> {
         if let Some((at, error)) = self
             .failed_at
             .lock()
@@ -135,7 +144,7 @@ impl MacSources {
                         }
                     }
                     _ => {
-                        tracing::debug!(browser = browser.name, "could not read active browser tab");
+                        tracing::debug!(browser = browser.name, "could not read browser tabs");
                         TabAccessError::Unavailable
                     }
                 };
@@ -224,10 +233,7 @@ impl CallSources for MacSources {
         core_audio_mic_users()
     }
 
-    fn call_tabs(
-        &self,
-        user: &MicUser,
-    ) -> Result<Vec<super::titles::CallTab>, TabAccessError> {
+    fn call_tabs(&self, user: &MicUser) -> Result<Vec<super::titles::CallTab>, TabAccessError> {
         let browser = user
             .bundle_id
             .as_deref()
@@ -254,14 +260,12 @@ mod tests {
     }
 
     #[test]
-    fn script_targets_one_bundle_and_only_the_active_tab() {
+    fn script_targets_one_bundle_and_reads_only_urls() {
         let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
         let script = tabs_script(browser);
         assert!(script.contains("application id \"com.brave.Browser\""));
-        assert!(script.contains("active tab of front window"));
-        assert!(script.contains("URL of t"));
-        assert!(!script.contains("title of t"));
-        assert!(!script.contains("repeat with t in tabs"));
+        assert!(script.contains("URL of every tab of w"));
+        assert!(!script.contains("title"));
     }
 
     #[test]
@@ -283,6 +287,46 @@ mod tests {
                 browser: "Brave".into()
             })
         );
+    }
+
+    #[test]
+    fn denial_code_1744_and_other_failures_are_classified_and_cached() {
+        let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
+        let user = MicUser {
+            process_name: "Brave".into(),
+            bundle_id: Some(browser.bundle_id.into()),
+            pid: Some(42),
+        };
+        let denied = MacSources::with_runner(Arc::new(MockRunner {
+            result: Err(ScriptFailure::Exit("execution error: (-1744)".into())),
+        }));
+        assert!(matches!(
+            denied.call_tabs(&user),
+            Err(TabAccessError::PermissionDenied { .. })
+        ));
+        for failure in [ScriptFailure::Timeout, ScriptFailure::Launch] {
+            let sources = MacSources::with_runner(Arc::new(MockRunner {
+                result: Err(failure),
+            }));
+            assert_eq!(sources.call_tabs(&user), Err(TabAccessError::Unavailable));
+        }
+    }
+
+    #[test]
+    fn successful_script_output_yields_call_tabs_for_that_browser() {
+        let browser = browser_for_bundle_id("com.brave.Browser").expect("known browser");
+        let user = MicUser {
+            process_name: "Brave".into(),
+            bundle_id: Some(browser.bundle_id.into()),
+            pid: Some(42),
+        };
+        let sources = MacSources::with_runner(Arc::new(MockRunner {
+            result: Ok("https://example.com/\nhttps://meet.google.com/pfm-bdvp-jkc\n".into()),
+        }));
+        let tabs = sources.call_tabs(&user).expect("tabs");
+        assert_eq!(tabs.len(), 1);
+        assert_eq!(tabs[0].code.as_deref(), Some("pfm-bdvp-jkc"));
+        assert_eq!(tabs[0].browser, "Brave");
     }
 
     #[test]

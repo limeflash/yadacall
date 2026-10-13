@@ -66,7 +66,11 @@ fn report(scan: &DetectionScan, json: bool) -> anyhow::Result<()> {
             "{}",
             serde_json::json!({
                 "microphone": format!("{:?}", scan.microphone),
-                "microphoneUsers": scan.microphone_users,
+                "microphoneUsers": scan.microphone_users.iter().map(|u| serde_json::json!({
+                    "processName": u.process_name,
+                    "bundleId": u.bundle_id,
+                    "pid": u.pid,
+                })).collect::<Vec<_>>(),
                 "call": scan.call,
             })
         );
@@ -91,23 +95,23 @@ fn report(scan: &DetectionScan, json: bool) -> anyhow::Result<()> {
         );
     }
     match scan.call.as_ref() {
-        Some(c) => println!(
-            "call detected: {:?}{}{}{}",
-            c.app,
-            c.meet_code
-                .as_ref()
-                .map(|m| format!(" {m}"))
-                .unwrap_or_default(),
-            c.browser
-                .as_ref()
-                .map(|b| format!(" in {b}"))
-                .unwrap_or_default(),
-            if c.certain {
-                ""
-            } else {
-                " (likely: a call app is running while the microphone is in use)"
+        Some(c) => {
+            println!(
+                "call detected: {}{}{}",
+                c.title,
+                c.browser
+                    .as_ref()
+                    .map(|b| format!(" [browser: {b}]"))
+                    .unwrap_or_default(),
+                c.url.as_ref().map(|u| format!(" {u}")).unwrap_or_default(),
+            );
+            if let Some(browser) = &c.automation_permission_required {
+                println!(
+                    "  tab access to {browser} is not authorized: allow it in System Settings \
+                     > Privacy & Security > Automation"
+                );
             }
-        ),
+        }
         None => println!(
             "no call detected (microphone: {})",
             match scan.microphone {

@@ -33,7 +33,7 @@ windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsA
 winreg = "0.55"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cidre = { version = "0.29", default-features = false, features = ["core_audio"] }
+cidre = { version = "0.29", default-features = false, features = ["core_audio", "dispatch", "macos_14_2"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
