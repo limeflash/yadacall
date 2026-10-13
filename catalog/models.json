@@ -319,10 +319,8 @@
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
       "licenseCustom": true,
       "homepage": "https://huggingface.co/moondream/parakeet-ultra",
-      "qualityRank": 96,
-      "defaultTiers": [
-        "multilingual"
-      ],
+      "qualityRank": 89,
+      "defaultTiers": [],
       "files": [
         {
           "path": "encoder-model.int8.onnx",
@@ -391,7 +389,8 @@
       "descriptionRu": "Мультиязычная CTC-модель для русского, английского, казахского, кыргызского и узбекского.",
       "descriptionEn": "Multilingual CTC recognizer for Russian, English, Kazakh, Kyrgyz and Uzbek.",
       "languages": [
-        "multilingual"
+        "ru",
+        "en"
       ],
       "vendor": "Сбер",
       "family": "GigaAM",
@@ -403,9 +402,7 @@
       "licenseCustom": false,
       "homepage": "https://huggingface.co/ai-sage/GigaAM-Multilingual",
       "qualityRank": 93,
-      "defaultTiers": [
-        "multilingual"
-      ],
+      "defaultTiers": [],
       "files": [
         {
           "path": "multilingual_ctc.int8.onnx",
@@ -806,9 +803,7 @@
       },
       "vendor": "Google",
       "family": "Gemma 4",
-      "tags": [
-        "moe"
-      ],
+      "tags": [],
       "qualityRank": 72,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
@@ -867,9 +862,7 @@
       },
       "vendor": "Google",
       "family": "Gemma 4",
-      "tags": [
-        "moe"
-      ],
+      "tags": [],
       "qualityRank": 74,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
@@ -930,9 +923,7 @@
       },
       "vendor": "Google",
       "family": "Gemma 4",
-      "tags": [
-        "moe"
-      ],
+      "tags": [],
       "qualityRank": 82,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
@@ -991,9 +982,7 @@
       },
       "vendor": "Google",
       "family": "Gemma 4",
-      "tags": [
-        "moe"
-      ],
+      "tags": [],
       "qualityRank": 84,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
@@ -1532,7 +1521,7 @@
       "licenseUrl": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct/blob/main/LICENSE",
       "licenseCustom": true,
       "homepage": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
-      "qualityRank": 97,
+      "qualityRank": 91,
       "defaultTiers": [],
       "files": [
         {
