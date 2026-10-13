@@ -285,7 +285,7 @@ export const en: Record<string, string> = {
   "Итоги выключены в настройках.": "Summaries are turned off in Settings.",
   "Словарь терминов": "Term dictionary",
   "Названия продуктов, имена, жаргон — расшифровка поправит написание, например «Google Mit» → «Google Meet»": "Product names, people, jargon — transcripts will fix the spelling, e.g. “Google Mit” → “Google Meet”",
-  "Добавить термин": "Add a term", "Убрать {term}": "Remove {term}", "Объединил с {name}": "Merged with {name}", "было: {was}": "was: {was}", "Открыть логи": "Open logs",
+  "Добавить термин": "Add a term", "Убрать {term}": "Remove {term}", "Объединил с {name}": "Merged with {name}", "было: {was}": "was: {was}", "Открыть логи": "Open logs", "Пройти настройку заново": "Run setup again",
   "macOS не даёт читать вкладки {browser}: разреши YadaCall в «Автоматизация».": "macOS blocks reading {browser} tabs: allow YadaCall under Automation.",
   "записать?": "record?",
   "делю по голосам": "splitting voices", "индексирую": "indexing", "пишу итоги": "writing the summary", "ещё ~{s}": "~{s} left",

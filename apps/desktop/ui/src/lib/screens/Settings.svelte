@@ -184,6 +184,7 @@
           {:else if update.phase === "available" || update.phase === "installing"}<button type="button" class="uplink" onclick={() => (update.sheet = true)}>{t("доступна {v}", { v: update.version ?? "" })}</button>
           {:else}<button type="button" class="uplink" onclick={checkForUpdates}>{t("Проверить обновления")}</button>{/if}
           · <button type="button" class="uplink" onclick={() => api.revealLogs().catch((e) => toast.error(e))}>{t("Открыть логи")}</button>
+          · <button type="button" class="uplink" onclick={() => go({ name: "onboarding" })}>{t("Пройти настройку заново")}</button>
         </span>
         {#if update.phase === "error" && update.error}<span class="sub" role="alert" style="color: var(--danger-text)">{update.error}</span>{/if}
       </div>
