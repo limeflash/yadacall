@@ -152,8 +152,9 @@ export function createMockApi(): Api {
       meetings.unshift(dm);
       emit({ type: "recorder", meeting: r.id, state: "stopped", elapsedMs: dur });
       let p = 0;
+      const stages = ["transcribe", "diarize", "index", "summarize"] as const;
       const iv = setInterval(() => {
-        p += 0.08;
+        p += 0.03 + Math.random() * 0.02;
         if (p >= 1) {
           clearInterval(iv);
           dm.summary = summaryFor(r.turns);
@@ -162,9 +163,9 @@ export function createMockApi(): Api {
           emit({ type: "status", meeting: r.id, status: meeting.status });
           return;
         }
-        meeting.status = dm.list.status = { state: "processing", stage: p > 0.6 ? "summarize" : "transcribe", progress: p };
+        meeting.status = dm.list.status = { state: "processing", stage: stages[Math.min(3, Math.floor(p * 4))], progress: p };
         emit({ type: "status", meeting: r.id, status: meeting.status });
-      }, 300);
+      }, 900);
       return r.id;
     },
     async recorderCancel() { if (rec) { emit({ type: "recorder", meeting: rec.id, state: "cancelled", elapsedMs: elapsed() }); rec = null; } },

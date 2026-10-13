@@ -6,10 +6,12 @@
   import Select from "../kit/Select.svelte";
   import Mascot from "../kit/Mascot.svelte";
   import { api } from "../api";
-  import type { InputDevice } from "../api";
+  import type { InputDevice, Stage } from "../api";
   import { app, theme, elapsedMs, startRecording, stopRecording, togglePause, addBookmark, levels, onEngineEvent } from "../state.svelte";
   import { t } from "../i18n/index.svelte";
-  import { clock } from "../format";
+  import { clock, minutes } from "../format";
+  import { meetingWords } from "../words";
+  import { Eta } from "../eta";
   import { go } from "../router.svelte";
   import { toast } from "../toast.svelte";
   import { Visualizer, type VisState } from "../visualizer";
@@ -29,8 +31,14 @@
   let devices = $state<InputDevice[]>([]);
   let micOn = $state(true), sysOn = $state(true);
   let tip = $state(!(typeof localStorage !== "undefined" && localStorage.getItem("yc.tip.headphones") === "0"));
-  let finished = $state<{ id: string; title: string; time: string } | null>(null);
+  let finished = $state<{ id: string; title: string; time: string; durationMs: number } | null>(null);
   let job = $state(0);
+  let stage = $state<Stage>("transcribe");
+  /** Reduced motion: the current word as plain text under the status line. */
+  let plainWord = $state<string | null>(null);
+  const eta = new Eta();
+  let etaSecs = $state<number | null>(null);
+  const stageWord: Record<Stage, string> = { transcribe: "распознаю", diarize: "делю по голосам", index: "индексирую", summarize: "пишу итоги" };
   let done = $state(false);
   let copied = $state(false);
 
@@ -38,7 +46,7 @@
   const paused = $derived(app.recorder.phase === "paused");
   const phase = $derived<VisState["phase"]>(recording ? "rec" : finished ? (done ? "done" : "proc") : "idle");
   const sec = $derived(recording ? Math.floor(elapsedMs() / 1000) : 0);
-  const timer = $derived(recording ? clock(elapsedMs()) : "00:00");
+  const timer = $derived(recording ? clock(elapsedMs()) : phase === "proc" && finished ? minutes(finished.durationMs) : "00:00");
   const placeholder = $derived(PLACEHOLDERS[ph % PLACEHOLDERS.length]);
 
   // live-level meter on the two chips (4 bars each)
@@ -47,21 +55,34 @@
 
   onMount(() => {
     api.listInputDevices().then((d) => { devices = d; mic = d.find((x) => x.isDefault)?.id ?? d[0]?.id ?? ""; });
-    vis = new Visualizer(orbCanvas, bgCanvas, () => ({ phase, paused, job, hover }), () => ({ acc: /^#[0-9a-f]{6}$/i.test(theme.accent) ? theme.accent : "#7dd3a0", dark: theme.resolved === "dark" }));
+    vis = new Visualizer(orbCanvas, bgCanvas, () => ({ phase, paused, job, hover, stage }), () => ({ acc: /^#[0-9a-f]{6}$/i.test(theme.accent) ? theme.accent : "#7dd3a0", dark: theme.resolved === "dark" }), {
+      next: (n) => meetingWords.next(n),
+      alphabet: () => meetingWords.alphabet(),
+      fallback: () => [t("расшифровка"), t("итоги"), t("задачи"), t("спикеры"), t("поиск"), t("локально")],
+      show: (w) => (plainWord = w),
+    });
     vis.start();
     const iv = visibleInterval(() => {
       const live = recording && !paused;
       meBars = barsFor(live && micOn ? levels.mic.peak : 0);
       themBars = barsFor(live && sysOn ? levels.system.peak : 0);
     }, 80);
+    const etaIv = visibleInterval(() => { etaSecs = phase === "proc" ? eta.seconds() : null; }, 1000);
     const phIv = setInterval(() => { if (!title && phase === "idle") ph++; }, 2600);
     const off = onEngineEvent((e) => {
       if (e.type === "status" && finished && e.meeting === finished.id) {
-        if (e.status.state === "processing") job = e.status.progress * 100;
+        if (e.status.state === "processing") {
+          job = e.status.progress * 100; eta.push(job);
+          if (e.status.stage !== stage) {
+            // The transcript exists once recognition is over: its words join the live ones.
+            if (stage === "transcribe" && finished) api.getMeeting(finished.id).then((d) => d.turns.forEach((x) => meetingWords.add(x.text, (x.corrections ?? []).map((c) => c.replacement)))).catch(() => {});
+            stage = e.status.stage;
+          }
+        }
         if (e.status.state === "ready") { job = 100; if (!done) { done = true; vis?.burst(); } }
       }
     });
-    return () => { iv(); clearInterval(phIv); off(); };
+    return () => { iv(); etaIv(); clearInterval(phIv); off(); };
   });
   onDestroy(() => vis?.stop());
 
@@ -69,14 +90,14 @@
   $effect(() => { if (recording && app.recorder.title && !title) title = app.recorder.title; });
 
   async function start() {
-    finished = null; done = false; job = 0;
+    finished = null; done = false; job = 0; stage = "transcribe"; eta.reset(); etaSecs = null; plainWord = null;
     await startRecording({ title: title.trim() || undefined, expectedSpeakers: spk === 0 ? undefined : spk, micDevice: mic || undefined });
   }
   async function stop() {
     const name = title.trim() || app.recorder.title || t("Без названия");
-    const time = clock(elapsedMs());
+    const time = clock(elapsedMs()), durationMs = elapsedMs();
     const id = await stopRecording();
-    if (id) { finished = { id, title: `${name} · ${time}`, time }; job = 0; done = false; title = ""; }
+    if (id) { finished = { id, title: `${name} · ${time}`, time, durationMs }; job = 0; stage = "transcribe"; eta.reset(); etaSecs = null; plainWord = null; done = false; title = ""; }
   }
   function orbClick() { if (phase === "idle" || phase === "done") start(); }
   function toggleRec() { if (phase === "proc") return; if (!recording) start(); else stop(); }
@@ -91,7 +112,7 @@
 
   const live = $derived(app.live.slice(-3));
   const speakerWord = (s: string) => (s === "me" ? t("Я") : t("Собеседник"));
-  const statusLine = $derived(recording ? (paused ? t("Пауза — звук не пишется") : t("Идёт запись · всё остаётся на компьютере")) : phase === "proc" ? t("Распознаю локально") : phase === "done" ? t("Готово — можно сразу начать новую запись") : t("Нажми на котика или {hotkey} из любого окна", { hotkey: prettyAccel(app.settings?.hotkeyRecord ?? "Alt+Shift+R") }));
+  const statusLine = $derived(recording ? (paused ? t("Пауза — звук не пишется") : t("Идёт запись · всё остаётся на компьютере")) : phase === "proc" ? t("Распознаю локально") + (etaSecs != null ? " · " + t("ещё ~{s}", { s: etaSecs >= 90 ? Math.round(etaSecs / 60) + " " + t("мин") : etaSecs + " " + t("с") }) : "") : phase === "done" ? t("Готово — можно сразу начать новую запись") : t("Нажми на котика или {hotkey} из любого окна", { hotkey: prettyAccel(app.settings?.hotkeyRecord ?? "Alt+Shift+R") }));
   const procInk = $derived(theme.resolved === "dark" ? "#f3f3f5" : "#16161a");
   const glow = $derived(`color-mix(in oklch, ${theme.accent} ${theme.resolved === "dark" ? 22 : 30}%, transparent)`);
   const fmtMark = (ms: number) => clock(ms);
@@ -128,7 +149,7 @@
           {:else if phase === "proc"}
             <span class="yc-popin" style="display: flex; flex-direction: column; align-items: center; gap: 1px">
               <span class="mg-mono yc-num" style="font-size: 24px; font-weight: 700; color: {procInk}">{Math.floor(job)}%</span>
-              <span style="font-size: 11px; font-weight: 700; color: {procInk}; opacity: 0.7">{t("распознаю")}</span>
+              <span style="font-size: 11px; font-weight: 700; color: {procInk}; opacity: 0.7">{t(stageWord[stage])}</span>
             </span>
           {:else}
             <span class="yc-popin" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
@@ -145,6 +166,7 @@
           {#if recording}<span class={paused ? "" : "yc-rec"} style="width: 6px; height: 6px; border-radius: 50%; background: {paused ? 'var(--warning)' : 'var(--danger)'}"></span>{/if}
           {statusLine}
         </div>
+        {#if plainWord && phase === "proc"}{#key plainWord}<div class="plainword" aria-hidden="true">{plainWord}</div>{/key}{/if}
       </div>
 
       {#if recording}
@@ -268,6 +290,10 @@
   .orb-btn { position: absolute; left: 50%; top: 50%; width: 132px; height: 132px; margin: -66px 0 0 -66px; padding: 0; border: 0; border-radius: 50%; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--ink-on-accent); }
   .cat { position: absolute; inset: 0; display: block; transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1), opacity 0.55s ease, filter 0.55s ease; }
   .rec-btn { position: absolute; left: 14px; top: 14px; width: 100px; height: 100px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, color-mix(in oklch, var(--accent) 70%, #fff), var(--accent) 70%); display: flex; align-items: center; justify-content: center; transition: transform 0.7s cubic-bezier(0.34, 1.45, 0.5, 1) 0.1s, opacity 0.45s ease 0.1s, box-shadow 0.8s ease 0.25s; }
+  /* reduced motion: words of the meeting cross-fade calmly under the status line */
+  .plainword { margin-top: 6px; font-family: var(--font-mono); font-size: 24px; font-weight: 700; letter-spacing: 0.14em; color: var(--accent-text); text-shadow: 0 0 28px color-mix(in oklch, var(--accent) 45%, transparent); animation: plainfade 3.2s ease both; }
+  @media (prefers-reduced-motion: reduce) { .plainword { animation: none !important; opacity: 1; filter: none; } }
+  @keyframes plainfade { 0% { opacity: 0; filter: blur(6px); } 22%, 72% { opacity: 1; filter: blur(0); } 100% { opacity: 0; filter: blur(6px); } }
   .timer-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: -2px; }
   .timer { font-size: 32px; font-weight: 600; letter-spacing: -0.04em; transition: color 0.4s; }
   .status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); text-align: center; }
