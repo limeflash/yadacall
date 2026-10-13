@@ -10,6 +10,7 @@ const COMMANDS: &[&str] = &[
     "rename_speaker",
     "set_task_done",
     "regenerate_summary",
+    "meeting_retranscribe",
     "export_meeting",
     "reveal_meeting",
     "copy_for_claude",

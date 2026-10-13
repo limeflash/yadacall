@@ -283,7 +283,7 @@ async fn structured_summary_retries_once_after_schema_violation() {
     let input = SummaryInput {
         meeting: MeetingMetadata {
             id: None,
-            title: "Планирование".into(),
+            title: "Meeting 11:16".into(),
             started_at: Utc
                 .with_ymd_and_hms(2026, 10, 12, 10, 0, 0)
                 .single()

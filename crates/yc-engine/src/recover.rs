@@ -34,6 +34,8 @@ pub struct ImportOptions {
     pub title: Option<String>,
     pub language: Option<String>,
     pub expected_speakers: Option<u8>,
+    /// Whether the speaker count was explicitly selected by the user.
+    pub expected_speakers_explicit: bool,
 }
 
 impl Engine {
@@ -157,6 +159,7 @@ impl Engine {
             started_at: modified,
             language: language.clone(),
             expected_speakers: opts.expected_speakers,
+            expected_speakers_explicit: opts.expected_speakers_explicit,
             source: Source::Import,
             bookmarks: Vec::new(),
             participant_hints: Vec::new(),

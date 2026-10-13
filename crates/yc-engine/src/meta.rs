@@ -29,6 +29,8 @@ pub struct SessionMeta {
     pub started_at: DateTime<Utc>,
     pub language: String,
     pub expected_speakers: Option<u8>,
+    #[serde(default)]
+    pub expected_speakers_explicit: bool,
     pub source: Source,
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,

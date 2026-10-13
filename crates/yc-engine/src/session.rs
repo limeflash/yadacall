@@ -42,8 +42,10 @@ pub enum MicChoice {
 pub struct StartOptions {
     /// Meeting title; empty/`None` = "Встреча" with the time, replaceable by the summary's title.
     pub title: Option<String>,
-    /// How many remote people to expect (`Some(1)` skips diarisation).
+    /// Expected number of remote speakers; invite-derived values are an upper bound.
     pub expected_speakers: Option<u8>,
+    /// Whether the user explicitly selected `expected_speakers` in the recorder.
+    pub expected_speakers_explicit: bool,
     /// Calendar invitees that may correspond to the remote speakers.
     pub participant_hints: Vec<ParticipantHint>,
     pub mic: MicChoice,
@@ -58,6 +60,7 @@ impl Default for StartOptions {
         Self {
             title: None,
             expected_speakers: None,
+            expected_speakers_explicit: false,
             participant_hints: Vec::new(),
             mic: MicChoice::Configured,
             system_audio: true,
@@ -245,6 +248,7 @@ impl Engine {
             started_at,
             language: language.clone(),
             expected_speakers: opts.expected_speakers,
+            expected_speakers_explicit: opts.expected_speakers_explicit,
             source: Source::Recording,
             bookmarks: Vec::new(),
             participant_hints,
@@ -582,7 +586,26 @@ impl Engine {
             .unwrap_or(0);
         if let Some(h) = handle {
             // Joins the capture threads; the frame channels close behind it.
-            h.stop()?;
+            let tracks = h.stop()?;
+            for track in tracks {
+                let pauses = read_meta(&meta_path(&s.dir, track.kind))
+                    .map(|meta| meta.pauses)
+                    .unwrap_or_default();
+                let track_ms =
+                    track.offset_ms + file_to_track_time(samples_to_ms(track.samples), &pauses);
+                let drift_ms = track_ms.abs_diff(elapsed);
+                if drift_ms > 2_000 {
+                    tracing::warn!(
+                        meeting = %s.id,
+                        track = ?track.kind,
+                        samples = track.samples,
+                        track_ms,
+                        wall_clock_ms = elapsed,
+                        drift_ms,
+                        "audio track sample count diverges from wall clock"
+                    );
+                }
+            }
         }
         self.emit(EngineEvent::Recorder {
             meeting: s.id,

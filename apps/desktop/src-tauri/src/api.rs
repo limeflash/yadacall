@@ -483,6 +483,8 @@ pub trait Backend: Send + Sync + 'static {
     async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<()>;
     async fn set_task_done(&self, id: &str, index: usize, done: bool) -> Result<()>;
     async fn regenerate_summary(&self, id: &str) -> Result<Summary>;
+    /// Queues a rebuild of the transcript from stored meeting audio.
+    async fn meeting_retranscribe(&self, id: &str) -> Result<()>;
     /// Writes `transcript.md` / `transcript.json` next to the meeting and returns the path.
     async fn export_meeting(&self, id: &str, format: ExportFormat) -> Result<String>;
     /// Folder of a meeting on disk, if it has one (used by "show in folder").

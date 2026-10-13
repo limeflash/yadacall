@@ -11,14 +11,21 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use yc_core::events::EngineEvent;
-use yc_core::meeting::{MeetingId, MeetingStatus, Stage};
+use yc_core::meeting::{MeetingId, MeetingStatus, Stage, TrackKind};
 use yc_core::{Error, Result};
 use yc_store::{Job, MeetingRecord};
 
 use crate::engine::Engine;
 
 /// Kinds the runner handles, in no particular order.
-pub const JOB_KINDS: &[&str] = &["transcribe", "diarize", "summarize", "archive", "index"];
+pub const JOB_KINDS: &[&str] = &[
+    "transcribe",
+    "retranscribe",
+    "diarize",
+    "summarize",
+    "archive",
+    "index",
+];
 
 /// Runner tuning.
 #[derive(Debug, Clone)]
@@ -59,6 +66,7 @@ pub struct JobPayload {
 pub fn kind_stage(kind: &str) -> Stage {
     match kind {
         "transcribe" => Stage::Transcribe,
+        "retranscribe" => Stage::Transcribe,
         "diarize" => Stage::Diarize,
         "summarize" => Stage::Summarize,
         _ => Stage::Index,
@@ -121,7 +129,7 @@ impl Engine {
                 self.blocking(move |e| e.store.complete(job_id)).await?;
                 self.job_finished(id);
                 // A re-transcription re-runs finalisation, which set the status itself.
-                if job.kind != "transcribe"
+                if !matches!(job.kind.as_str(), "transcribe" | "retranscribe")
                     && let Err(e) = self.settle_status(id, &payload).await
                 {
                     tracing::warn!("status update for {id} failed: {e}");
@@ -174,6 +182,10 @@ impl Engine {
             "archive" => self.blocking(move |e| e.run_archive(&job, &payload)).await,
             "index" => self.blocking(move |e| e.run_index(&job, &payload)).await,
             "transcribe" => {
+                self.blocking(move |e| e.run_retranscribe(&job, &payload))
+                    .await
+            }
+            "retranscribe" => {
                 self.blocking(move |e| e.run_retranscribe(&job, &payload))
                     .await
             }
@@ -331,12 +343,35 @@ impl Engine {
         self.queue_stage(id, "summarize").await
     }
 
+    /// Rebuilds a meeting transcript from its stored audio with the current ASR model.
+    pub async fn retranscribe(self: &Arc<Self>, id: MeetingId) -> Result<()> {
+        self.blocking(move |e| {
+            let rec = e.store.get_meeting(id)?;
+            let audio = e.library_root().join(rec.folder).join("audio");
+            let has_audio = TrackKind::ALL.iter().any(|kind| {
+                ["pcm", "flac"].iter().any(|extension| {
+                    audio
+                        .join(format!("{}.{}", kind.file_stem(), extension))
+                        .is_file()
+                })
+            });
+            if !has_audio {
+                return Err(Error::Invalid(
+                    "no audio is stored for this meeting; it cannot be re-transcribed".into(),
+                ));
+            }
+            Ok(())
+        })
+        .await?;
+        self.queue_stage(id, "retranscribe").await
+    }
+
     async fn queue_stage(self: &Arc<Self>, id: MeetingId, kind: &'static str) -> Result<()> {
         let mut plan = vec![kind.to_owned()];
         if kind != "index" {
             plan.push("index".to_owned());
         }
-        if kind == "transcribe" {
+        if matches!(kind, "transcribe" | "retranscribe") {
             plan.truncate(1);
         }
         let stage = kind_stage(kind);

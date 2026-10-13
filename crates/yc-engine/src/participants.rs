@@ -4,6 +4,9 @@ use yc_core::meeting::ParticipantHint;
 
 use crate::diarize::{KnownVoice, cosine, match_voices};
 
+const MAX_SUGGESTIONS: usize = 5;
+const MIN_SUGGESTION_SCORE: u8 = 68;
+
 /// Identity and invite suggestions for one diarisation cluster.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SpeakerResolution {
@@ -85,17 +88,15 @@ fn ranked_suggestions(
     hints: &[ParticipantHint],
     used_hints: &[bool],
 ) -> Vec<String> {
-    let voice = voice_index.map(|index| &voices[index]);
+    let Some(voice) = voice_index.map(|index| &voices[index]) else {
+        return Vec::new();
+    };
     let mut ranked: Vec<(usize, u8)> = hints
         .iter()
         .enumerate()
         .filter(|(index, _)| !used_hints[*index])
-        .map(|(index, hint)| {
-            (
-                index,
-                voice.map_or(0, |voice| suggestion_score(voice, hint)),
-            )
-        })
+        .map(|(index, hint)| (index, suggestion_score(voice, hint)))
+        .filter(|(_, score)| *score >= MIN_SUGGESTION_SCORE)
         .collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
@@ -108,6 +109,9 @@ fn ranked_suggestions(
                 .any(|existing: &String| same_name(existing, name))
         {
             names.push(name.to_owned());
+        }
+        if names.len() == MAX_SUGGESTIONS {
+            break;
         }
     }
     names
@@ -481,16 +485,18 @@ mod tests {
     }
 
     #[test]
-    fn more_clusters_than_hints_only_adds_suggestions() {
+    fn invitees_without_voice_evidence_are_not_copied_as_suggestions() {
         let centroids = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![-1.0, 0.0]];
         let hints = [hint("Анна Ковалёва", None)];
 
         let resolved = resolve_speakers(&centroids, &[], &hints, 0.7);
 
         assert!(resolved.iter().all(|speaker| speaker.hint_index.is_none()));
-        assert!(resolved.iter().all(|speaker| {
-            speaker.suggestions == vec!["Анна Ковалёва".to_owned()]
-        }));
+        assert!(
+            resolved
+                .iter()
+                .all(|speaker| speaker.suggestions.is_empty())
+        );
     }
 
     #[test]
@@ -542,12 +548,40 @@ mod tests {
     }
 
     #[test]
-    fn similar_nickname_is_only_a_suggestion_without_voice_evidence() {
+    fn similar_invitee_names_need_voice_evidence_for_suggestions() {
         let hints = [hint("Анна Ковалёва", None), hint("Борис Иванов", None)];
 
         let resolved = resolve_speakers(&[vec![1.0, 0.0]], &[], &hints, 0.7);
 
         assert_eq!(resolved[0].hint_index, None);
-        assert_eq!(resolved[0].suggestions[0], "Анна Ковалёва");
+        assert!(resolved[0].suggestions.is_empty());
+    }
+
+    #[test]
+    fn fuzzy_voice_suggestions_are_ranked_and_capped_at_five() {
+        let voices = [voice("Alexandra", None, &[1.0, 0.0])];
+        let hints = (0..8)
+            .map(|index| hint(&format!("Alexandria Colleague {index}"), None))
+            .collect::<Vec<_>>();
+
+        let resolved = resolve_speakers(&[vec![1.0, 0.0]], &voices, &hints, 0.7);
+
+        assert_eq!(resolved[0].suggestions.len(), MAX_SUGGESTIONS);
+        assert!(
+            resolved[0]
+                .suggestions
+                .iter()
+                .all(|name| name.starts_with("Alexandria"))
+        );
+    }
+
+    #[test]
+    fn unrelated_invitees_are_not_suggested_for_a_known_voice() {
+        let voices = [voice("Alexandra", None, &[1.0, 0.0])];
+        let hints = [hint("Boris Ivanov", None), hint("Carolina Smith", None)];
+
+        let resolved = resolve_speakers(&[vec![1.0, 0.0]], &voices, &hints, 0.7);
+
+        assert!(resolved[0].suggestions.is_empty());
     }
 }

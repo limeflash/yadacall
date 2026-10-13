@@ -161,11 +161,7 @@ impl Engine {
 
         let vectors: Vec<Vec<f32>> = embedded.iter().map(|(_, v, _)| v.clone()).collect();
         let secs: Vec<f32> = embedded.iter().map(|(_, _, s)| *s).collect();
-        let cfg = ClusterConfig {
-            distance_threshold: settings.speaker_cluster_threshold,
-            num_speakers: rec.meeting.expected_speakers.map(usize::from),
-            ..Default::default()
-        };
+        let cfg = cluster_config(&rec.meeting, settings.speaker_cluster_threshold);
         let cluster_labels = cluster(&vectors, &secs, &cfg);
         let mut per_segment: Vec<Option<usize>> = vec![None; them.len()];
         for ((pos, _, _), l) in embedded.iter().zip(&cluster_labels) {
@@ -339,18 +335,13 @@ impl Engine {
         let payload = payload.clone();
         self.blocking(move |e| {
             e.mutate_meeting(id, |rec| {
-                let title_untouched = payload
-                    .auto_title
-                    .as_deref()
-                    .is_some_and(|t| t == rec.meeting.title);
-                if title_untouched
-                    && let Some(t) = summary
-                        .title
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|t| !t.is_empty())
-                {
-                    rec.meeting.title = t.to_owned();
+                if let Some(title) = summary_title_replacement(
+                    rec.meeting.title_is_auto,
+                    &rec.meeting.title,
+                    summary.title.as_deref(),
+                ) {
+                    rec.meeting.title = title;
+                    rec.meeting.title_is_auto = false;
                 }
                 rec.summary = Some(summary);
                 rec.meeting.status = Self::next_status(&rec.meeting.status, &payload);
@@ -387,7 +378,9 @@ impl Engine {
             }
             if !delete_all {
                 let flac = audio.join(format!("{}.flac", kind.file_stem()));
-                yc_audio::encode_flac(&pcm, &flac)?;
+                if !flac.is_file() {
+                    yc_audio::encode_flac(&pcm, &flac)?;
+                }
             }
             std::fs::remove_file(&pcm)?;
         }
@@ -449,6 +442,18 @@ impl Engine {
         let id = job.meeting_id;
         let rec = self.store.get_meeting(id)?;
         let audio = audio_dir(&self.library_root(), &rec.folder);
+        let has_audio = TrackKind::ALL.iter().any(|kind| {
+            ["pcm", "flac"].iter().any(|extension| {
+                audio
+                    .join(format!("{}.{}", kind.file_stem(), extension))
+                    .is_file()
+            })
+        });
+        if !has_audio {
+            return Err(Error::Invalid(
+                "no audio is stored for this meeting; it cannot be re-transcribed".into(),
+            ));
+        }
         let dir = self.recording_root().join(id.to_string());
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir)?;
@@ -486,16 +491,17 @@ impl Engine {
         if !found {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(Error::Invalid(
-                "the audio of this meeting is no longer on disk".into(),
+                "no readable audio is stored for this meeting".into(),
             ));
         }
         SessionMeta {
             id,
             title: rec.meeting.title.clone(),
-            title_auto: false,
+            title_auto: rec.meeting.title_is_auto,
             started_at: rec.meeting.started_at,
             language: rec.meeting.language.clone(),
             expected_speakers: rec.meeting.expected_speakers,
+            expected_speakers_explicit: rec.meeting.expected_speakers_explicit,
             source: Source::Retranscribe,
             bookmarks: rec.meeting.bookmarks.clone(),
             participant_hints: rec.meeting.participant_hints.clone(),
@@ -516,6 +522,128 @@ impl Engine {
                 let _ = std::fs::remove_dir_all(&dir);
                 Err(e)
             }
+        }
+    }
+}
+
+fn cluster_config(meeting: &Meeting, distance_threshold: f32) -> ClusterConfig {
+    let mut config = ClusterConfig {
+        distance_threshold,
+        ..Default::default()
+    };
+    if let Some(expected) = meeting.expected_speakers {
+        if meeting.expected_speakers_explicit {
+            config.num_speakers = Some(usize::from(expected));
+        } else {
+            config.max_speakers = usize::from(expected).max(1);
+        }
+    }
+    config
+}
+
+fn summary_title_replacement(
+    title_is_untitled: bool,
+    current_title: &str,
+    suggested_title: Option<&str>,
+) -> Option<String> {
+    if !title_is_untitled || current_title.trim().is_empty() {
+        return None;
+    }
+    let title = suggested_title?.trim();
+    if title.is_empty() || is_generic_summary_title(title) {
+        return None;
+    }
+    Some(title.to_owned())
+}
+
+fn is_generic_summary_title(title: &str) -> bool {
+    let normalized = title
+        .chars()
+        .flat_map(char::to_lowercase)
+        .filter(|character| character.is_alphanumeric())
+        .collect::<String>();
+    [
+        "резюмевстречи",
+        "итогивстречи",
+        "meetingsummary",
+        "summaryofmeeting",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn meeting(expected_speakers: Option<u8>, explicit: bool) -> Meeting {
+        Meeting {
+            id: yc_core::meeting::MeetingId::new(),
+            title: "Meeting 11:16".to_owned(),
+            title_is_auto: true,
+            started_at: chrono::Utc::now(),
+            duration_ms: 0,
+            language: "en".to_owned(),
+            expected_speakers,
+            expected_speakers_explicit: explicit,
+            tracks: Vec::new(),
+            bookmarks: Vec::new(),
+            participants: Vec::new(),
+            participant_hints: Vec::new(),
+            asr_model: None,
+            status: MeetingStatus::Ready,
+        }
+    }
+
+    #[test]
+    fn invite_speaker_count_is_a_bound_and_user_count_is_exact() {
+        let invite = cluster_config(&meeting(Some(2), false), 0.55);
+        assert_eq!(invite.num_speakers, None);
+        assert_eq!(invite.max_speakers, 2);
+
+        let explicit = cluster_config(&meeting(Some(2), true), 0.55);
+        assert_eq!(explicit.num_speakers, Some(2));
+        assert_eq!(explicit.max_speakers, ClusterConfig::default().max_speakers);
+
+        let embeddings = vec![
+            vec![1.0, 0.0],
+            vec![0.99, 0.01],
+            vec![0.0, 1.0],
+            vec![0.01, 0.99],
+        ];
+        let durations = [4.0; 4];
+        let invite_config = ClusterConfig {
+            distance_threshold: 2.0,
+            ..invite
+        };
+        let explicit_config = ClusterConfig {
+            distance_threshold: 2.0,
+            ..explicit
+        };
+        let invite_labels = cluster(&embeddings, &durations, &invite_config);
+        let explicit_labels = cluster(&embeddings, &durations, &explicit_config);
+        assert!(invite_labels.iter().all(|&label| label == 0));
+        assert_eq!(explicit_labels.iter().copied().max(), Some(1));
+    }
+
+    #[test]
+    fn summary_title_policy_keeps_named_meetings_and_rejects_generic_suggestions() {
+        assert_eq!(
+            summary_title_replacement(true, "Meeting 11:16", Some("NB planning")),
+            Some("NB planning".to_owned())
+        );
+        assert_eq!(
+            summary_title_replacement(false, "NB Week", Some("Specific topic")),
+            None,
+            "calendar and user titles are not replaced"
+        );
+        for generic in ["Резюме встречи NB Week", "Meeting summary", "Итоги встречи"]
+        {
+            assert_eq!(
+                summary_title_replacement(true, "Meeting 11:16", Some(generic)),
+                None,
+                "generic title must be rejected: {generic}"
+            );
         }
     }
 }

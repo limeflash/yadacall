@@ -96,10 +96,12 @@ impl Engine {
         let mut meeting = Meeting {
             id,
             title: meta.title.clone(),
+            title_is_auto: meta.title_auto,
             started_at: meta.started_at,
             duration_ms,
             language: meta.language.clone(),
             expected_speakers: meta.expected_speakers,
+            expected_speakers_explicit: meta.expected_speakers_explicit,
             tracks: tracks.clone(),
             bookmarks: meta.bookmarks.clone(),
             participants: Vec::new(),
@@ -193,7 +195,7 @@ impl Engine {
             let system_audio = tracks
                 .iter()
                 .any(|t| t.kind == TrackKind::System && t.samples > 0);
-            if meeting.expected_speakers != Some(1)
+            if !(meeting.expected_speakers_explicit && meeting.expected_speakers == Some(1))
                 && has_system_speech
                 && system_audio
                 && self.ports.speaker.is_available()
@@ -346,7 +348,7 @@ fn undiarised_participant(meeting: &Meeting) -> Vec<Participant> {
             "Собеседник".to_owned()
         },
         voice_id: None,
-        suggestions: if single { Vec::new() } else { names },
+        suggestions: Vec::new(),
     }]
 }
 

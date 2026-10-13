@@ -6,12 +6,12 @@ pub struct ClusterConfig {
     /// Stop merging when the closest pair of clusters is farther apart than this (cosine
     /// distance, average linkage). Ignored when `num_speakers` is set.
     pub distance_threshold: f32,
-    /// Exact number of clusters to produce (the user said how many people were on the call).
+    /// Exact maximum cluster count chosen by the user; ignored when the count came from an invite.
     pub num_speakers: Option<usize>,
-    /// Upper bound on clusters when detecting automatically.
+    /// Upper bound on clusters when detecting automatically or from an invite.
     pub max_speakers: usize,
-    /// Clusters with fewer than 2 members and less total speech than this (seconds) are folded into
-    /// the nearest other cluster — a cough or a clipped word is not a new participant.
+    /// A one-segment cluster with less total speech than this (seconds) is folded into the nearest
+    /// other cluster. Clusters with at least two segments always meet the minimum evidence rule.
     pub min_cluster_secs: f32,
 }
 
@@ -21,7 +21,7 @@ impl Default for ClusterConfig {
             distance_threshold: 0.55,
             num_speakers: None,
             max_speakers: 10,
-            min_cluster_secs: 3.0,
+            min_cluster_secs: 8.0,
         }
     }
 }
@@ -112,9 +112,10 @@ pub fn cluster(embeddings: &[Vec<f32>], durations_secs: &[f32], cfg: &ClusterCon
         else {
             break;
         };
-        let must_merge = match target {
-            Some(k) => count > k,
-            None => count > cfg.max_speakers.max(1) || d <= cfg.distance_threshold,
+        let must_merge = if let Some(k) = target {
+            count > k
+        } else {
+            count > cfg.max_speakers.max(1) || d <= cfg.distance_threshold
         };
         if !must_merge {
             break;
@@ -155,7 +156,7 @@ pub fn cluster(embeddings: &[Vec<f32>], durations_secs: &[f32], cfg: &ClusterCon
             labels[i] = c;
         }
     }
-    if target.is_none() && !durations_secs.is_empty() {
+    if !durations_secs.is_empty() {
         fold_tiny(
             &mut labels,
             embeddings,
@@ -387,6 +388,62 @@ mod tests {
             },
         );
         assert_eq!(loose.iter().copied().max(), Some(2));
+    }
+
+    #[test]
+    fn invite_count_caps_clusters_but_explicit_count_is_exact() {
+        let embeddings = vec![
+            vec![1.0, 0.0],
+            vec![0.99, 0.01],
+            vec![0.0, 1.0],
+            vec![0.01, 0.99],
+        ];
+        let durations = [4.0; 4];
+        let invite_bound = cluster(
+            &embeddings,
+            &durations,
+            &ClusterConfig {
+                distance_threshold: 2.0,
+                max_speakers: 2,
+                ..Default::default()
+            },
+        );
+        assert!(invite_bound.iter().all(|&label| label == 0));
+
+        let explicit_count = cluster(
+            &embeddings,
+            &durations,
+            &ClusterConfig {
+                distance_threshold: 2.0,
+                num_speakers: Some(2),
+                ..Default::default()
+            },
+        );
+        assert_eq!(explicit_count.iter().copied().max(), Some(1));
+    }
+
+    #[test]
+    fn one_segment_clusters_need_eight_seconds_of_speech() {
+        let embeddings = vec![vec![1.0, 0.0], vec![0.99, 0.01], vec![0.0, 1.0]];
+        let folded = cluster(
+            &embeddings,
+            &[4.0, 4.0, 7.9],
+            &ClusterConfig {
+                distance_threshold: 0.1,
+                ..Default::default()
+            },
+        );
+        assert_eq!(folded.iter().copied().max(), Some(0));
+
+        let retained = cluster(
+            &embeddings,
+            &[4.0, 4.0, 8.0],
+            &ClusterConfig {
+                distance_threshold: 0.1,
+                ..Default::default()
+            },
+        );
+        assert_eq!(retained.iter().copied().max(), Some(1));
     }
 
     #[test]

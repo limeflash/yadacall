@@ -17,7 +17,7 @@ fn folder_of(env: &Env, folder: &str) -> std::path::PathBuf {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn call_to_transcript_summary_and_tasks() {
-    let env = Env::new(call_scripts());
+    let env = Env::new(call_scripts_with_speaker_evidence());
     let engine = env.open().await;
     let mut rx = engine.events();
 
@@ -61,7 +61,13 @@ async fn call_to_transcript_summary_and_tasks() {
         .collect();
     assert_eq!(
         texts,
-        vec![("them", TEXT_A), ("me", TEXT_B), ("them", TEXT_C)],
+        vec![
+            ("them", TEXT_A),
+            ("them", TEXT_A),
+            ("me", TEXT_B),
+            ("them", TEXT_C),
+            ("them", TEXT_C),
+        ],
         "segments: {:?}",
         detail.segments
     );
@@ -83,7 +89,7 @@ async fn call_to_transcript_summary_and_tasks() {
     assert_eq!(ready(&engine, id).await, MeetingStatus::Ready);
     let detail = engine.get_meeting(id).await.expect("meeting");
     let speakers: Vec<_> = detail.segments.iter().map(|s| s.speaker.as_str()).collect();
-    assert_eq!(speakers, vec!["s1", "me", "s2"]);
+    assert_eq!(speakers, vec!["s1", "s1", "me", "s2", "s2"]);
     assert_eq!(detail.meeting.participants.len(), 2);
     assert_eq!(detail.meeting.participants[0].name, "Спикер 1");
     let summary = detail.summary.expect("summary");
@@ -149,7 +155,7 @@ async fn call_to_transcript_summary_and_tasks() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn naming_a_speaker_teaches_the_voice_for_the_next_meeting() {
-    let env = Env::new(call_scripts());
+    let env = Env::new(call_scripts_with_speaker_evidence());
     let engine = env.open().await;
     let first = record_call_with_hints(
         &env,
@@ -236,6 +242,45 @@ async fn keep_audio_none_deletes_audio_after_the_transcript_is_written() {
     assert!(!folder.join("audio").exists(), "audio removed");
     assert!(detail.audio.is_empty());
     assert!(!detail.segments.is_empty());
+    let error = engine
+        .retranscribe(id)
+        .await
+        .expect_err("re-transcribe needs stored audio");
+    assert!(error.to_string().contains("no audio is stored"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn retranscribe_rebuilds_the_transcript_from_stored_audio() {
+    let env = Env::new(call_scripts());
+    let engine = env.open().await;
+    engine
+        .update_settings(|s| s.keep_audio = yc_engine::settings::KeepAudio::Forever)
+        .await
+        .expect("keep audio");
+    let id = record_call(&env, &engine, "Calendar title stays").await;
+    ready(&engine, id).await;
+    let before = engine.get_meeting(id).await.expect("before retranscribe");
+    let prior_asr_calls = env.asr.calls.load(std::sync::atomic::Ordering::Relaxed);
+
+    engine.retranscribe(id).await.expect("queue retranscribe");
+    assert_eq!(ready(&engine, id).await, MeetingStatus::Ready);
+
+    let after = engine.get_meeting(id).await.expect("after retranscribe");
+    let before_text: Vec<_> = before
+        .segments
+        .iter()
+        .map(|segment| &segment.text)
+        .collect();
+    let after_text: Vec<_> = after.segments.iter().map(|segment| &segment.text).collect();
+    assert_eq!(after_text, before_text);
+    assert!(env.asr.calls.load(std::sync::atomic::Ordering::Relaxed) > prior_asr_calls);
+    assert_eq!(after.meeting.title, "Calendar title stays");
+    assert_eq!(
+        after.folder, before.folder,
+        "stored folder name is preserved"
+    );
+    assert!(after.summary.is_some());
+    assert!(after.audio.contains(&TrackKind::System));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

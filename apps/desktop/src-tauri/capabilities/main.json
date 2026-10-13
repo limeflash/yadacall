@@ -21,6 +21,7 @@
     "allow-rename-speaker",
     "allow-set-task-done",
     "allow-regenerate-summary",
+    "allow-meeting-retranscribe",
     "allow-export-meeting",
     "allow-reveal-meeting",
     "allow-copy-for-claude",

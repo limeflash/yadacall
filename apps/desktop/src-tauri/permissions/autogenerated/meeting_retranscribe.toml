@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-meeting-retranscribe"
+description = "Enables the meeting_retranscribe command without any pre-configured scope."
+commands.allow = ["meeting_retranscribe"]
+
+[[permission]]
+identifier = "deny-meeting-retranscribe"
+description = "Denies the meeting_retranscribe command without any pre-configured scope."
+commands.deny = ["meeting_retranscribe"]

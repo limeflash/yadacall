@@ -143,6 +143,10 @@ pub async fn regenerate_summary(b: B<'_>, id: String) -> R<Summary> {
     Ok(b.regenerate_summary(&id).await?)
 }
 #[tauri::command]
+pub async fn meeting_retranscribe(b: B<'_>, id: String) -> R<()> {
+    Ok(b.meeting_retranscribe(&id).await?)
+}
+#[tauri::command]
 pub async fn export_meeting(b: B<'_>, id: String, format: ExportFormat) -> R<String> {
     Ok(b.export_meeting(&id, format).await?)
 }
