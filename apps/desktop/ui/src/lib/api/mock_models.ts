@@ -98,7 +98,7 @@ const EXTRA: Extra[] = [
 ];
 
 /** Seed models + metadata, plus the upcoming catalog. */
-export function mockCatalog(seed: ModelEntry[]): ModelEntry[] {
+export function mockCatalog(seed: ModelEntry[], fresh = false): ModelEntry[] {
   const out: ModelEntry[] = [];
   for (const m of seed) {
     if (m.id === "gemma-4-27b") continue; // replaced by the 26B-A4B / 31B pair below
@@ -114,5 +114,6 @@ export function mockCatalog(seed: ModelEntry[]): ModelEntry[] {
       verdict: e.verdict, estimate: e.estimate, benchmarkable: e.benchmarkable, ...e.meta,
     });
   }
-  return out;
+  // A fresh install has nothing downloaded yet except what recording itself needs.
+  return fresh ? out.map((m) => ({ ...m, installed: m.tags.includes("required"), active: m.tags.includes("required"), download: undefined })) : out;
 }

@@ -33,9 +33,10 @@ export function createMockApi(): Api {
 
   const meetings: DemoMeeting[] = demoMeetings();
   const { hardware, models: seedModels, devices } = demoModels();
-  const models: ModelEntry[] = mockCatalog(seedModels);
+  const freshInstall = typeof location !== "undefined" && /onboarding/.test(location.hash);
+  const models: ModelEntry[] = mockCatalog(seedModels, freshInstall);
   const imports: ImportJob[] = [];
-  let perms: Permissions = { microphone: "granted", systemAudio: "notDetermined" };
+  let perms: Permissions = { microphone: freshInstall ? "notDetermined" : "granted", systemAudio: "notDetermined" };
 
   // ---- processing meeting: progress loops as in the design ------------------------------------------
   const proc = meetings.find((m) => m.meeting.status.state === "processing");

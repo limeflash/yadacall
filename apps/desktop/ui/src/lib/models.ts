@@ -190,3 +190,21 @@ export function monogram(vendor: string): string {
 export function paramsLabel(n: number, fmt: (x: number) => string): string {
   return n >= 0.5e9 ? fmt(n / 1e9) + "B" : Math.round(n / 1e6) + "M";
 }
+
+export type SpokenLang = "ru" | "multi" | "en";
+
+/**
+ * The model onboarding preselects: the best-quality one that runs well here and speaks the chosen language
+ * (the backend's `recommended` pick wins when it qualifies). Falls back to any model that fits.
+ */
+export function recommendFor(models: ModelEntry[], kind: ModelKind, lang: SpokenLang): ModelEntry | undefined {
+  const fits = models.filter((m) => m.kind === kind && isFit(m.verdict));
+  const speaks = (m: ModelEntry) => {
+    const multi = m.languages.includes("multilingual");
+    return lang === "ru" ? m.languages.includes("ru") || (multi && !m.tags.includes("english-only")) : lang === "en" ? m.languages.includes("en") || multi : multi;
+  };
+  const pool = fits.filter(speaks);
+  const use = pool.length ? pool : fits;
+  const best = (a: ModelEntry, b: ModelEntry) => (b.qualityRank ?? 0) - (a.qualityRank ?? 0) || a.sizeBytes - b.sizeBytes;
+  return use.filter((m) => m.recommended).sort(best)[0] ?? [...use].sort(best)[0];
+}

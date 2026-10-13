@@ -46,9 +46,9 @@
 {/if}
 
 <style>
-  .veil { position: fixed; inset: 0; z-index: 20; background: var(--backdrop); animation: sheetFade 0.2s ease-out both; }
+  .veil { position: fixed; inset: 0; z-index: 30; background: var(--backdrop); animation: sheetFade 0.2s ease-out both; }
   .sheet {
-    position: fixed; z-index: 21; top: 0; right: 0; bottom: 0; width: min(540px, 100%); box-sizing: border-box; display: flex; flex-direction: column;
+    position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; width: min(540px, 100%); box-sizing: border-box; display: flex; flex-direction: column;
     background: var(--bg); border-left: 1px solid var(--border); box-shadow: -24px 0 60px rgba(0, 0, 0, 0.25); outline: none;
     --cat-bg: var(--bg); --cat-pad: 20px; animation: sheetIn 0.32s var(--ease-out-soft, ease-out) both;
   }
