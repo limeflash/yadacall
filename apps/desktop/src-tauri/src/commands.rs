@@ -132,7 +132,7 @@ pub async fn delete_meeting(b: B<'_>, id: String) -> R<()> {
     Ok(b.delete_meeting(&id).await?)
 }
 #[tauri::command]
-pub async fn rename_speaker(b: B<'_>, id: String, key: String, name: String) -> R<()> {
+pub async fn rename_speaker(b: B<'_>, id: String, key: String, name: String) -> R<RenameOutcome> {
     Ok(b.rename_speaker(&id, &key, &name).await?)
 }
 #[tauri::command]

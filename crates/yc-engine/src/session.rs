@@ -307,6 +307,7 @@ impl Engine {
     ) -> Result<Session> {
         let events = self.events_sender();
         let russian = self.settings().russian();
+        let terms = self.term_dictionary();
         let notify: Notifier = {
             let events = events.clone();
             Arc::new(move |level, message| {
@@ -331,6 +332,7 @@ impl Engine {
                 language: language.clone(),
                 log: Arc::clone(&log),
                 on_segment: Box::new(move |mut seg: Segment| {
+                    terms.correct_segment(&mut seg);
                     let kind = seg.track;
                     seg.start_ms = clock.to_meeting_ms(kind, seg.start_ms);
                     seg.end_ms = clock.to_meeting_ms(kind, seg.end_ms);

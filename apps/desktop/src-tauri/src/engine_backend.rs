@@ -440,7 +440,7 @@ impl Backend for EngineBackend {
         Ok(())
     }
 
-    async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<()> {
+    async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<RenameOutcome> {
         self.engine
             .rename_speaker(mid(id)?, key.to_owned(), name.to_owned())
             .await

@@ -23,6 +23,19 @@ pub struct Segment {
     /// Mean token confidence 0..=1 when available; used by hallucination filters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<f32>,
+    /// Term dictionary replacements applied to this segment's text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrections: Vec<TextCorrection>,
+}
+
+/// One transcript term replacement, retained to make automatic corrections inspectable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextCorrection {
+    /// Text as recognised before correction.
+    pub original: String,
+    /// Canonical term written to the segment.
+    pub replacement: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

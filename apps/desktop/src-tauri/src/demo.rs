@@ -461,6 +461,7 @@ impl DemoBackend {
                             text: text.into(),
                             words: vec![],
                             confidence: None,
+                            corrections: Vec::new(),
                         };
                         r.turns.push(Turn {
                             speaker: who.into(),
@@ -852,7 +853,7 @@ impl Backend for DemoBackend {
         Ok(())
     }
 
-    async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<()> {
+    async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<RenameOutcome> {
         let mut g = self.lock();
         let m = g.find_mut(id)?;
         match m.meeting.participants.iter_mut().find(|p| p.key == key) {
@@ -864,7 +865,7 @@ impl Backend for DemoBackend {
                 suggestions: Vec::new(),
             }),
         }
-        Ok(())
+        Ok(RenameOutcome::default())
     }
 
     async fn set_task_done(&self, id: &str, index: usize, done: bool) -> Result<()> {

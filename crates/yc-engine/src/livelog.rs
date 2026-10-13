@@ -163,6 +163,7 @@ mod tests {
                 text: text.into(),
                 words: vec![],
                 confidence: None,
+                corrections: Vec::new(),
             },
         }
     }

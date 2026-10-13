@@ -15,7 +15,10 @@ use yc_store::Job;
 use yc_text::{build_turns, chunk_turns};
 
 use crate::audio::{TrackAudio, write_s16};
-use crate::diarize::{ClusterConfig, KnownVoice, assign_unlabelled, centroid, cluster, from_bytes};
+use crate::diarize::{
+    ClusterConfig, KnownVoice, assign_unlabelled, centroid, cluster, from_bytes,
+    relabel_by_first_appearance, same_voice_merge,
+};
 use crate::engine::Engine;
 use crate::finalize::{FinalizeOpts, audio_dir};
 use crate::jobs::JobPayload;
@@ -88,7 +91,7 @@ pub(crate) fn speaker_names(meeting: &Meeting) -> Vec<(String, String)> {
     names
 }
 
-fn is_diarised_key(key: &str) -> bool {
+pub(crate) fn is_diarised_key(key: &str) -> bool {
     key == SPEAKER_THEM
         || (key.starts_with('s') && key.len() > 1 && key[1..].chars().all(|c| c.is_ascii_digit()))
 }
@@ -161,8 +164,46 @@ impl Engine {
 
         let vectors: Vec<Vec<f32>> = embedded.iter().map(|(_, v, _)| v.clone()).collect();
         let secs: Vec<f32> = embedded.iter().map(|(_, _, s)| *s).collect();
-        let cfg = cluster_config(&rec.meeting, settings.speaker_cluster_threshold);
-        let cluster_labels = cluster(&vectors, &secs, &cfg);
+        let cfg = cluster_config(
+            &rec.meeting,
+            settings.speaker_cluster_threshold,
+            settings.speaker_merge_similarity,
+        );
+        let mut cluster_labels = cluster(&vectors, &secs, &cfg);
+        let contacts = VoiceEmailIndex::read(&self.library_root());
+        let known: Vec<KnownVoice> = if settings.recognise_voices {
+            self.store
+                .list_voices()?
+                .into_iter()
+                .map(|v| KnownVoice {
+                    emails: contacts.emails(&v.id),
+                    id: v.id,
+                    name: v.name,
+                    centroid: from_bytes(&v.centroid),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if cfg.num_speakers.is_none() {
+            // One saved voice recognised in two clusters: it is one person.
+            loop {
+                cluster_labels = relabel_by_first_appearance(&cluster_labels);
+                let count = cluster_labels.iter().copied().max().map_or(0, |m| m + 1);
+                let cents = cluster_centroids(&embedded, &cluster_labels, count);
+                let Some((absorbed, into)) = same_voice_merge(
+                    &cents,
+                    &known,
+                    settings.voice_match_threshold,
+                    cfg.distinct_similarity,
+                ) else {
+                    break;
+                };
+                for l in cluster_labels.iter_mut().filter(|l| **l == absorbed) {
+                    *l = into;
+                }
+            }
+        }
         let mut per_segment: Vec<Option<usize>> = vec![None; them.len()];
         for ((pos, _, _), l) in embedded.iter().zip(&cluster_labels) {
             per_segment[*pos] = Some(*l);
@@ -182,32 +223,7 @@ impl Engine {
         };
 
         // Cluster voices, matched against the saved ones.
-        let centroids: Vec<Vec<f32>> = (0..k)
-            .map(|c| {
-                centroid(
-                    embedded
-                        .iter()
-                        .zip(&cluster_labels)
-                        .filter(|(_, l)| **l == c)
-                        .map(|((_, v, _), _)| v.as_slice()),
-                )
-            })
-            .collect();
-        let contacts = VoiceEmailIndex::read(&self.library_root());
-        let known: Vec<KnownVoice> = if settings.recognise_voices {
-            self.store
-                .list_voices()?
-                .into_iter()
-                .map(|v| KnownVoice {
-                    emails: contacts.emails(&v.id),
-                    id: v.id,
-                    name: v.name,
-                    centroid: from_bytes(&v.centroid),
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let centroids = cluster_centroids(&embedded, &cluster_labels, k);
         let resolutions = resolve_speakers(
             &centroids,
             &known,
@@ -526,9 +542,33 @@ impl Engine {
     }
 }
 
-fn cluster_config(meeting: &Meeting, distance_threshold: f32) -> ClusterConfig {
+/// Centroid of every cluster `0..count` over the embedded utterances.
+fn cluster_centroids(
+    embedded: &[(usize, Vec<f32>, f32)],
+    labels: &[usize],
+    count: usize,
+) -> Vec<Vec<f32>> {
+    (0..count)
+        .map(|c| {
+            centroid(
+                embedded
+                    .iter()
+                    .zip(labels)
+                    .filter(|(_, l)| **l == c)
+                    .map(|((_, v, _), _)| v.as_slice()),
+            )
+        })
+        .collect()
+}
+
+fn cluster_config(
+    meeting: &Meeting,
+    distance_threshold: f32,
+    merge_similarity: f32,
+) -> ClusterConfig {
     let mut config = ClusterConfig {
         distance_threshold,
+        merge_similarity,
         ..Default::default()
     };
     if let Some(expected) = meeting.expected_speakers {
@@ -597,11 +637,11 @@ mod tests {
 
     #[test]
     fn invite_speaker_count_is_a_bound_and_user_count_is_exact() {
-        let invite = cluster_config(&meeting(Some(2), false), 0.55);
+        let invite = cluster_config(&meeting(Some(2), false), 0.55, 0.5);
         assert_eq!(invite.num_speakers, None);
         assert_eq!(invite.max_speakers, 2);
 
-        let explicit = cluster_config(&meeting(Some(2), true), 0.55);
+        let explicit = cluster_config(&meeting(Some(2), true), 0.55, 0.5);
         assert_eq!(explicit.num_speakers, Some(2));
         assert_eq!(explicit.max_speakers, ClusterConfig::default().max_speakers);
 

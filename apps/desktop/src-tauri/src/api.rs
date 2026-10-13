@@ -15,6 +15,7 @@ use yc_core::events::{DownloadState, EngineEvent};
 use yc_core::meeting::{Meeting, MeetingStatus};
 use yc_core::summary::Summary;
 use yc_core::transcript::Turn;
+pub use yc_engine::RenameOutcome;
 
 /// Pushes engine events to the UI (global `engine` event, a Tauri `Channel`, …).
 pub type EventSink = Arc<dyn Fn(EngineEvent) + Send + Sync>;
@@ -455,6 +456,8 @@ pub struct Settings {
     pub recording_reminder: bool,
     pub recognize_voices: bool,
     pub mini_player: bool,
+    /// The user's own terms (product names, jargon) spelled correctly in transcripts.
+    pub terms: Vec<String>,
     pub summaries: SummarySettings,
     pub onboarded: bool,
 }
@@ -474,6 +477,7 @@ impl Default for Settings {
             recording_reminder: true,
             recognize_voices: true,
             mini_player: true,
+            terms: Vec::new(),
             summaries: SummarySettings {
                 mode: SummaryMode::Local {
                     model: String::new(),
@@ -502,6 +506,7 @@ pub struct SettingsPatch {
     pub recording_reminder: Option<bool>,
     pub recognize_voices: Option<bool>,
     pub mini_player: Option<bool>,
+    pub terms: Option<Vec<String>>,
     pub onboarded: Option<bool>,
     pub summaries: Option<SummaryPatch>,
 }
@@ -538,6 +543,7 @@ impl Settings {
             recording_reminder,
             recognize_voices,
             mini_player,
+            terms,
             onboarded
         );
         if let Some(s) = p.summaries {
@@ -586,7 +592,7 @@ pub trait Backend: Send + Sync + 'static {
     async fn get_meeting(&self, id: &str) -> Result<MeetingDetail>;
     async fn rename_meeting(&self, id: &str, title: &str) -> Result<()>;
     async fn delete_meeting(&self, id: &str) -> Result<()>;
-    async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<()>;
+    async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<RenameOutcome>;
     async fn set_task_done(&self, id: &str, index: usize, done: bool) -> Result<()>;
     async fn regenerate_summary(&self, id: &str) -> Result<Summary>;
     /// Queues a rebuild of the transcript from stored meeting audio.

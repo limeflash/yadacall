@@ -227,6 +227,60 @@ async fn naming_a_speaker_teaches_the_voice_for_the_next_meeting() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn naming_two_speakers_alike_merges_them_into_one_person() {
+    let env = Env::new(call_scripts_with_speaker_evidence());
+    let engine = env.open().await;
+    let id = record_call(&env, &engine, "Один человек").await;
+    ready(&engine, id).await;
+    let before = engine.get_meeting(id).await.expect("meeting");
+    let remote = |d: &yc_engine::MeetingDetail, key: &str| {
+        d.segments.iter().filter(|s| s.speaker == key).count()
+    };
+    let (s1, s2) = (remote(&before, "s1"), remote(&before, "s2"));
+    assert!(s1 > 0 && s2 > 0, "premise: two remote speakers");
+
+    let first = engine
+        .rename_speaker(id, "s1".into(), "Дима".into())
+        .await
+        .expect("first rename");
+    assert_eq!(first.merged_into, None);
+    // Same name (other case, extra space) on the second cluster: it is the same person.
+    let second = engine
+        .rename_speaker(id, "s2".into(), " дима ".into())
+        .await
+        .expect("second rename");
+    let merged = second.merged_into.expect("merged");
+    assert_eq!((merged.key.as_str(), merged.name.as_str()), ("s1", "Дима"));
+
+    let after = engine.get_meeting(id).await.expect("meeting");
+    assert_eq!(remote(&after, "s2"), 0);
+    assert_eq!(remote(&after, "s1"), s1 + s2, "segments re-keyed");
+    let dimas: Vec<_> = after
+        .meeting
+        .participants
+        .iter()
+        .filter(|p| p.name == "Дима")
+        .collect();
+    assert_eq!(dimas.len(), 1, "{:?}", after.meeting.participants);
+    assert!(dimas[0].voice_id.is_some());
+
+    let profiles: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(folder_of(&env, &after.folder).join("speakers.json")).unwrap(),
+    )
+    .unwrap();
+    let speakers = profiles["speakers"].as_object().unwrap();
+    assert!(speakers.contains_key("s1") && !speakers.contains_key("s2"));
+    let voices = engine.list_voices().await.expect("voices");
+    assert_eq!(voices.len(), 1, "one voice profile: {voices:?}");
+    assert_eq!(voices[0].1, "Дима");
+    assert_eq!(
+        voices[0].2,
+        speakers["s1"]["samples"].as_u64().unwrap(),
+        "the profile holds both clusters' evidence"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn keep_audio_none_deletes_audio_after_the_transcript_is_written() {
     let env = Env::new(call_scripts());
     let engine = env.open().await;

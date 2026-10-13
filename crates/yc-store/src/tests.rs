@@ -71,6 +71,7 @@ fn transcript() -> Transcript {
                 text: "Проверили настройки экрана разрешений для нового приложения".to_owned(),
                 words: Vec::new(),
                 confidence: Some(0.98),
+                corrections: Vec::new(),
             },
             Segment {
                 start_ms: 2_500,
@@ -80,6 +81,7 @@ fn transcript() -> Transcript {
                 text: "Экран разрешений теперь открывается правильно".to_owned(),
                 words: Vec::new(),
                 confidence: Some(0.95),
+                corrections: Vec::new(),
             },
         ],
     }

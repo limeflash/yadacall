@@ -118,6 +118,11 @@ pub struct Settings {
     pub voice_match_threshold: f32,
     /// Diarisation merges clusters while their average cosine distance is below this.
     pub speaker_cluster_threshold: f32,
+    /// After diarisation, speaker clusters whose voices are at least this cosine-similar are
+    /// merged into one person.
+    pub speaker_merge_similarity: f32,
+    /// The user's own terms (product names, jargon) that the recogniser should spell correctly.
+    pub terms: Vec<String>,
 }
 
 impl Default for Settings {
@@ -139,6 +144,8 @@ impl Default for Settings {
             prefer_builtin_mic: true,
             voice_match_threshold: 0.6,
             speaker_cluster_threshold: 0.55,
+            speaker_merge_similarity: crate::diarize::DEFAULT_MERGE_SIMILARITY,
+            terms: Vec::new(),
         }
     }
 }

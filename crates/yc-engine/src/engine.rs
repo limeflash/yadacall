@@ -173,6 +173,11 @@ impl Engine {
         self.settings.read().map(|s| s.clone()).unwrap_or_default()
     }
 
+    /// The term dictionary for the current settings: built-in terms plus the user's.
+    pub(crate) fn term_dictionary(&self) -> yc_text::TermDictionary {
+        yc_text::TermDictionary::with_user_terms(self.settings().terms)
+    }
+
     /// Replaces and persists the settings.
     pub async fn set_settings(self: &Arc<Self>, new: Settings) -> Result<()> {
         let old = self.settings();
