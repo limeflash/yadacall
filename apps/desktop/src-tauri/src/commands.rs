@@ -60,6 +60,7 @@ pub fn friendly(e: &yc_core::Error) -> &'static str {
         }
         E::Invalid(m) if m.contains("sign in again") => "Вход в Google истёк. Войди заново.",
         E::Invalid(m) if m.contains("sign-in was denied") => "Вход в Google отменён.",
+        E::Invalid(m) if m.contains("summaries are turned off") => "Итоги выключены в настройках.",
         E::Invalid(_) => "Сейчас это действие недоступно.",
         E::Io(_) => "Ошибка чтения или записи файла.",
     }
@@ -259,6 +260,16 @@ pub async fn model_benchmark(b: B<'_>, id: String) -> R<BenchmarkResult> {
 }
 
 // ---- settings / permissions ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn ollama_status(b: B<'_>, base: OllamaBase) -> R<OllamaStatus> {
+    Ok(b.ollama_status(base).await?)
+}
+
+#[tauri::command]
+pub async fn test_summary_provider(b: B<'_>, mode: Option<SummaryMode>) -> R<ProviderTest> {
+    Ok(b.test_summary_provider(mode).await?)
+}
 
 #[tauri::command]
 pub async fn get_settings(b: B<'_>) -> R<Settings> {

@@ -115,7 +115,8 @@ export interface SentNote { excerpts: number; provider: string; audio: boolean }
 export type AskEvent =
   | { kind: "token"; text: string }
   | { kind: "citations"; items: Citation[] }
-  | { kind: "done"; sent: SentNote }
+  /** `generated: false` — summaries are off, only the matching passages (citations) were found. */
+  | { kind: "done"; sent: SentNote; generated?: boolean }
   | { kind: "error"; message: string };
 
 // ---- tasks / import ------------------------------------------------------------------------------
@@ -181,8 +182,22 @@ export type UpdateEvent =
 export type ThemeChoice = "system" | "light" | "dark";
 export type UiLanguage = "ru" | "en";
 export type KeepAudio = "none" | "7d" | "30d" | "forever";
-export type SummaryProvider = "local" | "claude" | "openai" | "ollama";
-export interface SummarySettings { provider: SummaryProvider; model: string; baseUrl?: string; apiKeySet: boolean }
+export type OllamaBase = "local" | "cloud";
+export type ApiProvider = "anthropic" | "openAiCompatible" | "openRouter" | "lmStudio";
+/** How summaries (and Ask answers) are produced. */
+export type SummaryMode =
+  | { mode: "off" }
+  /** `model`: catalog id of an on-device Gemma, empty = automatic. */
+  | { mode: "local"; model: string }
+  | { mode: "ollama"; base: OllamaBase; model: string }
+  | { mode: "api"; provider: ApiProvider; model: string; baseUrl?: string };
+export type KeyAccount = "anthropic" | "openAi" | "openRouter" | "ollamaCloud";
+/** Which keys are in the OS keychain (values never reach the UI). */
+export type KeysSet = Record<KeyAccount, boolean>;
+export type SummarySettings = SummaryMode & { keysSet: KeysSet };
+export interface OllamaModel { name: string; sizeBytes: number; cloud: boolean }
+export interface OllamaStatus { running: boolean; version?: string; signedIn: boolean; models: OllamaModel[]; error?: string }
+export interface ProviderTest { ok: boolean; latencyMs: number; reply?: string; error?: string }
 export interface Settings {
   theme: ThemeChoice;
   accent: string;
@@ -199,8 +214,8 @@ export interface Settings {
   summaries: SummarySettings;
   onboarded: boolean;
 }
-/** Partial update; `summaries.apiKey` is written to the OS keychain by the real backend. */
-export type SettingsPatch = Partial<Omit<Settings, "summaries">> & { summaries?: Partial<SummarySettings> & { apiKey?: string } };
+/** Partial update; `summaries.key` is written to the OS keychain by the real backend (an empty value removes it). */
+export type SettingsPatch = Partial<Omit<Settings, "summaries">> & { summaries?: { mode?: SummaryMode; key?: { account: KeyAccount; value: string } } };
 
 // ---- permissions ---------------------------------------------------------------------------------
 export type PermissionState = "granted" | "denied" | "notDetermined";
@@ -245,6 +260,11 @@ export interface Api {
   modelRemove(id: string): Promise<void>;
   modelSetActive(id: string): Promise<void>;
   modelBenchmark(id: string): Promise<BenchmarkResult>;
+  // summary providers
+  /** Probes the local Ollama daemon, or lists Ollama Cloud with the stored key. */
+  ollamaStatus(base: OllamaBase): Promise<OllamaStatus>;
+  /** One short request with `mode` (the saved one when omitted), timed. */
+  testSummaryProvider(mode?: SummaryMode): Promise<ProviderTest>;
   // settings / permissions
   getSettings(): Promise<Settings>;
   updateSettings(patch: SettingsPatch): Promise<Settings>;

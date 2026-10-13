@@ -3,7 +3,15 @@
 use serde::{Deserialize, Serialize};
 use yc_core::{Error, Result};
 
-use crate::{anthropic::AnthropicProvider, openai::OpenAiCompatibleProvider, secrets};
+use crate::{
+    anthropic::AnthropicProvider,
+    ollama::{self, OllamaProvider},
+    openai::OpenAiCompatibleProvider,
+    secrets,
+};
+
+/// Keychain account of the Ollama Cloud API key.
+pub const OLLAMA_CLOUD_ACCOUNT: &str = "ollama-cloud";
 
 /// Provider settings. Credentials are looked up by provider id in the OS keychain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,13 +26,19 @@ pub enum ProviderConfig {
         /// Model id sent to the service.
         model: String,
     },
-    /// Ollama's OpenAI-compatible endpoint.
+    /// The local Ollama daemon through its native API. Cloud models (`name:cloud`) it serves run
+    /// under the account the daemon is signed in to; no key is involved.
     Ollama {
         /// Model name.
         model: String,
-        /// API root; defaults to `http://localhost:11434/v1`.
+        /// Daemon address; defaults to `http://127.0.0.1:11434`.
         #[serde(default = "default_ollama_url")]
         base_url: String,
+    },
+    /// Ollama Cloud's hosted API; the key is read from the keychain account `ollama-cloud`.
+    OllamaCloud {
+        /// Model name, for example `gpt-oss:120b`.
+        model: String,
     },
     /// OpenRouter.
     OpenRouter {
@@ -56,9 +70,21 @@ impl ProviderConfig {
                     model,
                 )?))
             }
-            Self::Ollama { model, base_url } => Ok(Box::new(OpenAiCompatibleProvider::new(
-                base_url, None, "ollama", model,
-            )?)),
+            Self::Ollama { model, base_url } => {
+                let base = base_url.trim_end_matches('/');
+                let base = base.strip_suffix("/v1").unwrap_or(base);
+                Ok(Box::new(OllamaProvider::new(base, None, model)?))
+            }
+            Self::OllamaCloud { model } => {
+                let key = secrets::get(OLLAMA_CLOUD_ACCOUNT)?.ok_or_else(|| {
+                    Error::Llm("Ollama Cloud API key is missing from the OS keychain".to_owned())
+                })?;
+                Ok(Box::new(OllamaProvider::new(
+                    ollama::CLOUD_URL,
+                    Some(key),
+                    model,
+                )?))
+            }
             Self::OpenRouter { model } => {
                 let key = secrets::get("openrouter")?.ok_or_else(|| {
                     Error::Llm("OpenRouter API key is missing from the OS keychain".to_owned())
@@ -81,7 +107,7 @@ impl ProviderConfig {
 }
 
 fn default_ollama_url() -> String {
-    "http://localhost:11434/v1".to_owned()
+    ollama::LOCAL_URL.to_owned()
 }
 fn default_anthropic_model() -> String {
     "claude-sonnet-5-5".to_owned()

@@ -31,8 +31,8 @@ crates/
                jobs, settings. On-disk meeting folders are the source of truth; the index is rebuildable.
   yc-hub       model catalog, hardware probe, performance predictor, resumable downloader with
                mirrors + sha256, runtime packs (llama.cpp server builds).
-  yc-llm       chat providers (OpenAI-compatible: local llama-server / Ollama / LM Studio / OpenRouter;
-               Anthropic), llama-server supervisor, prompts, summary JSON schema, RAG answering.
+  yc-llm       chat providers (OpenAI-compatible: local llama-server / LM Studio / OpenRouter;
+               Ollama native API for the local daemon and Ollama Cloud; Anthropic), llama-server supervisor, prompts, summary JSON schema, RAG answering.
   yc-engine    orchestration: recording sessions, live transcription, job pipeline state machine,
                event bus. The only crate that wires adapters together.
 apps/
@@ -101,8 +101,10 @@ No colons in names (Windows). The library can be synced/backed up as plain files
   reciprocal-rank fusion.
 - **LLM**: Gemma 4 GGUF served by an official llama.cpp `llama-server` build that is downloaded as a
   *runtime pack* for the current platform/GPU (Metal / Vulkan / CUDA / CPU) and talked to over the
-  OpenAI-compatible API on a random localhost port. The same client code drives Ollama, LM Studio,
-  OpenRouter and any OpenAI-compatible endpoint; Anthropic has its own small client.
+  OpenAI-compatible API on a random localhost port. The same client code drives LM Studio, OpenRouter
+  and any OpenAI-compatible endpoint; Ollama (the local daemon, whose `:cloud` models run under the user's
+  subscription, and Ollama Cloud with a key) uses its native `/api/chat` with `format` = JSON schema;
+  Anthropic has its own small client. Summaries can be switched off entirely (Ask then lists passages).
 
 Why a sidecar instead of linking llama.cpp: no C++ build, new model architectures arrive by updating
 a download (not the app), GPU backends match the official builds, and a crash in inference cannot take

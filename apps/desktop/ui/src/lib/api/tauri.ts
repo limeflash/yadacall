@@ -56,6 +56,8 @@ export function createTauriApi(): Api {
     modelSetActive: (id) => invoke("model_set_active", { id }),
     modelBenchmark: (id) => invoke("model_benchmark", { id }),
 
+    ollamaStatus: (base) => invoke("ollama_status", { base }),
+    testSummaryProvider: (mode) => invoke("test_summary_provider", { mode: mode ?? null }),
     getSettings: () => invoke("get_settings"),
     updateSettings: (patch) => invoke("update_settings", { patch }),
     pickFolder: async () => {

@@ -147,6 +147,7 @@
     menuOpen = false;
     try { await api.retranscribeMeeting(id); toast(t("Распознаю заново — это займёт несколько минут")); app.rev++; } catch (e) { toast.error(e); }
   }
+  const summariesOff = $derived(app.settings?.summaries.mode === "off");
   async function regenerate() {
     menuOpen = false; busy = true;
     try { const s = await api.regenerateSummary(id); if (detail) detail.summary = s; toast(t("Итоги пересобраны")); } catch (e) { toast.error(e); }
@@ -205,7 +206,7 @@
         <button type="button" role="menuitem" class="yc-mi mi" onclick={startRename}><span class="mi-ic"><Icon name="text" size={16} /></span><span class="grow">{t("Переименовать")}</span></button>
         <button type="button" role="menuitem" class="yc-mi mi" onclick={openSearch}><span class="mi-ic"><Icon name="search" size={16} /></span><span class="grow">{t("Найти в расшифровке")}</span><span class="mg-mono dim">{isMac ? "⌘F" : "Ctrl+F"}</span></button>
         {#if detail?.hasAudio}<button type="button" role="menuitem" class="yc-mi mi" onclick={retranscribe}><span class="mi-ic"><Icon name="mic" size={16} /></span><span class="grow">{t("Распознать заново")}</span></button>{/if}
-        <button type="button" role="menuitem" class="yc-mi mi" onclick={regenerate}><span class="mi-ic"><Icon name="refresh" size={16} /></span><span class="grow">{t("Пересобрать итоги")}</span></button>
+        <button type="button" role="menuitem" class="yc-mi mi" onclick={regenerate} disabled={summariesOff} title={summariesOff ? t("Итоги выключены в настройках") : undefined}><span class="mi-ic"><Icon name="refresh" size={16} /></span><span class="grow">{t("Пересобрать итоги")}</span></button>
         <span aria-hidden="true" class="sep"></span>
         <button type="button" role="menuitem" class="yc-mi mi" onclick={openNames}><span class="mi-ic"><Icon name="people" size={16} /></span><span class="grow">{t("Назвать спикеров")}</span>{#if unnamed.length}<span class="new">{t("{n} новый", { n: unnamed.length })}</span>{/if}</button>
         <button type="button" role="menuitem" class="yc-mi mi" onclick={() => { menuOpen = false; toast(t("Скоро: разделение реплик вручную")); }}><span class="mi-ic"><Icon name="layers" size={16} /></span><span class="grow">{t("Разделить реплики")}</span></button>
@@ -349,7 +350,7 @@
                   </section>
                 {/if}
               {:else if m.status.state === "ready"}
-                <p class="note">{busy ? t("Собираю итоги…") : t("Итогов пока нет. Их можно собрать из меню ⋯ → «Пересобрать итоги».")}</p>
+                <p class="note">{busy ? t("Собираю итоги…") : summariesOff ? t("Итоги выключены в настройках. Включи их там — и их можно будет собрать из меню ⋯.") : t("Итогов пока нет. Их можно собрать из меню ⋯ → «Пересобрать итоги».")}</p>
               {/if}
               {#if busy}<p class="note">{t("Собираю итоги…")}</p>{/if}
             </div>

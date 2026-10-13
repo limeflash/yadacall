@@ -1,6 +1,7 @@
-//! `yc-llm` behind the engine's [`Summarizer`] and [`Answerer`] ports, per the summary-provider setting:
-//! on-device Gemma through a supervised `llama-server`, Anthropic (key from the OS keychain), or any
-//! OpenAI-compatible / Ollama endpoint.
+//! `yc-llm` behind the engine's [`Summarizer`] and [`Answerer`] ports, per the summary mode setting:
+//! off, on-device Gemma through a supervised `llama-server`, Ollama (the local daemon or Ollama Cloud),
+//! or a chat API (Anthropic, OpenRouter, LM Studio, any OpenAI-compatible endpoint) with a key from the
+//! OS keychain.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -16,19 +17,24 @@ use yc_engine::ports::{
 use yc_hub::catalog::{ModelKind, ModelSpec};
 use yc_hub::predictor::Verdict;
 use yc_llm::{
-    ChatProvider, LocalServer, LocalServerConfig, MeetingMetadata, ProviderConfig, SummaryInput,
-    SummaryOptions, SummaryTemplate, SummaryTurn, answer_question,
+    ChatMessage, ChatProvider, ChatRequest, LocalServer, LocalServerConfig, MeetingMetadata,
+    OLLAMA_CLOUD_ACCOUNT, OLLAMA_CLOUD_URL, OLLAMA_LOCAL_URL, OllamaProvider, ProviderConfig,
+    SummaryInput, SummaryOptions, SummaryTemplate, SummaryTurn, answer_question,
 };
 
 use super::hub::{Insights, ModelHub};
 use super::runtime_keeper::RuntimeKeeper;
 use super::{SharedPrefs, read_prefs};
-use crate::api::SummaryProvider;
+use crate::api::{
+    ApiProvider, KeyAccount, KeysSet, OllamaBase, OllamaStatus, ProviderTest, SummaryMode,
+};
 
 /// Keychain account of the Anthropic key.
 pub const KEY_ANTHROPIC: &str = "anthropic";
 /// Keychain account of the OpenAI-compatible key.
 pub const KEY_OPENAI: &str = "openai";
+/// Keychain account of the OpenRouter key.
+pub const KEY_OPENROUTER: &str = "openrouter";
 /// A local server unused for this long is stopped (it restarts on the next use).
 const SERVER_IDLE: Duration = Duration::from_secs(15 * 60);
 
@@ -45,6 +51,8 @@ pub struct Llm {
     prefs: SharedPrefs,
     server: tokio::sync::Mutex<Option<ServerSlot>>,
     keys: Mutex<HashMap<String, bool>>,
+    /// False in tests: the OS keychain is never touched.
+    keychain: bool,
 }
 
 impl Llm {
@@ -53,6 +61,7 @@ impl Llm {
         insights: Arc<Insights>,
         keeper: Arc<RuntimeKeeper>,
         prefs: SharedPrefs,
+        keychain: bool,
     ) -> Arc<Self> {
         Arc::new(Self {
             hub,
@@ -61,6 +70,7 @@ impl Llm {
             prefs,
             server: tokio::sync::Mutex::new(None),
             keys: Mutex::new(HashMap::new()),
+            keychain,
         })
     }
 
@@ -68,6 +78,9 @@ impl Llm {
 
     /// Whether a key is stored for `account` (cached; the keychain is read once per session).
     pub fn key_present(&self, account: &str) -> bool {
+        if !self.keychain {
+            return false;
+        }
         let mut cache = self.keys.lock().unwrap_or_else(|e| e.into_inner());
         *cache
             .entry(account.to_owned())
@@ -76,6 +89,9 @@ impl Llm {
 
     /// Stores a key in the OS keychain.
     pub fn set_key(&self, account: &str, secret: &str) -> Result<()> {
+        if !self.keychain {
+            return Err(Error::Invalid("the keychain is disabled".to_owned()));
+        }
         yc_llm::set_secret(account, secret)?;
         self.keys
             .lock()
@@ -84,51 +100,208 @@ impl Llm {
         Ok(())
     }
 
-    /// Keychain account used by a provider, if it takes a key.
-    pub fn account_of(p: SummaryProvider) -> Option<&'static str> {
-        match p {
-            SummaryProvider::Claude => Some(KEY_ANTHROPIC),
-            SummaryProvider::Openai => Some(KEY_OPENAI),
-            SummaryProvider::Local | SummaryProvider::Ollama => None,
+    /// Keychain account of a key the UI can write.
+    pub fn account_of(k: KeyAccount) -> &'static str {
+        match k {
+            KeyAccount::Anthropic => KEY_ANTHROPIC,
+            KeyAccount::OpenAi => KEY_OPENAI,
+            KeyAccount::OpenRouter => KEY_OPENROUTER,
+            KeyAccount::OllamaCloud => OLLAMA_CLOUD_ACCOUNT,
+        }
+    }
+
+    /// Stores a key, or removes it when `value` is empty.
+    pub fn apply_key(&self, k: KeyAccount, value: &str) -> Result<()> {
+        let account = Self::account_of(k);
+        if !self.keychain {
+            return Err(Error::Invalid("the keychain is disabled".to_owned()));
+        }
+        if value.trim().is_empty() {
+            yc_llm::delete_secret(account)?;
+            self.keys
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(account.to_owned(), false);
+            Ok(())
+        } else {
+            self.set_key(account, value.trim())
+        }
+    }
+
+    /// Which keys are in the keychain.
+    pub fn keys_set(&self) -> KeysSet {
+        KeysSet {
+            anthropic: self.key_present(KEY_ANTHROPIC),
+            open_ai: self.key_present(KEY_OPENAI),
+            open_router: self.key_present(KEY_OPENROUTER),
+            ollama_cloud: self.key_present(OLLAMA_CLOUD_ACCOUNT),
         }
     }
 
     // ---- provider state -----------------------------------------------------------------------------
 
-    /// Whether the selected provider can produce a summary right now.
+    /// The saved mode.
+    pub fn mode(&self) -> SummaryMode {
+        read_prefs(&self.prefs).summary
+    }
+
+    /// Whether the selected mode can produce a summary right now. False when summaries are off, so no
+    /// summarize job is queued.
     pub fn configured(&self) -> bool {
-        let cfg = read_prefs(&self.prefs).summary;
-        match cfg.provider {
+        match self.mode() {
+            SummaryMode::Off => false,
             // The runtime is installed on first use, so only the model has to be there.
-            SummaryProvider::Local => !self.hub.installed_of(ModelKind::Llm).is_empty(),
-            SummaryProvider::Claude => self.key_present(KEY_ANTHROPIC),
-            SummaryProvider::Openai => cfg.current().base_url.is_some_and(|u| !u.trim().is_empty()),
-            SummaryProvider::Ollama => true,
+            SummaryMode::Local { .. } => !self.hub.installed_of(ModelKind::Llm).is_empty(),
+            SummaryMode::Ollama { base, model } => {
+                !model.trim().is_empty()
+                    && (base == OllamaBase::Local || self.key_present(OLLAMA_CLOUD_ACCOUNT))
+            }
+            SummaryMode::Api {
+                provider,
+                model,
+                base_url,
+            } => match provider {
+                ApiProvider::Anthropic => self.key_present(KEY_ANTHROPIC),
+                ApiProvider::OpenRouter => {
+                    !model.trim().is_empty() && self.key_present(KEY_OPENROUTER)
+                }
+                ApiProvider::OpenAiCompatible => {
+                    !model.trim().is_empty() && base_url.is_some_and(|u| !u.trim().is_empty())
+                }
+                ApiProvider::LmStudio => !model.trim().is_empty(),
+            },
         }
     }
 
     /// Label for the "what left the device" note. `"local"` means nothing left the computer.
-    pub fn egress_label(&self) -> String {
-        let cfg = read_prefs(&self.prefs).summary;
-        match cfg.provider {
-            SummaryProvider::Local => "local".to_owned(),
-            SummaryProvider::Claude => "Claude".to_owned(),
-            SummaryProvider::Ollama => {
-                let url = cfg.current().base_url.unwrap_or_default();
-                if url.is_empty() || is_loopback(&url) {
-                    "local".to_owned()
+    pub async fn egress_label(&self) -> String {
+        match self.mode() {
+            SummaryMode::Off | SummaryMode::Local { .. } => "local".to_owned(),
+            SummaryMode::Ollama { base, model } => {
+                if base == OllamaBase::Cloud || self.daemon_runs_in_cloud(&model).await {
+                    "Ollama Cloud".to_owned()
                 } else {
-                    "Ollama".to_owned()
+                    "local".to_owned()
                 }
             }
-            SummaryProvider::Openai => {
-                let url = cfg.current().base_url.unwrap_or_default();
-                if is_loopback(&url) {
-                    "local".to_owned()
-                } else {
-                    host_of(&url).unwrap_or_else(|| "OpenAI".to_owned())
+            SummaryMode::Api {
+                provider, base_url, ..
+            } => match provider {
+                ApiProvider::Anthropic => "Claude".to_owned(),
+                ApiProvider::OpenRouter => "OpenRouter".to_owned(),
+                ApiProvider::LmStudio | ApiProvider::OpenAiCompatible => {
+                    let default_name = if provider == ApiProvider::LmStudio {
+                        "LM Studio"
+                    } else {
+                        "OpenAI"
+                    };
+                    match base_url {
+                        Some(u) if is_loopback(&u) => "local".to_owned(),
+                        Some(u) => host_of(&u).unwrap_or_else(|| default_name.to_owned()),
+                        None if provider == ApiProvider::LmStudio => "local".to_owned(),
+                        None => default_name.to_owned(),
+                    }
+                }
+            },
+        }
+    }
+
+    /// Whether the local daemon forwards `model` to Ollama's servers (a `:cloud` model of the account).
+    async fn daemon_runs_in_cloud(&self, model: &str) -> bool {
+        if is_cloud_name(model) {
+            return true;
+        }
+        match OllamaProvider::new(OLLAMA_LOCAL_URL, None, model) {
+            Ok(p) => p
+                .list_models()
+                .await
+                .is_ok_and(|ms| ms.iter().any(|m| m.name == model && m.cloud)),
+            Err(_) => false,
+        }
+    }
+
+    /// Probes the local daemon, or lists Ollama Cloud with the stored key.
+    pub async fn ollama_status(&self, base: OllamaBase) -> OllamaStatus {
+        match base {
+            OllamaBase::Local => {
+                let p = OllamaProvider::probe(OLLAMA_LOCAL_URL).await;
+                OllamaStatus {
+                    running: p.running,
+                    version: p.version,
+                    signed_in: p.signed_in,
+                    models: p.models,
+                    error: None,
                 }
             }
+            OllamaBase::Cloud => {
+                let down = |error: String| OllamaStatus {
+                    running: false,
+                    version: None,
+                    signed_in: false,
+                    models: Vec::new(),
+                    error: Some(error),
+                };
+                let key = match self
+                    .keychain
+                    .then(|| yc_llm::get_secret(OLLAMA_CLOUD_ACCOUNT))
+                    .transpose()
+                {
+                    Ok(Some(Some(k))) => k,
+                    Ok(_) => return down("no key".to_owned()),
+                    Err(e) => return down(e.to_string()),
+                };
+                let listed = match OllamaProvider::new(OLLAMA_CLOUD_URL, Some(key), "") {
+                    Ok(p) => p.list_models().await,
+                    Err(e) => Err(e),
+                };
+                match listed {
+                    Ok(models) => OllamaStatus {
+                        running: true,
+                        version: None,
+                        signed_in: true,
+                        models: models
+                            .into_iter()
+                            .map(|m| yc_llm::OllamaModel { cloud: true, ..m })
+                            .collect(),
+                        error: None,
+                    },
+                    Err(e) => down(e.to_string()),
+                }
+            }
+        }
+    }
+
+    /// One short completion with `mode`, timed.
+    pub async fn test_provider(&self, mode: &SummaryMode) -> ProviderTest {
+        let started = std::time::Instant::now();
+        let result = async {
+            let provider = self.provider_for(mode).await?;
+            let request = ChatRequest::new(
+                "",
+                vec![ChatMessage::user(
+                    "Ответь одним коротким предложением: ты на связи?",
+                )],
+                200,
+            );
+            tokio::time::timeout(Duration::from_secs(90), provider.complete(request))
+                .await
+                .map_err(|_| Error::Network("the provider did not answer in 90 s".to_owned()))?
+        }
+        .await;
+        let latency_ms = started.elapsed().as_millis() as u64;
+        match result {
+            Ok(r) => ProviderTest {
+                ok: !r.text.trim().is_empty(),
+                latency_ms,
+                reply: Some(r.text.trim().chars().take(160).collect()),
+                error: r.text.trim().is_empty().then(|| "empty reply".to_owned()),
+            },
+            Err(e) => ProviderTest {
+                ok: false,
+                latency_ms,
+                reply: None,
+                error: Some(e.to_string()),
+            },
         }
     }
 
@@ -192,35 +365,59 @@ impl Llm {
             .ok_or_else(|| Error::Llm("local server did not start".to_owned()))
     }
 
-    /// A chat provider for the selected setting.
+    /// A chat provider for the saved mode.
     pub async fn provider(&self) -> Result<Box<dyn ChatProvider>> {
-        let cfg = read_prefs(&self.prefs).summary;
-        let entry = cfg.current();
-        match cfg.provider {
-            SummaryProvider::Local => self.local_provider().await,
-            SummaryProvider::Claude => ProviderConfig::Anthropic { model: entry.model }.build(),
-            SummaryProvider::Openai => {
-                let base_url = entry
-                    .base_url
-                    .filter(|u| !u.trim().is_empty())
-                    .unwrap_or_else(|| "https://api.openai.com/v1".to_owned());
-                ProviderConfig::OpenAiCompatible {
-                    provider_id: KEY_OPENAI.to_owned(),
-                    base_url,
-                    model: entry.model,
+        self.provider_for(&self.mode()).await
+    }
+
+    /// A chat provider for `mode`.
+    pub async fn provider_for(&self, mode: &SummaryMode) -> Result<Box<dyn ChatProvider>> {
+        match mode {
+            SummaryMode::Off => Err(Error::Invalid("summaries are turned off".to_owned())),
+            SummaryMode::Local { .. } => self.local_provider().await,
+            SummaryMode::Ollama { base, model } => match base {
+                OllamaBase::Local => ProviderConfig::Ollama {
+                    model: model.clone(),
+                    base_url: OLLAMA_LOCAL_URL.to_owned(),
                 }
-                .build()
-            }
-            SummaryProvider::Ollama => {
-                let base = entry
-                    .base_url
-                    .filter(|u| !u.trim().is_empty())
-                    .unwrap_or_else(|| "http://localhost:11434".to_owned());
-                ProviderConfig::Ollama {
-                    model: entry.model,
-                    base_url: with_v1(&base),
+                .build(),
+                OllamaBase::Cloud => ProviderConfig::OllamaCloud {
+                    model: model.clone(),
                 }
-                .build()
+                .build(),
+            },
+            SummaryMode::Api {
+                provider,
+                model,
+                base_url,
+            } => {
+                let url = base_url.clone().filter(|u| !u.trim().is_empty());
+                match provider {
+                    ApiProvider::Anthropic => ProviderConfig::Anthropic {
+                        model: if model.trim().is_empty() {
+                            "claude-sonnet-5-5".to_owned()
+                        } else {
+                            model.clone()
+                        },
+                    }
+                    .build(),
+                    ApiProvider::OpenRouter => ProviderConfig::OpenRouter {
+                        model: model.clone(),
+                    }
+                    .build(),
+                    ApiProvider::OpenAiCompatible => ProviderConfig::OpenAiCompatible {
+                        provider_id: KEY_OPENAI.to_owned(),
+                        base_url: url.unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
+                        model: model.clone(),
+                    }
+                    .build(),
+                    ApiProvider::LmStudio => ProviderConfig::OpenAiCompatible {
+                        provider_id: "lmstudio".to_owned(),
+                        base_url: url.unwrap_or_else(|| "http://127.0.0.1:1234/v1".to_owned()),
+                        model: model.clone(),
+                    }
+                    .build(),
+                }
             }
         }
     }
@@ -266,9 +463,21 @@ impl Summarizer for Llm {
 #[async_trait]
 impl Answerer for Llm {
     async fn answer(&self, request: AnswerRequest, out: mpsc::Sender<AnswerEvent>) -> Result<()> {
-        let provider = self.provider().await?;
-        let label = self.egress_label();
         let n = request.excerpts.len();
+        if self.mode() == SummaryMode::Off {
+            // No generated answer: hand back the ranked passages as sources.
+            let note = if request.language.to_ascii_lowercase().starts_with("en") {
+                "Summaries are off: nothing left this computer"
+            } else {
+                "Итоги выключены: ничего не покинуло компьютер"
+            };
+            let _ = out.send(AnswerEvent::Egress(note.to_owned())).await;
+            let _ = out.send(AnswerEvent::Citations((0..n).collect())).await;
+            let _ = out.send(AnswerEvent::Done).await;
+            return Ok(());
+        }
+        let provider = self.provider().await?;
+        let label = self.egress_label().await;
         let note = if request.language.to_ascii_lowercase().starts_with("en") {
             if label == "local" {
                 "Nothing left this computer".to_owned()
@@ -378,13 +587,9 @@ async fn server_alive(server: &LocalServer) -> bool {
     .unwrap_or(false)
 }
 
-fn with_v1(base: &str) -> String {
-    let b = base.trim_end_matches('/');
-    if b.ends_with("/v1") {
-        b.to_owned()
-    } else {
-        format!("{b}/v1")
-    }
+/// Ollama's naming for models that run on its servers.
+fn is_cloud_name(model: &str) -> bool {
+    model.ends_with(":cloud") || model.ends_with("-cloud")
 }
 
 fn host_of(url: &str) -> Option<String> {
@@ -446,12 +651,9 @@ mod tests {
     }
 
     #[test]
-    fn urls_are_normalised() {
-        assert_eq!(
-            with_v1("http://localhost:11434"),
-            "http://localhost:11434/v1"
-        );
-        assert_eq!(with_v1("http://x/v1/"), "http://x/v1");
+    fn urls_and_model_names_are_classified() {
+        assert!(is_cloud_name("glm-5.2:cloud") && is_cloud_name("qwen3:480b-cloud"));
+        assert!(!is_cloud_name("gemma4:e4b"));
         assert!(is_loopback("http://localhost:1234/v1"));
         assert!(!is_loopback("https://api.example.com/v1"));
         assert_eq!(

@@ -149,10 +149,21 @@ pub struct SentNote {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum AskEvent {
-    Token { text: String },
-    Citations { items: Vec<Citation> },
-    Done { sent: SentNote },
-    Error { message: String },
+    Token {
+        text: String,
+    },
+    Citations {
+        items: Vec<Citation>,
+    },
+    /// `generated` is false when summaries are off: only the matching passages were found.
+    Done {
+        sent: SentNote,
+        #[serde(default = "yes")]
+        generated: bool,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -321,23 +332,111 @@ pub enum KeepAudio {
     Forever,
 }
 
+/// Where an Ollama request goes.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub enum SummaryProvider {
+pub enum OllamaBase {
+    /// The daemon on this computer (also serves the user's `:cloud` models under their account).
     Local,
-    Claude,
-    Openai,
-    Ollama,
+    /// Ollama Cloud's own API with a key.
+    Cloud,
+}
+
+/// Hosted or self-run API behind the "API" summary mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ApiProvider {
+    Anthropic,
+    OpenAiCompatible,
+    OpenRouter,
+    LmStudio,
+}
+
+/// How meeting summaries (and answers in Ask) are produced. Also the persisted form.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "mode",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SummaryMode {
+    /// No summaries; Ask lists the matching passages without a generated answer.
+    Off,
+    /// Gemma on this computer; `model` is a catalog id prefix such as `gemma-4-e4b` (empty = automatic).
+    Local {
+        #[serde(default)]
+        model: String,
+    },
+    /// Ollama (the local daemon, or Ollama Cloud with a key).
+    Ollama { base: OllamaBase, model: String },
+    /// A chat API with the user's own key.
+    Api {
+        provider: ApiProvider,
+        #[serde(default)]
+        model: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        base_url: Option<String>,
+    },
+}
+
+impl Default for SummaryMode {
+    fn default() -> Self {
+        Self::Local {
+            model: String::new(),
+        }
+    }
+}
+
+/// Keychain accounts the UI can write.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum KeyAccount {
+    Anthropic,
+    OpenAi,
+    OpenRouter,
+    OllamaCloud,
+}
+
+/// Which keys are stored (the values never leave the keychain).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct KeysSet {
+    pub anthropic: bool,
+    pub open_ai: bool,
+    pub open_router: bool,
+    pub ollama_cloud: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummarySettings {
-    pub provider: SummaryProvider,
-    pub model: String,
+    #[serde(flatten)]
+    pub mode: SummaryMode,
+    pub keys_set: KeysSet,
+}
+
+/// What a probe of Ollama found (local daemon, or Ollama Cloud with the stored key).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OllamaStatus {
+    pub running: bool,
+    pub version: Option<String>,
+    /// The daemon is signed in to an Ollama account (cloud models need it). Always true for the cloud API.
+    pub signed_in: bool,
+    pub models: Vec<yc_llm::OllamaModel>,
+    /// Why Ollama Cloud could not be listed (no key, rejected key, no network).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base_url: Option<String>,
-    pub api_key_set: bool,
+    pub error: Option<String>,
+}
+
+/// Result of the "Проверить" button: one short completion with the selected provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderTest {
+    pub ok: bool,
+    pub latency_ms: u64,
+    pub reply: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -376,10 +475,10 @@ impl Default for Settings {
             recognize_voices: true,
             mini_player: true,
             summaries: SummarySettings {
-                provider: SummaryProvider::Claude,
-                model: "claude-sonnet-5-5".into(),
-                base_url: None,
-                api_key_set: true,
+                mode: SummaryMode::Local {
+                    model: String::new(),
+                },
+                keys_set: KeysSet::default(),
             },
             onboarded: true,
         }
@@ -407,13 +506,19 @@ pub struct SettingsPatch {
     pub summaries: Option<SummaryPatch>,
 }
 
+/// A key to store in (or, when `value` is empty, remove from) the OS keychain; never echoed back.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyPatch {
+    pub account: KeyAccount,
+    pub value: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SummaryPatch {
-    pub provider: Option<SummaryProvider>,
-    pub model: Option<String>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
+    pub mode: Option<SummaryMode>,
+    pub key: Option<KeyPatch>,
 }
 
 impl Settings {
@@ -436,17 +541,18 @@ impl Settings {
             onboarded
         );
         if let Some(s) = p.summaries {
-            if let Some(v) = s.provider {
-                self.summaries.provider = v;
+            if let Some(mode) = s.mode {
+                self.summaries.mode = mode;
             }
-            if let Some(v) = s.model {
-                self.summaries.model = v;
-            }
-            if let Some(v) = s.base_url {
-                self.summaries.base_url = Some(v);
-            }
-            if s.api_key.is_some_and(|k| !k.is_empty()) {
-                self.summaries.api_key_set = true;
+            if let Some(k) = s.key {
+                let set = !k.value.is_empty();
+                let keys = &mut self.summaries.keys_set;
+                match k.account {
+                    KeyAccount::Anthropic => keys.anthropic = set,
+                    KeyAccount::OpenAi => keys.open_ai = set,
+                    KeyAccount::OpenRouter => keys.open_router = set,
+                    KeyAccount::OllamaCloud => keys.ollama_cloud = set,
+                }
             }
         }
         self
@@ -519,6 +625,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn model_remove(&self, id: &str) -> Result<()>;
     async fn model_set_active(&self, id: &str) -> Result<()>;
     async fn model_benchmark(&self, id: &str) -> Result<BenchmarkResult>;
+
+    // summary providers
+    /// Probes the local Ollama daemon, or lists Ollama Cloud with the stored key.
+    async fn ollama_status(&self, base: OllamaBase) -> Result<OllamaStatus>;
+    /// Runs a one-sentence request with `mode` (the saved mode when `None`) and times it.
+    async fn test_summary_provider(&self, mode: Option<SummaryMode>) -> Result<ProviderTest>;
 
     // settings / permissions
     async fn get_settings(&self) -> Result<Settings>;

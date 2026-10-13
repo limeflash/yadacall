@@ -34,6 +34,8 @@ const COMMANDS: &[&str] = &[
     "model_remove",
     "model_set_active",
     "model_benchmark",
+    "ollama_status",
+    "test_summary_provider",
     "get_settings",
     "update_settings",
     "permissions",

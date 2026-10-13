@@ -9,80 +9,47 @@ pub mod llm;
 pub mod ml;
 pub mod runtime_keeper;
 
-use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
-use serde::{Deserialize, Serialize};
+use crate::api::{ApiProvider, OllamaBase, SummaryMode};
 
-use crate::api::SummaryProvider;
-
-/// Per-provider summary settings (model, optional base URL).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct ProviderEntry {
-    pub model: String,
-    pub base_url: Option<String>,
-}
-
-/// Which provider summarises and answers, and each provider's own settings.
-/// Stored as the opaque `summary_provider` value of the engine settings.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct SummaryConfig {
-    pub provider: SummaryProvider,
-    pub entries: BTreeMap<String, ProviderEntry>,
-}
-
-impl Default for SummaryConfig {
-    fn default() -> Self {
-        Self {
-            provider: SummaryProvider::Local,
-            entries: BTreeMap::new(),
-        }
+/// Reads the engine's opaque `summary_provider` value. Understands the first release's shape
+/// (`{provider: "claude" | "openai" | "ollama" | "local", entries: {..}}`) too. `None` for the
+/// never-initialised `null`.
+pub fn parse_summary_mode(v: &serde_json::Value) -> Option<SummaryMode> {
+    if v.is_null() {
+        return None;
     }
-}
-
-impl SummaryConfig {
-    /// Key under which a provider's entry is stored.
-    pub fn key(p: SummaryProvider) -> &'static str {
-        match p {
-            SummaryProvider::Local => "local",
-            SummaryProvider::Claude => "claude",
-            SummaryProvider::Openai => "openai",
-            SummaryProvider::Ollama => "ollama",
-        }
+    if v.get("mode").is_some() {
+        return serde_json::from_value(v.clone()).ok();
     }
-
-    /// Default model of a provider (empty = chosen automatically).
-    pub fn default_model(p: SummaryProvider) -> &'static str {
-        match p {
-            SummaryProvider::Claude => "claude-sonnet-5-5",
-            SummaryProvider::Ollama => "gemma3",
-            SummaryProvider::Local | SummaryProvider::Openai => "",
-        }
-    }
-
-    /// The active provider's entry with defaults filled in.
-    pub fn current(&self) -> ProviderEntry {
-        self.entry(self.provider)
-    }
-
-    /// A provider's entry with defaults filled in.
-    pub fn entry(&self, p: SummaryProvider) -> ProviderEntry {
-        let mut e = self.entries.get(Self::key(p)).cloned().unwrap_or_default();
-        if e.model.is_empty() {
-            e.model = Self::default_model(p).to_owned();
-        }
-        e
-    }
-
-    /// Parses the engine's opaque value; `None` for the never-initialised `null`.
-    pub fn from_value(v: &serde_json::Value) -> Option<Self> {
-        if v.is_null() {
-            return None;
-        }
-        serde_json::from_value(v.clone()).ok()
-    }
+    let provider = v.get("provider")?.as_str()?;
+    let entry = v.get("entries").and_then(|e| e.get(provider));
+    let text = |k: &str| {
+        entry
+            .and_then(|e| e.get(k))
+            .and_then(|x| x.as_str())
+            .map(str::trim)
+            .filter(|x| !x.is_empty())
+            .map(str::to_owned)
+    };
+    Some(match provider {
+        "claude" => SummaryMode::Api {
+            provider: ApiProvider::Anthropic,
+            model: text("model").unwrap_or_default(),
+            base_url: None,
+        },
+        "openai" => SummaryMode::Api {
+            provider: ApiProvider::OpenAiCompatible,
+            model: text("model").unwrap_or_default(),
+            base_url: text("baseUrl"),
+        },
+        "ollama" => SummaryMode::Ollama {
+            base: OllamaBase::Local,
+            model: text("model").unwrap_or_default(),
+        },
+        _ => SummaryMode::default(),
+    })
 }
 
 /// Choices the adapters consult on every use.
@@ -92,7 +59,7 @@ pub struct Prefs {
     pub speaker: Option<String>,
     pub text_embedding: Option<String>,
     pub llm: Option<String>,
-    pub summary: SummaryConfig,
+    pub summary: SummaryMode,
     pub russian: bool,
 }
 
@@ -102,4 +69,48 @@ pub type SharedPrefs = Arc<RwLock<Prefs>>;
 /// Snapshot of the prefs (poison-tolerant).
 pub fn read_prefs(p: &SharedPrefs) -> Prefs {
     p.read().map(|g| g.clone()).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn legacy_and_current_shapes_parse() {
+        assert_eq!(parse_summary_mode(&serde_json::Value::Null), None);
+        assert_eq!(
+            parse_summary_mode(
+                &json!({"provider":"claude","entries":{"claude":{"model":"claude-haiku-5-5"}}})
+            ),
+            Some(SummaryMode::Api {
+                provider: ApiProvider::Anthropic,
+                model: "claude-haiku-5-5".into(),
+                base_url: None
+            })
+        );
+        assert_eq!(
+            parse_summary_mode(&json!({"provider":"ollama","entries":{}})),
+            Some(SummaryMode::Ollama {
+                base: OllamaBase::Local,
+                model: String::new()
+            })
+        );
+        assert_eq!(
+            parse_summary_mode(&json!({"provider":"local"})),
+            Some(SummaryMode::default())
+        );
+        let current = SummaryMode::Ollama {
+            base: OllamaBase::Cloud,
+            model: "gpt-oss:120b".into(),
+        };
+        let value = serde_json::to_value(&current).unwrap();
+        assert_eq!(value["mode"], "ollama");
+        assert_eq!(value["base"], "cloud");
+        assert_eq!(parse_summary_mode(&value), Some(current));
+        assert_eq!(
+            parse_summary_mode(&json!({"mode":"off"})),
+            Some(SummaryMode::Off)
+        );
+    }
 }

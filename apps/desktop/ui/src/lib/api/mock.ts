@@ -4,15 +4,16 @@
  */
 import type {
   Api, AskEvent, BenchmarkResult, EngineEvent, ImportJob, InputDevice, MeetingDetail, MeetingListItem, ModelEntry, ModelsOverview,
-  Permissions, RecorderSnapshot, RecorderStartOptions, SearchHit, Settings, SettingsPatch, Summary, TaskItem, Turn, Meeting,
+  OllamaBase, OllamaStatus, Permissions, ProviderTest, SummaryMode, RecorderSnapshot, RecorderStartOptions, SearchHit, Settings, SettingsPatch, Summary, TaskItem, Turn, Meeting,
 } from "./types";
+import { mergeSummaries, noKeys } from "./summaries";
 import { demoAsk, demoMeetings, demoModels, LIVE_SCRIPT, type DemoMeeting } from "./demo";
 
 const SETTINGS_KEY = "yadacall.mock.settings";
 const defaults: Settings = {
   theme: "dark", accent: "#7dd3a0", uiLanguage: "ru", meetingLanguage: "auto", keepAudio: "30d", libraryDir: "~/YadaCall",
   hotkeyRecord: "Alt+Shift+R", hotkeyBookmark: "Alt+Shift+M", launchAtLogin: false, recordingReminder: true, recognizeVoices: true, miniPlayer: true,
-  summaries: { provider: "claude", model: "claude-sonnet-5-5", apiKeySet: true }, onboarded: true,
+  summaries: { mode: "local", model: "", keysSet: { ...noKeys, anthropic: true } }, onboarded: true,
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -23,7 +24,7 @@ export function createMockApi(): Api {
   const emit = (e: EngineEvent) => listeners.forEach((l) => l(e));
 
   let settings: Settings = { ...defaults };
-  try { const s = localStorage.getItem(SETTINGS_KEY); if (s) settings = { ...defaults, ...JSON.parse(s), summaries: { ...defaults.summaries, ...(JSON.parse(s).summaries ?? {}) } }; } catch { /* private mode */ }
+  try { const s = localStorage.getItem(SETTINGS_KEY); if (s) settings = { ...defaults, ...JSON.parse(s) }; if (!("mode" in settings.summaries)) settings.summaries = defaults.summaries; } catch { /* private mode */ }
   const persist = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
   // `?onboarding` in the URL lets screenshots start from the first-run flow.
   if (typeof location !== "undefined" && /onboarding/.test(location.hash)) settings = { ...settings, onboarded: false };
@@ -176,11 +177,15 @@ export function createMockApi(): Api {
     },
     async ask(_q, onEvent: (e: AskEvent) => void) {
       const a = demoAsk();
+      const m = settings.summaries;
       await sleep(500);
-      const words = a.answer.split(/(?<=\s)/);
-      for (const w of words) { onEvent({ kind: "token", text: w }); await sleep(35); }
+      if (m.mode !== "off") {
+        const words = a.answer.split(/(?<=\s)/);
+        for (const w of words) { onEvent({ kind: "token", text: w }); await sleep(35); }
+      }
       onEvent({ kind: "citations", items: a.citations });
-      onEvent({ kind: "done", sent: { excerpts: a.excerpts, provider: settings.summaries.provider === "local" ? "local" : "Claude", audio: false } });
+      const provider = m.mode === "api" ? (m.provider === "anthropic" ? "Claude" : m.provider === "openRouter" ? "OpenRouter" : "API") : m.mode === "ollama" ? "Ollama Cloud" : "local";
+      onEvent({ kind: "done", sent: { excerpts: provider === "local" ? 0 : a.excerpts, provider, audio: false }, generated: m.mode !== "off" });
     },
     async listTasks(includeDone) { return toTasks(includeDone); },
     async importAudio(paths) {
@@ -214,11 +219,19 @@ export function createMockApi(): Api {
     },
     async modelBenchmark(id): Promise<BenchmarkResult> { await sleep(1200); return { modelId: id, realtimeFactor: 38 + Math.round(Math.random() * 8) }; },
 
+    async ollamaStatus(base: OllamaBase): Promise<OllamaStatus> {
+      await sleep(250);
+      const cloud = (name: string) => ({ name, sizeBytes: 338, cloud: true });
+      if (/ollama-(down|signedout)/.test(location.hash + location.search)) return { running: !/down/.test(location.hash + location.search), signedIn: false, models: [{ name: "gemma4:e4b", sizeBytes: 5_000_000_000, cloud: false }] };
+      if (base === "cloud") return settings.summaries.keysSet.ollamaCloud ? { running: true, signedIn: true, models: [cloud("gpt-oss:120b"), cloud("glm-5.2"), cloud("qwen3-coder:480b")] } : { running: false, signedIn: false, models: [], error: "no key" };
+      return { running: true, version: "0.40.3", signedIn: true, models: [cloud("glm-5.2:cloud"), { name: "gemma4:e4b", sizeBytes: 5_000_000_000, cloud: false }, { name: "embeddinggemma:latest", sizeBytes: 621_875_917, cloud: false }] };
+    },
+    async testSummaryProvider(_mode?: SummaryMode): Promise<ProviderTest> { await sleep(900); return { ok: true, latencyMs: 1100, reply: "Да, я на связи." }; },
+
     async getSettings() { return structuredClone(settings); },
     async updateSettings(patch: SettingsPatch) {
       const { summaries, ...rest } = patch;
-      settings = { ...settings, ...rest, summaries: { ...settings.summaries, ...(summaries ?? {}), apiKeySet: summaries?.apiKey ? true : (summaries?.apiKeySet ?? settings.summaries.apiKeySet) } };
-      delete (settings.summaries as { apiKey?: string }).apiKey;
+      settings = { ...settings, ...rest, summaries: mergeSummaries(settings.summaries, summaries) };
       persist();
       return structuredClone(settings);
     },

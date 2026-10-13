@@ -27,7 +27,7 @@ use yc_store::SearchFilters;
 use crate::adapters::hub::{Insights, ModelHub};
 use crate::adapters::llm::Llm;
 use crate::adapters::runtime_keeper::RuntimeKeeper;
-use crate::adapters::{Prefs, SharedPrefs, SummaryConfig, ml, read_prefs};
+use crate::adapters::{Prefs, SharedPrefs, ml, parse_summary_mode, read_prefs};
 use crate::api::*;
 use crate::{paths, permissions};
 use models::ActiveDownload;
@@ -45,6 +45,8 @@ pub struct BackendConfig {
     pub prevent_sleep: bool,
     /// Skip the free-disk-space check when recording starts (tests).
     pub skip_disk_check: bool,
+    /// Never read or write the OS keychain (tests): every key counts as missing.
+    pub skip_keychain: bool,
 }
 
 impl BackendConfig {
@@ -56,6 +58,7 @@ impl BackendConfig {
             events,
             prevent_sleep: true,
             skip_disk_check: false,
+            skip_keychain: false,
         }
     }
 }
@@ -128,6 +131,7 @@ impl EngineBackend {
             Arc::clone(&insights),
             Arc::clone(&keeper),
             Arc::clone(&prefs),
+            !cfg.skip_keychain,
         );
         let ports = Ports {
             asr: Arc::new(ml::Asr::new(Arc::clone(&hub), Arc::clone(&prefs))),
@@ -206,7 +210,7 @@ impl EngineBackend {
             p.speaker = s.models.speaker.clone();
             p.text_embedding = s.models.text_embedding.clone();
             p.llm = s.models.llm.clone();
-            p.summary = SummaryConfig::from_value(&s.summary_provider).unwrap_or_default();
+            p.summary = parse_summary_mode(&s.summary_provider).unwrap_or_default();
             p.russian = s.russian();
         }
     }
@@ -606,6 +610,8 @@ impl Backend for EngineBackend {
                 return Ok(());
             }
         };
+        // With summaries off the answerer returns the ranked passages only.
+        let generated_answer = read_prefs(&self.prefs).summary != SummaryMode::Off;
         while let Some(ev) = rx.recv().await {
             match ev {
                 AnswerEvent::Egress(_) => {}
@@ -627,7 +633,7 @@ impl Backend for EngineBackend {
                     sink(AskEvent::Citations { items });
                 }
                 AnswerEvent::Done => {
-                    let provider = self.llm.egress_label();
+                    let provider = self.llm.egress_label().await;
                     sink(AskEvent::Done {
                         sent: SentNote {
                             excerpts: if provider == "local" {
@@ -638,6 +644,7 @@ impl Backend for EngineBackend {
                             provider,
                             audio: false,
                         },
+                        generated: generated_answer,
                     });
                     break;
                 }
@@ -759,44 +766,30 @@ impl Backend for EngineBackend {
     async fn get_settings(&self) -> Result<Settings> {
         let s = self.engine.settings();
         let app = self.lock().app.clone();
-        let cfg = read_prefs(&self.prefs).summary;
-        let key_set = Llm::account_of(cfg.provider).is_some_and(|a| self.llm.key_present(a));
+        let mode = read_prefs(&self.prefs).summary;
         Ok(settings::to_api(
             &s,
             &self.engine.library_root(),
             &app,
-            &cfg,
-            key_set,
+            &mode,
+            self.llm.keys_set(),
         ))
     }
 
     async fn update_settings(&self, patch: SettingsPatch) -> Result<Settings> {
         let mut app = self.lock().app.clone();
         let hub = Arc::clone(&self.hub);
-        let before = read_prefs(&self.prefs).summary.provider;
+        let before = read_prefs(&self.prefs).summary;
         let summary_patch = patch.summaries.clone();
-        if let Some(sp) = &summary_patch
-            && let Some(key) = sp
-                .api_key
-                .as_deref()
-                .map(str::trim)
-                .filter(|k| !k.is_empty())
-        {
-            let provider = sp.provider.unwrap_or(before);
-            if let Some(account) = Llm::account_of(provider) {
-                self.llm.set_key(account, key)?;
-            }
+        if let Some(key) = summary_patch.as_ref().and_then(|sp| sp.key.as_ref()) {
+            self.llm.apply_key(key.account, &key.value)?;
         }
         self.engine
             .update_settings(|s| {
                 settings::apply_patch(s, &mut app, &patch);
-                if let Some(sp) = &summary_patch {
-                    let mut cfg =
-                        SummaryConfig::from_value(&s.summary_provider).unwrap_or_default();
-                    settings::apply_summary_patch(&mut cfg, sp);
-                    if cfg.provider == SummaryProvider::Local
-                        && let Some(model) = &sp.model
-                    {
+                if let Some(mode) = summary_patch.as_ref().and_then(|sp| sp.mode.as_ref()) {
+                    let mode = settings::clean_mode(mode);
+                    if let SummaryMode::Local { model } = &mode {
                         let ids: Vec<&str> = hub
                             .offered()
                             .filter(|m| m.kind == CatKind::Llm)
@@ -805,19 +798,30 @@ impl Backend for EngineBackend {
                         s.models.llm = settings::local_model_choice(&ids, model);
                     }
                     s.summary_provider =
-                        serde_json::to_value(&cfg).unwrap_or(serde_json::Value::Null);
+                        serde_json::to_value(&mode).unwrap_or(serde_json::Value::Null);
                 }
             })
             .await?;
         self.lock().app = app.clone();
         self.save_app_prefs(&app);
         self.sync_prefs();
-        if before == SummaryProvider::Local
-            && read_prefs(&self.prefs).summary.provider != SummaryProvider::Local
+        if matches!(before, SummaryMode::Local { .. })
+            && !matches!(read_prefs(&self.prefs).summary, SummaryMode::Local { .. })
         {
             self.llm.stop_server().await;
         }
         self.get_settings().await
+    }
+
+    async fn ollama_status(&self, base: OllamaBase) -> Result<OllamaStatus> {
+        Ok(self.llm.ollama_status(base).await)
+    }
+
+    async fn test_summary_provider(&self, mode: Option<SummaryMode>) -> Result<ProviderTest> {
+        let mode = mode
+            .map(|m| settings::clean_mode(&m))
+            .unwrap_or_else(|| read_prefs(&self.prefs).summary);
+        Ok(self.llm.test_provider(&mode).await)
     }
 
     async fn permissions(&self) -> Result<Permissions> {

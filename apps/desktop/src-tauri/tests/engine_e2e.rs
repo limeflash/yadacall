@@ -126,6 +126,7 @@ async fn import_transcribe_search_summarise_ask() {
     cfg.library_dir = Some(library.clone());
     cfg.prevent_sleep = false;
     cfg.skip_disk_check = true;
+    cfg.skip_keychain = true;
     let t0 = Instant::now();
     let backend = EngineBackend::open(cfg).await.expect("open backend");
     eprintln!("open: {:?}", t0.elapsed());
@@ -133,7 +134,7 @@ async fn import_transcribe_search_summarise_ask() {
     // First-run settings.
     let s = backend.get_settings().await.unwrap();
     assert!(!s.onboarded);
-    assert_eq!(s.summaries.provider, SummaryProvider::Local);
+    assert_eq!(s.summaries.mode, SummaryMode::default());
     backend
         .update_settings(SettingsPatch {
             meeting_language: Some("ru".into()),
@@ -281,7 +282,7 @@ async fn import_transcribe_search_summarise_ask() {
             "Кто подготовит релизные заметки?",
             Arc::new(move |e| match e {
                 AskEvent::Token { text } => tk.lock().unwrap().push_str(&text),
-                AskEvent::Done { sent } => *fin.lock().unwrap() = Some(sent),
+                AskEvent::Done { sent, .. } => *fin.lock().unwrap() = Some(sent),
                 AskEvent::Error { message } => panic!("ask failed: {message}"),
                 AskEvent::Citations { .. } => {}
             }),
