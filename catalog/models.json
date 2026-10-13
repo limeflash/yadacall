@@ -380,7 +380,13 @@
         "gflopPerAudioSec": 12.0,
         "efficiency": 0.6
       },
-      "engine": "parakeet-tdt"
+      "engine": "parakeet-tdt",
+      "engineFiles": {
+        "preprocessor": "nemo128.onnx",
+        "encoder": "encoder-model.int8.onnx",
+        "decoderJoint": "decoder_joint-model.int8.onnx",
+        "vocabulary": "vocab.txt"
+      }
     },
     {
       "id": "gigaam-multilingual-ctc-int8",

@@ -14,6 +14,8 @@ use yc_hub::{
     hw, predictor,
 };
 
+use super::shared::app_data_dir;
+
 /// Model command options.
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
@@ -226,16 +228,4 @@ fn format_bytes(bytes: u64) -> String {
         unit += 1;
     }
     format!("{value:.1} {}", UNITS[unit])
-}
-
-fn app_data_dir() -> anyhow::Result<PathBuf> {
-    if let Some(path) = std::env::var_os("YC_DATA_DIR") {
-        let path = PathBuf::from(path);
-        std::fs::create_dir_all(&path).context("create configured YadaCall data directory")?;
-        return Ok(path);
-    }
-    let root = dirs::data_local_dir().context("cannot resolve the local app data directory")?;
-    let path = root.join("YadaCall");
-    std::fs::create_dir_all(&path).context("create YadaCall app data directory")?;
-    Ok(path)
 }

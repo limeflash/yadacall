@@ -60,6 +60,19 @@ pub fn resolve_models_dir(supplied: Option<PathBuf>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("models"))
 }
 
+/// Resolve the YadaCall app data directory used by model management and installed catalog models.
+pub fn app_data_dir() -> anyhow::Result<PathBuf> {
+    if let Some(path) = std::env::var_os("YC_DATA_DIR") {
+        let path = PathBuf::from(path);
+        std::fs::create_dir_all(&path).context("create configured YadaCall data directory")?;
+        return Ok(path);
+    }
+    let root = dirs::data_local_dir().context("cannot resolve the local app data directory")?;
+    let path = root.join("YadaCall");
+    std::fs::create_dir_all(&path).context("create YadaCall app data directory")?;
+    Ok(path)
+}
+
 pub fn resolve_engine_dir(models_dir: &Path, engine: EngineArg) -> anyhow::Result<PathBuf> {
     let required_file = match engine {
         EngineArg::Gigaam => "v3_e2e_rnnt_encoder.int8.onnx",

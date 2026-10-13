@@ -21,6 +21,17 @@ pub enum AsrKind {
     Parakeet,
 }
 
+/// Catalog engine families supported by the ASR adapters, independent of `yc-hub`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AsrCatalogEngine {
+    /// GigaAM v3 transducer.
+    GigaAmRnnt,
+    /// GigaAM CTC model.
+    GigaAmCtc,
+    /// Parakeet TDT model.
+    ParakeetTdt,
+}
+
 /// Optional artifact filenames supplied by a model catalog entry.
 #[derive(Debug, Clone, Default)]
 pub struct AsrFileNames {
@@ -58,6 +69,26 @@ impl AsrKind {
             Self::Parakeet => "parakeet",
         }
     }
+}
+
+/// Maps a catalog engine and artifact names to the configured ASR loader settings.
+pub fn asr_config(
+    engine: AsrCatalogEngine,
+    id: impl Into<String>,
+    files: AsrFileNames,
+) -> (AsrKind, AsrModelConfig) {
+    let kind = match engine {
+        AsrCatalogEngine::GigaAmRnnt => AsrKind::GigaAm,
+        AsrCatalogEngine::GigaAmCtc => AsrKind::GigaAmCtc,
+        AsrCatalogEngine::ParakeetTdt => AsrKind::Parakeet,
+    };
+    (
+        kind,
+        AsrModelConfig {
+            id: id.into(),
+            files,
+        },
+    )
 }
 
 impl std::fmt::Display for AsrKind {

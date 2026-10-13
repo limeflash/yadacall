@@ -8,32 +8,32 @@ use yc_core::{Error, Result};
 use yc_engine::ports::{AsrFactory, SpeakerEmbedderFactory, TextEmbedderFactory, VadFactory};
 use yc_hub::catalog::{ModelEngine, ModelSpec};
 use yc_ml::{
-    AsrEngine, AsrFileNames, AsrKind, AsrModelConfig, Backend, CampPlusEmbedder, OnnxTextEmbedder,
-    Pooling, SileroVad, TextEmbeddingConfig,
+    AsrCatalogEngine, AsrEngine, AsrFileNames, Backend, CampPlusEmbedder, OnnxTextEmbedder,
+    Pooling, SileroVad, TextEmbeddingConfig, asr_config as shared_asr_config,
 };
 
 use super::SharedPrefs;
 use super::hub::{EMBED_E5_SMALL, ModelHub, SPEAKER_CAMPPLUS};
 use super::read_prefs;
 
-/// Maps a catalog engine value to the recogniser implementation.
-pub fn asr_kind(engine: ModelEngine) -> AsrKind {
+fn asr_catalog_engine(engine: ModelEngine) -> AsrCatalogEngine {
     match engine {
-        ModelEngine::GigaAmRnnt => AsrKind::GigaAm,
-        ModelEngine::GigaAmCtc => AsrKind::GigaAmCtc,
-        ModelEngine::ParakeetTdt => AsrKind::Parakeet,
+        ModelEngine::GigaAmRnnt => AsrCatalogEngine::GigaAmRnnt,
+        ModelEngine::GigaAmCtc => AsrCatalogEngine::GigaAmCtc,
+        ModelEngine::ParakeetTdt => AsrCatalogEngine::ParakeetTdt,
     }
 }
 
-/// Builds the recognizer kind and loader settings from one catalog entry.
-pub fn asr_config(spec: &ModelSpec) -> Result<(AsrKind, AsrModelConfig)> {
+/// Converts catalog metadata to the shared `yc-ml` ASR loader configuration.
+pub fn asr_config(spec: &ModelSpec) -> Result<(yc_ml::AsrKind, yc_ml::AsrModelConfig)> {
     let engine = spec
         .engine
         .ok_or_else(|| Error::Invalid(format!("no engine configured for `{}`", spec.id)))?;
     let catalog_files = spec.engine_files.as_ref();
-    let config = AsrModelConfig {
-        id: spec.id.clone(),
-        files: AsrFileNames {
+    Ok(shared_asr_config(
+        asr_catalog_engine(engine),
+        spec.id.clone(),
+        AsrFileNames {
             preprocessor: catalog_files.and_then(|files| files.preprocessor.clone()),
             encoder: catalog_files.and_then(|files| files.encoder.clone()),
             decoder: catalog_files.and_then(|files| files.decoder.clone()),
@@ -42,8 +42,7 @@ pub fn asr_config(spec: &ModelSpec) -> Result<(AsrKind, AsrModelConfig)> {
             model: catalog_files.and_then(|files| files.model.clone()),
             vocabulary: catalog_files.and_then(|files| files.vocabulary.clone()),
         },
-    };
-    Ok((asr_kind(engine), config))
+    ))
 }
 
 /// Loads GigaAM v3 for `ru` and Parakeet v3 for everything else, unless the user chose a model.
