@@ -9,8 +9,9 @@
   import Mascot from "../kit/Mascot.svelte";
   import StatusPill from "../kit/StatusPill.svelte";
   import SummarySection from "./SummarySection.svelte";
+  import ModelPicker from "../components/ModelPicker.svelte";
   import { api, integrations } from "../api";
-  import type { Connection, ModelEntry, Permissions, ThemeChoice, KeepAudio } from "../api";
+  import type { Connection, Permissions, ThemeChoice, KeepAudio } from "../api";
   import { app, saveSettings, theme, update, checkForUpdates, installUpdate } from "../state.svelte";
   import { t, plural, i18n } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
@@ -20,7 +21,6 @@
   import { toast } from "../toast.svelte";
 
   const s = $derived(app.settings!);
-  let asr = $state<ModelEntry[]>([]);
   let perms = $state<Permissions | null>(null);
   let capturing = $state<null | "hotkeyRecord" | "hotkeyBookmark">(null);
 
@@ -37,14 +37,11 @@
   }
   function removeTerm(term: string) { saveSettings({ terms: (s.terms ?? []).filter((x) => x !== term) }); }
 
-  async function loadModels() { asr = (await api.modelsOverview()).models.filter((m) => m.kind === "asr"); }
   let meet = $state<Connection | null>(null);
   onMount(() => {
-    loadModels(); api.permissions().then((p) => (perms = p));
+    api.permissions().then((p) => (perms = p));
     integrations.connections().then((c) => (meet = c.find((x) => x.state === "connected") ?? null));
   });
-  // keep the three ASR rows live while something downloads
-  $effect(() => { const d = JSON.stringify(app.downloads); void d; loadModels(); });
 
   const L = { Bg: "#f8f8f6", Surf: "#ffffff", Line: "#e3e3df" };
   const D = { Bg: "#0c0c0e", Surf: "#1d1d22", Line: "#2c2c33" };
@@ -72,17 +69,6 @@
   }
   async function pickFolder() { const f = await api.pickFolder(); if (f) saveSettings({ libraryDir: f }); }
   async function askPerm(k: "microphone" | "systemAudio") { perms = await api.requestPermission(k); }
-  function modelBtn(m: ModelEntry): string {
-    const d = m.download;
-    if (m.active && m.installed) return t("Основная");
-    if (m.installed) return t("Сделать основной");
-    if (d && d.state.state === "running") return Math.floor((d.doneBytes / d.totalBytes) * 100) + "%";
-    return t("Скачать");
-  }
-  async function modelAct(m: ModelEntry) {
-    if (m.installed && !m.active) { await api.modelSetActive(m.id); loadModels(); }
-    else if (!m.installed && !m.download) { await api.modelDownload(m.id); loadModels(); }
-  }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -121,24 +107,8 @@
         <span style="display: inline-flex; color: var(--muted)"><Icon name="chevronRight" size={16} /></span>
       </button>
 
-      <div class="hrow">
-        <SectionLabel as="h2">{t("Модель расшифровки")}</SectionLabel>
-        <button type="button" class="yc-press alllink" onclick={() => go({ name: "models" })}>{t("Все модели")} →</button>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 6px">
-        {#each asr.slice(0, 3) as m (m.id)}
-          {@const d = m.download}
-          {@const fill = d && d.state.state === "running" ? (d.doneBytes / d.totalBytes) * 100 : 0}
-          <div class="model" style="border-color: {m.active && m.installed ? 'var(--accent-line)' : 'var(--border)'}">
-            <span aria-hidden="true" class="fill" style="width: {fill}%"></span>
-            <span style="position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
-              <span class="mg-mono" style="font-size: 13px; font-weight: 700">{m.name}</span>
-              <span style="font-size: 12px; color: var(--muted)">{bytes(m.sizeBytes)} · {m.blurb}</span>
-            </span>
-            <button type="button" class="mbtn" class:primary={m.active && m.installed} class:mono={!!d && !m.installed} onclick={() => modelAct(m)}>{modelBtn(m)}</button>
-          </div>
-        {/each}
-      </div>
+      <ModelPicker kind="asr" title={t("Модель расшифровки")} />
+
       <div class="group">
         <div class="grow">
           <span style="flex: 1; min-width: 0; font-size: 14px">{t("Язык встреч")}</span>
@@ -253,13 +223,6 @@
   .chk span { display: block; width: 3px; height: 6px; margin-top: -2px; border-right: 1.8px solid var(--ink-on-accent); border-bottom: 1.8px solid var(--ink-on-accent); transform: rotate(45deg); }
   .conn { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); text-align: left; font: inherit; }
   .gtile { width: 32px; height: 32px; flex: none; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); font-size: 14px; font-weight: 800; display: grid; place-items: center; }
-  .hrow { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 14px 4px 0; }
-  .alllink { flex: none; margin-bottom: 8px; padding: 0; border: 0; background: none; font-size: 12.5px; font-weight: 600; color: var(--accent-text); white-space: nowrap; }
-  .model { position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); transition: border-color 0.3s; }
-  .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-soft); transition: width 0.2s; }
-  .mbtn { position: relative; height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 11px; background: transparent; color: var(--text); font-size: 12px; font-weight: 700; white-space: nowrap; }
-  .mbtn.primary { background: var(--accent); color: var(--ink-on-accent); border-color: transparent; }
-  .mbtn.mono { font-family: var(--font-mono); }
   .group { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
   .grow { display: flex; align-items: center; gap: 16px; padding: 12px 16px; }
   .bt { border-top: 1px solid var(--border); }

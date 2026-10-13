@@ -314,7 +314,7 @@
   {@const vp = verdictPill[m.verdict]}
   <div class="pickwrap">
     <div class="pickline">
-    <button type="button" role="radio" aria-checked={on} aria-disabled={dead} tabindex={on ? 0 : -1} class="card pickrow" class:on class:dead
+    <button type="button" role="radio" aria-checked={on} aria-disabled={dead} class="card pickrow" class:on class:dead
       onclick={() => { if (!dead) onPick?.(m.id); }}>
       <span class="radio" aria-hidden="true">{#if on}<span></span>{/if}</span>
       {@render identity(m)}
