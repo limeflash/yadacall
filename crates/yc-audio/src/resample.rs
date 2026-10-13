@@ -22,6 +22,9 @@ struct Inner {
     scratch: Vec<f32>,
     /// Leading output frames that are filter warm-up and must be dropped to keep time alignment.
     skip: usize,
+    rate: u32,
+    total_in: u64,
+    total_out: u64,
 }
 
 impl Resampler16k {
@@ -49,6 +52,9 @@ impl Resampler16k {
                 pending: Vec::new(),
                 scratch,
                 skip,
+                rate: input_rate,
+                total_in: 0,
+                total_out: 0,
             }),
         })
     }
@@ -61,6 +67,7 @@ impl Resampler16k {
             return Ok(());
         };
         inner.pending.extend_from_slice(input);
+        inner.total_in += input.len() as u64;
         loop {
             let need = inner.fft.input_frames_next();
             if inner.pending.len() < need {
@@ -79,7 +86,32 @@ impl Resampler16k {
             let skip = inner.skip.min(produced);
             inner.skip -= skip;
             out.extend_from_slice(&inner.scratch[skip..produced]);
+            inner.total_out += (produced - skip) as u64;
         }
+    }
+
+    /// Emits the tail still held back by the filter, so the output covers exactly the time the
+    /// input did (`input_len × 16000 / rate`, rounded down). Call when a stream ends.
+    pub fn flush(&mut self, out: &mut Vec<f32>) -> Result<()> {
+        let Some(inner) = self.inner.as_ref() else {
+            return Ok(());
+        };
+        let target = inner.total_in * u64::from(SAMPLE_RATE) / u64::from(inner.rate);
+        let have = inner.total_out;
+        if have >= target {
+            return Ok(());
+        }
+        let zeros = vec![0.0f32; CHUNK_FRAMES];
+        let mut tail = Vec::new();
+        for _ in 0..16 {
+            self.process(&zeros, &mut tail)?;
+            if have + tail.len() as u64 >= target {
+                break;
+            }
+        }
+        tail.truncate((target - have) as usize);
+        out.extend_from_slice(&tail);
+        Ok(())
     }
 }
 
@@ -154,6 +186,19 @@ mod tests {
             alias < 0.01,
             "aliased amplitude {alias} (≥ 38 dB rejection expected)"
         );
+    }
+
+    #[test]
+    fn flush_makes_output_cover_the_full_input_duration() {
+        let x = tone(48_000, 500.0, 0.3, 1.0);
+        let mut r = Resampler16k::new(48_000).unwrap();
+        let mut out = Vec::new();
+        for c in x.chunks(333) {
+            r.process(c, &mut out).unwrap();
+        }
+        assert!(out.len() < 16_000);
+        r.flush(&mut out).unwrap();
+        assert_eq!(out.len(), 16_000);
     }
 
     #[test]

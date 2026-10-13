@@ -107,6 +107,8 @@ impl Sink {
 pub(crate) struct OpenInfo {
     pub device: String,
     pub sample_rate: u32,
+    /// Bluetooth headset that was avoided in favour of `device` (microphone policy).
+    pub substituted_for: Option<String>,
 }
 
 /// A platform capture source.
@@ -175,6 +177,7 @@ pub(crate) fn supervise<B: Backend>(
                 last_error = None;
                 let opened_target = backend.target();
                 let device = info.device.clone();
+                let substituted_for = info.substituted_for.clone();
                 let _ = streams.send(StreamStart {
                     consumer,
                     sample_rate: info.sample_rate,
@@ -195,6 +198,12 @@ pub(crate) fn supervise<B: Backend>(
                 };
                 opened_before = true;
                 let _ = events.send(ev);
+                if let Some(headset) = substituted_for {
+                    let _ = events.send(RecorderEvent::MicSubstituted {
+                        bluetooth: headset,
+                        using: device.clone(),
+                    });
+                }
                 if let Some(r) = ready.take() {
                     let _ = r.send(Ok(device));
                 }

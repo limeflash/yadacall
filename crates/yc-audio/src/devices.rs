@@ -17,6 +17,93 @@ pub struct DeviceInfo {
     pub transport: Option<String>,
 }
 
+/// How a device is attached, as far as the mic-choice policy cares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Transport {
+    BuiltIn,
+    Bluetooth,
+    Other,
+}
+
+/// Transport of a cpal device. On macOS cpal does not report it, so Core Audio is asked directly.
+pub(crate) fn transport_of(d: &cpal::Device) -> Transport {
+    #[cfg(target_os = "macos")]
+    if let Some(t) = mac_transport(d) {
+        return t;
+    }
+    match d.description().map(|x| x.interface_type()) {
+        Ok(cpal::InterfaceType::BuiltIn) => Transport::BuiltIn,
+        Ok(cpal::InterfaceType::Bluetooth) => Transport::Bluetooth,
+        _ => Transport::Other,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn mac_transport(d: &cpal::Device) -> Option<Transport> {
+    use cidre::core_audio::{self as ca, DeviceTransportType as T};
+    let id = d.id().ok()?.to_string();
+    let uid = id.strip_prefix("coreaudio:")?;
+    let dev = ca::Device::with_uid(&cidre::cf::String::from_str(uid)).ok()?;
+    if dev.is_unknown() {
+        return None;
+    }
+    let t = dev.transport_type().ok()?;
+    Some(if t == T::BUILT_IN {
+        Transport::BuiltIn
+    } else if t == T::BLUETOOTH || t == T::BLUETOOTH_LE {
+        Transport::Bluetooth
+    } else {
+        Transport::Other
+    })
+}
+
+fn device_name(d: &cpal::Device) -> String {
+    d.description()
+        .map(|x| x.name().to_owned())
+        .or_else(|_| d.id().map(|i| i.to_string()))
+        .unwrap_or_else(|_| "unknown device".into())
+}
+
+/// The input to record for "the default microphone": the system default, except that a Bluetooth
+/// headset is replaced by a built-in microphone when `prefer_builtin` and one exists. The second
+/// value is the name of the replaced headset.
+pub(crate) fn pick_default_input(
+    host: &cpal::Host,
+    prefer_builtin: bool,
+) -> Option<(cpal::Device, Option<String>)> {
+    let default = host.default_input_device()?;
+    if prefer_builtin
+        && transport_of(&default) == Transport::Bluetooth
+        && let Ok(mut all) = host.input_devices()
+        && let Some(builtin) =
+            all.find(|d| d.supports_input() && transport_of(d) == Transport::BuiltIn)
+    {
+        let headset = device_name(&default);
+        return Some((builtin, Some(headset)));
+    }
+    Some((default, None))
+}
+
+/// What "the default microphone" resolves to right now (for the UI hint "AirPods stay in high
+/// quality, recording the built-in microphone").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MicResolution {
+    /// Name of the microphone that will be recorded.
+    pub device: String,
+    /// The Bluetooth headset that is the system default input but is being avoided.
+    pub substituted_for: Option<String>,
+}
+
+/// Resolves [`crate::DeviceSel::Default`] the way the recorder will.
+pub fn resolve_default_mic(prefer_builtin: bool) -> Option<MicResolution> {
+    let host = cpal::default_host();
+    let (device, substituted_for) = pick_default_input(&host, prefer_builtin)?;
+    Some(MicResolution {
+        device: device_name(&device),
+        substituted_for,
+    })
+}
+
 fn describe(d: &cpal::Device, default_id: Option<&str>, input: bool) -> DeviceInfo {
     let id = d.id().map(|i| i.to_string()).unwrap_or_default();
     let desc = d.description().ok();
@@ -32,10 +119,14 @@ fn describe(d: &cpal::Device, default_id: Option<&str>, input: bool) -> DeviceIn
             .as_ref()
             .map(|x| x.name().to_owned())
             .unwrap_or_else(|| id.clone()),
-        transport: desc
-            .as_ref()
-            .map(|x| format!("{:?}", x.interface_type()).to_lowercase())
-            .filter(|t| t != "unknown"),
+        transport: match transport_of(d) {
+            Transport::BuiltIn => Some("built-in".to_owned()),
+            Transport::Bluetooth => Some("bluetooth".to_owned()),
+            Transport::Other => desc
+                .as_ref()
+                .map(|x| format!("{:?}", x.interface_type()).to_lowercase())
+                .filter(|t| t != "unknown"),
+        },
         sample_rate: cfg.as_ref().map(|c| c.sample_rate()),
         channels: cfg.as_ref().map(|c| c.channels()),
         id,

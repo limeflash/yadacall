@@ -16,6 +16,7 @@ mod asr;
 mod audio;
 mod engine;
 mod finalize;
+mod flac_repair;
 mod jobs;
 mod livelog;
 mod meta;
