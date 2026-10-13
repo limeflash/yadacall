@@ -7,6 +7,8 @@ import type {
   OllamaBase, OllamaStatus, Permissions, ProviderTest, SummaryMode, RecorderSnapshot, RecorderStartOptions, SearchHit, Settings, SettingsPatch, Summary, TaskItem, Turn, Meeting,
 } from "./types";
 import { mergeSummaries, noKeys } from "./summaries";
+import { AppError } from "./error";
+import { mockCatalog } from "./mock_models";
 import { demoAsk, demoMeetings, demoModels, LIVE_SCRIPT, type DemoMeeting } from "./demo";
 
 const SETTINGS_KEY = "yadacall.mock.settings";
@@ -31,9 +33,10 @@ export function createMockApi(): Api {
 
   const meetings: DemoMeeting[] = demoMeetings();
   const { hardware, models: seedModels, devices } = demoModels();
-  const models: ModelEntry[] = seedModels;
+  const freshInstall = typeof location !== "undefined" && /onboarding/.test(location.hash);
+  const models: ModelEntry[] = mockCatalog(seedModels, freshInstall);
   const imports: ImportJob[] = [];
-  let perms: Permissions = { microphone: "granted", systemAudio: "notDetermined" };
+  let perms: Permissions = { microphone: freshInstall ? "notDetermined" : "granted", systemAudio: "notDetermined" };
 
   // ---- processing meeting: progress loops as in the design ------------------------------------------
   const proc = meetings.find((m) => m.meeting.status.state === "processing");
@@ -216,7 +219,13 @@ export function createMockApi(): Api {
     },
     async modelPause(id) { const d = models.find((x) => x.id === id)?.download; if (d) d.state = { state: "paused" }; },
     async modelCancel(id) { const m = models.find((x) => x.id === id); if (m) m.download = undefined; },
-    async modelRemove(id) { const m = models.find((x) => x.id === id); if (m && !m.active) m.installed = false; },
+    /** Like the engine: refuses during a recording, frees the files and any partial download, and un-primaries the removed model. */
+    async modelRemove(id) {
+      const m = models.find((x) => x.id === id); if (!m) return;
+      if (rec) throw new AppError("Идёт запись — модель можно удалить после неё", "a recording is in progress");
+      if (m.tags.includes("required")) throw new AppError("Эта модель нужна для записи", "model is required");
+      m.installed = false; m.active = false; m.download = undefined;
+    },
     async modelSetActive(id) {
       const m = models.find((x) => x.id === id); if (!m || !m.installed) return;
       models.filter((x) => x.kind === m.kind).forEach((x) => (x.active = x.id === id));

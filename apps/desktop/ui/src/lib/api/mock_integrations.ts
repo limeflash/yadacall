@@ -34,7 +34,8 @@ export function createMockIntegrations(rec: Pick<Api, "recorderStart">): Integra
     }),
   ].map(({ e, start }) => ({ id: e.id, account: e.account, title: e.title, start, end: start + e.durationMin * 60000, attendees: e.attendees, meetUrl: e.meetUrl, meetingId: e.meetingId }));
 
-  let accounts: CalendarAccount[] = data.accounts.map((a) => ({ ...a }));
+  // A first-run preview (`#/onboarding`) starts with no calendar connected.
+  let accounts: CalendarAccount[] = typeof location !== "undefined" && /onboarding/.test(location.hash) ? [] : data.accounts.map((a) => ({ ...a }));
   const chosen = new Map<string, boolean>();
   let settings: ReminderSettings = { remindMinutes: 2, openInAccount: true, detectUnscheduled: true, browserAccess: false };
   let detected: DetectedCall | null = null;

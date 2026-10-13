@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import Button from "../kit/Button.svelte";
   import Segmented from "../kit/Segmented.svelte";
   import Select from "../kit/Select.svelte";
   import SectionLabel from "../kit/SectionLabel.svelte";
   import StatusDot from "../kit/StatusDot.svelte";
+  import ModelPicker from "../components/ModelPicker.svelte";
   import { api } from "../api";
-  import type { ApiProvider, KeyAccount, ModelEntry, OllamaBase, OllamaStatus, ProviderTest, SummaryMode } from "../api";
+  import type { ApiProvider, KeyAccount, OllamaBase, OllamaStatus, ProviderTest, SummaryMode } from "../api";
   import { app, saveSettings } from "../state.svelte";
   import { t, i18n } from "../i18n/index.svelte";
-  import { go } from "../router.svelte";
   import { bytes } from "../format";
   import { toast } from "../toast.svelte";
   import { isCloudName } from "../api/summaries";
@@ -20,13 +19,10 @@
   const pick = $derived<Pick>(s.mode);
 
   // ---- state ---------------------------------------------------------------------------------------
-  let llms = $state<ModelEntry[]>([]);
   let status = $state<OllamaStatus | null>(null);
   let probing = $state(false);
   let test = $state<{ busy: boolean; result?: ProviderTest }>({ busy: false });
   let draft = $state<Record<string, string>>({});
-
-  onMount(() => { api.modelsOverview().then((o) => (llms = o.models.filter((m) => m.kind === "llm" && m.installed))); });
 
   const save = (mode: SummaryMode) => { test = { busy: false }; return saveSettings({ summaries: { mode } }); };
   const saveMode = (patch: Partial<SummaryMode>) => save({ ...s, ...patch } as SummaryMode);
@@ -68,7 +64,6 @@
   const ollamaModelIsCloud = $derived(s.mode === "ollama" && (s.base === "cloud" || isCloudName(s.model) || !!status?.models.find((m) => m.name === s.model)?.cloud));
 
   // ---- local --------------------------------------------------------------------------------------------
-  const localOptions = $derived([{ value: "", label: t("Автоматически"), hint: t("лучшая по оценке скорости") }, ...llms.map((m) => ({ value: m.id, label: m.name, hint: m.estimate }))]);
 
   // ---- API ----------------------------------------------------------------------------------------------
   const providerOptions = $derived<{ value: ApiProvider; label: string; hint?: string }[]>([
@@ -174,17 +169,7 @@
 {#if s.mode !== "off"}
   <div class="group">
     {#if s.mode === "local"}
-      {#if llms.length === 0}
-        <div class="grow">
-          <span class="two"><span style="font-size: 14px">{t("Gemma 4 ещё не скачана")}</span><span class="sub">{t("Скачай её в разделе «Модели», и итоги появятся")}</span></span>
-          <Button size="sm" onclick={() => go({ name: "models" })}>{t("Открыть «Модели»")}</Button>
-        </div>
-      {:else}
-        <div class="grow">
-          <span style="flex: 1; min-width: 0; font-size: 14px">{t("Модель")}</span>
-          <div style="width: 240px; flex: none"><Select compact label={t("Модель итогов")} value={s.model} onchange={(v) => saveMode({ model: v } as Partial<SummaryMode>)} options={localOptions} /></div>
-        </div>
-      {/if}
+      <div class="grow pick"><div style="flex: 1; min-width: 0"><ModelPicker kind="llm" title={t("Модель итогов")} currentId={s.model} sheetTitle={t("Модель для итогов")} /></div></div>
       {@render testRow()}
     {:else if s.mode === "ollama"}
       <div class="grow">
@@ -244,6 +229,8 @@
 <style>
   .group { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
   .grow { display: flex; align-items: center; gap: 16px; padding: 12px 16px; }
+  .pick { padding: 4px 12px 12px; }
+  .pick :global(.head) { padding-top: 6px; }
   .bt { border-top: 1px solid var(--border); }
   .two { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .sub { font-size: 12px; color: var(--muted); }
