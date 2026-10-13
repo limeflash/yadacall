@@ -262,7 +262,7 @@
 <style>
   main { position: relative; flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   .glow { position: absolute; left: 50%; top: -170px; width: 720px; height: 520px; margin-left: -360px; pointer-events: none; }
-  .bg { position: absolute; left: 0; top: 0; width: 100%; height: 520px; pointer-events: none; -webkit-mask-image: linear-gradient(#000 45%, transparent 80%); mask-image: linear-gradient(#000 45%, transparent 80%); }
+  .bg { position: absolute; left: 0; top: 0; width: 100%; height: 520px; pointer-events: none; }
   .col { max-width: 440px; box-sizing: border-box; margin: 0 auto; padding: 12px 24px 20px; display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
   .orb { position: relative; width: 250px; height: 250px; align-self: center; flex: none; margin: -25px 0; transform: scale(0.8); }
   .orb-btn { position: absolute; left: 50%; top: 50%; width: 132px; height: 132px; margin: -66px 0 0 -66px; padding: 0; border: 0; border-radius: 50%; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--ink-on-accent); }

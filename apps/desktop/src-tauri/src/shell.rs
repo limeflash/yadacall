@@ -37,6 +37,8 @@ const TRAY_W: f64 = if cfg!(target_os = "macos") {
 const MINI_W: f64 = 300.0;
 const SNAP_MARGIN: f64 = 12.0;
 const SNAP_DISTANCE: f64 = 28.0;
+/// A popover window hidden for this long is destroyed (its WebContent process is ~100 MB).
+const POPOVER_IDLE: Duration = Duration::from_secs(60);
 
 /// Mutable shell state shared by event handlers.
 #[derive(Default)]
@@ -63,6 +65,13 @@ pub struct ShellState {
     /// The tray menu and its "update" entry (present only while an update is available).
     tray_menu: Option<Menu<Wry>>,
     update_item: Option<MenuItem<Wry>>,
+    /// Popover windows created on demand whose page has not reported its size yet: shown on the first
+    /// `popover_fit` (or after a short timeout) so no blank frame appears.
+    pending_show: HashSet<String>,
+    /// Bumped whenever a popover is shown or hidden; a destroy timer only fires for the hide it belongs to.
+    popover_seq: std::collections::HashMap<String, u64>,
+    /// Where the user left the mini-player; restored when the window is created again.
+    mini_pos: Option<PhysicalPosition<i32>>,
 }
 
 pub type Shared = Arc<Mutex<ShellState>>;
@@ -82,9 +91,7 @@ pub fn show_main(app: &AppHandle) {
     }
     #[cfg(target_os = "macos")]
     let _ = app.show();
-    if let Some(t) = app.get_webview_window("tray") {
-        let _ = t.hide();
-    }
+    hide_popover_window(app, "tray");
 }
 
 fn popover(
@@ -112,32 +119,130 @@ fn popover(
     .build()
 }
 
-/// Creates the hidden `tray` and `mini` windows. Called once from `setup`.
-pub fn create_popovers(app: &AppHandle) -> tauri::Result<()> {
-    let tray = popover(app, "tray", "tray", TRAY_W, 440.0)?;
-    let t2 = tray.clone();
-    tray.on_window_event(move |e| {
-        if let WindowEvent::Focused(false) = e {
-            let _ = t2.hide();
-        }
-    });
+/// The `tray` / `mini` popover window, created on first use. The second value tells whether it was just
+/// created (its page is still loading). Popovers are not created at startup: each one is a WebContent process.
+fn ensure_popover(app: &AppHandle, label: &str) -> Option<(WebviewWindow, bool)> {
+    if let Some(w) = app.get_webview_window(label) {
+        return Some((w, false));
+    }
+    let w = match label {
+        "tray" => popover(app, "tray", "tray", TRAY_W, 440.0),
+        _ => popover(app, "mini", "mini", MINI_W, 64.0),
+    }
+    .map_err(|e| tracing::warn!("could not create the {label} window: {e}"))
+    .ok()?;
+    let handle = app.clone();
+    if label == "tray" {
+        w.on_window_event(move |e| {
+            if let WindowEvent::Focused(false) = e {
+                hide_popover_window(&handle, "tray");
+            }
+        });
+    } else {
+        let m = w.clone();
+        w.on_window_event(move |e| {
+            if let WindowEvent::Moved(_) = e {
+                // Snap after the drag settles: debounce on a sequence number.
+                let seq = MOVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+                let (m, handle) = (m.clone(), handle.clone());
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(260)).await;
+                    if MOVE_SEQ.load(Ordering::SeqCst) == seq {
+                        snap_to_edges(&m);
+                        remember_mini_position(&handle, &m);
+                    }
+                });
+            }
+        });
+    }
+    Some((w, true))
+}
 
-    let mini = popover(app, "mini", "mini", MINI_W, 64.0)?;
-    let m2 = mini.clone();
-    mini.on_window_event(move |e| {
-        if let WindowEvent::Moved(_) = e {
-            // Snap after the drag settles: debounce on a sequence number.
-            let seq = MOVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
-            let m3 = m2.clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(260)).await;
-                if MOVE_SEQ.load(Ordering::SeqCst) == seq {
-                    snap_to_edges(&m3);
-                }
-            });
+fn remember_mini_position(app: &AppHandle, w: &WebviewWindow) {
+    if let Ok(pos) = w.outer_position() {
+        state(app)
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .mini_pos = Some(pos);
+    }
+}
+
+/// Hides a popover and destroys it after [`POPOVER_IDLE`] unless it is shown again meanwhile.
+pub fn hide_popover_window(app: &AppHandle, label: &str) {
+    let Some(w) = app.get_webview_window(label) else {
+        return;
+    };
+    if label == "mini" {
+        remember_mini_position(app, &w);
+    }
+    let _ = w.hide();
+    // A window still waiting for its first `popover_fit` must not appear after it was hidden.
+    state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .pending_show
+        .remove(label);
+    let seq = bump_popover_seq(app, label);
+    let (handle, label) = (app.clone(), label.to_owned());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(POPOVER_IDLE).await;
+        let current = state(&handle)
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .popover_seq
+            .get(&label)
+            .copied();
+        if current == Some(seq)
+            && let Some(w) = handle.get_webview_window(&label)
+            && !w.is_visible().unwrap_or(true)
+        {
+            tracing::debug!("destroying the idle {label} window");
+            let _ = w.destroy();
         }
     });
-    Ok(())
+}
+
+fn bump_popover_seq(app: &AppHandle, label: &str) -> u64 {
+    let shared = state(app);
+    let mut g = shared.lock().unwrap_or_else(|e| e.into_inner());
+    let n = g.popover_seq.entry(label.to_owned()).or_insert(0);
+    *n += 1;
+    *n
+}
+
+/// Shows a popover that was created a moment ago once its page is ready (first `popover_fit`), or after
+/// a timeout if the page never reports.
+fn show_when_ready(app: &AppHandle, label: &str) {
+    state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .pending_show
+        .insert(label.to_owned());
+    let (handle, label) = (app.clone(), label.to_owned());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        reveal_pending(&handle, &label);
+    });
+}
+
+fn reveal_pending(app: &AppHandle, label: &str) {
+    let pending = state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .pending_show
+        .remove(label);
+    if !pending {
+        return;
+    }
+    if label == "tray" {
+        if let Some(w) = app.get_webview_window("tray") {
+            anchor_tray_window(&w);
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    } else {
+        place_and_show_mini(app);
+    }
 }
 
 /// Pulls the mini-player to the nearest screen edge when it was dropped close to one.
@@ -187,6 +292,7 @@ pub fn fit_popover(app: &AppHandle, label: &str, height: f64) {
     if label == "tray" && w.is_visible().unwrap_or(false) {
         anchor_tray_window(&w);
     }
+    reveal_pending(app, label);
 }
 
 fn anchor_tray_window(w: &WebviewWindow) {
@@ -201,12 +307,16 @@ fn anchor_tray_window(w: &WebviewWindow) {
 }
 
 fn toggle_tray_popover(app: &AppHandle) {
-    let Some(w) = app.get_webview_window("tray") else {
+    let Some((w, created)) = ensure_popover(app, "tray") else {
         return;
     };
-    if w.is_visible().unwrap_or(false) {
-        let _ = w.hide();
+    if created {
+        bump_popover_seq(app, "tray");
+        show_when_ready(app, "tray");
+    } else if w.is_visible().unwrap_or(false) {
+        hide_popover_window(app, "tray");
     } else {
+        bump_popover_seq(app, "tray");
         anchor_tray_window(&w);
         let _ = w.show();
         let _ = w.set_focus();
@@ -214,31 +324,45 @@ fn toggle_tray_popover(app: &AppHandle) {
 }
 
 fn show_mini(app: &AppHandle) {
+    let Some((w, created)) = ensure_popover(app, "mini") else {
+        return;
+    };
+    bump_popover_seq(app, "mini");
+    if created {
+        show_when_ready(app, "mini");
+    } else if !w.is_visible().unwrap_or(false) {
+        place_and_show_mini(app);
+    }
+}
+
+/// Puts the mini-player where the user left it (first time: bottom-right corner inside the snap margin) and shows it.
+fn place_and_show_mini(app: &AppHandle) {
     let Some(w) = app.get_webview_window("mini") else {
         return;
     };
-    if !w.is_visible().unwrap_or(false) {
-        // First appearance: bottom-right corner of the monitor, inside the snap margin.
-        if let Ok(Some(mon)) = w.current_monitor().or_else(|_| app.primary_monitor()) {
-            let s = mon.scale_factor();
-            let (sw, sh) = (
-                f64::from(mon.size().width) / s,
-                f64::from(mon.size().height) / s,
-            );
-            let p = mon.position();
-            let _ = w.set_position(PhysicalPosition::new(
-                ((sw - MINI_W - SNAP_MARGIN) * s) as i32 + p.x,
-                ((sh - 64.0 - SNAP_MARGIN - 40.0) * s) as i32 + p.y,
-            ));
-        }
+    let remembered = state(app)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .mini_pos;
+    if let Some(pos) = remembered {
+        let _ = w.set_position(pos);
+    } else if let Ok(Some(mon)) = w.current_monitor().or_else(|_| app.primary_monitor()) {
+        let s = mon.scale_factor();
+        let (sw, sh) = (
+            f64::from(mon.size().width) / s,
+            f64::from(mon.size().height) / s,
+        );
+        let p = mon.position();
+        let _ = w.set_position(PhysicalPosition::new(
+            ((sw - MINI_W - SNAP_MARGIN) * s) as i32 + p.x,
+            ((sh - 64.0 - SNAP_MARGIN - 40.0) * s) as i32 + p.y,
+        ));
     }
     let _ = w.show();
 }
 
 fn hide_mini(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("mini") {
-        let _ = w.hide();
-    }
+    hide_popover_window(app, "mini");
 }
 
 /// Main window focus decides whether the mini-player is useful: it appears when you leave the window mid-recording.

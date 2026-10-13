@@ -22,6 +22,7 @@ export class Visualizer {
   private motion = typeof matchMedia !== "undefined" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
   private reduced = this.motion?.matches ?? false;
   private last = 0;
+  private frame = 0;
   /** Milliseconds since the previous frame; the easing below is tuned for 60 fps and scaled by this. */
   private dt = 16.7;
 
@@ -55,7 +56,9 @@ export class Visualizer {
     if (this.last === 0 || ts - this.last >= every - 3) {
       this.dt = this.last === 0 ? 16.7 : Math.min(100, ts - this.last);
       this.last = ts;
-      this.draw(ts); this.drawBg(ts);
+      this.draw(ts);
+      // The dotted background changes slowly and costs the most: every other frame is enough.
+      if ((this.frame++ & 1) === 0) this.drawBg(ts);
     }
     this.raf = requestAnimationFrame(this.loop);
   };
@@ -66,7 +69,7 @@ export class Visualizer {
   private drawBg(tsRaw: number) {
     const c = this.bg;
     const ts = this.reduced ? 0 : tsRaw;
-    const W = c.clientWidth || 792, H = 520, dpr = window.devicePixelRatio || 1;
+    const W = c.clientWidth || 792, H = 520, dpr = 1; // faint dots: no need for retina pixels
     if (c.width !== Math.round(W * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
     const ctx = c.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
@@ -115,6 +118,12 @@ export class Visualizer {
       ctx.fillStyle = css(cc, Math.min(1, al + glow));
       ctx.fillRect(gx - size / 2, gy - size / 2, size, size);
     }
+    // Fade the grid out towards the bottom here instead of with a CSS mask, which forces the GPU to
+    // re-composite this animating canvas through an offscreen layer every frame.
+    const fade = ctx.createLinearGradient(0, 0, 0, H);
+    fade.addColorStop(0.45, "#000"); fade.addColorStop(0.8, "rgba(0,0,0,0)");
+    ctx.globalCompositeOperation = "destination-in"; ctx.fillStyle = fade; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "source-over";
   }
 
   private draw(tsRaw: number) {
@@ -203,10 +212,12 @@ export class Visualizer {
     if (R <= 0.5) { ctx.globalAlpha = 1; return; }
     const g = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.45, R * 0.1, cx, cy, R * 1.1);
     g.addColorStop(0, css(mixc(col, [255, 255, 255], 0.28 * (1 - a.rec) + 0.06 * a.rec))); g.addColorStop(1, css(col));
+    // Glow: a radial gradient instead of `shadowBlur`, which re-blurs the whole disc every frame on the GPU.
+    const glow = ctx.createRadialGradient(cx, cy + 8, R * 0.7, cx, cy + 8, R * 1.55);
+    glow.addColorStop(0, css(acc, 0.4 * (1 - a.rec * 0.5))); glow.addColorStop(1, css(acc, 0));
+    ctx.beginPath(); ctx.arc(cx, cy + 8, R * 1.55, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.shadowColor = css(acc, 0.45 * (1 - a.rec * 0.5)); ctx.shadowBlur = 34; ctx.shadowOffsetY = 8;
     ctx.fillStyle = g; ctx.fill();
-    ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
     if (a.rec > 0.01) {
       ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2);
       ctx.strokeStyle = css(acc, a.rec); ctx.lineWidth = 2; ctx.stroke();
