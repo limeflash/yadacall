@@ -85,6 +85,7 @@ impl Engine {
         self.blocking(move |e| {
             e.mutate_meeting(id, |rec| {
                 rec.meeting.title = title;
+                rec.meeting.title_is_auto = false;
                 Ok(((), true))
             })
         })

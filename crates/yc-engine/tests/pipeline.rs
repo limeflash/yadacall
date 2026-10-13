@@ -18,7 +18,7 @@ fn assert_standard_transcript(texts: &[(String, String)]) {
         .collect();
     assert_eq!(
         got,
-        vec![("s1", TEXT_A), ("me", TEXT_B), ("s2", TEXT_C)],
+        vec![("them", TEXT_A), ("me", TEXT_B), ("them", TEXT_C)],
         "no duplicates, nothing lost"
     );
 }
@@ -164,9 +164,9 @@ async fn import_audio_file_becomes_a_diarised_meeting() {
     let env = Env::new(vec![]);
     let engine = env.open().await;
     let mut audio = silence(500);
-    audio.extend(speech(A, 3500));
+    audio.extend(speech(A, 9000));
     audio.extend(silence(3000));
-    audio.extend(speech(C, 3500));
+    audio.extend(speech(C, 9000));
     audio.extend(silence(1000));
     let file = env.dir.path().join("Созвон с клиентом.wav");
     std::fs::write(&file, wav(&audio, 16_000)).unwrap();
@@ -210,6 +210,7 @@ async fn one_expected_speaker_skips_diarisation() {
             &file,
             ImportOptions {
                 expected_speakers: Some(1),
+                expected_speakers_explicit: true,
                 title: Some("Лекция".into()),
                 ..Default::default()
             },

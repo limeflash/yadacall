@@ -324,10 +324,12 @@ impl DemoBackend {
         let meeting = Meeting {
             id: m.id.parse().expect("demo uuid"),
             title: m.title.clone(),
+            title_is_auto: false,
             started_at,
             duration_ms: ms(m.duration_sec),
             language: "ru".into(),
             expected_speakers: None,
+            expected_speakers_explicit: false,
             participant_hints: Vec::new(),
             tracks: vec![
                 TrackInfo {
@@ -546,10 +548,12 @@ impl DemoBackend {
                             .rsplit_once('.')
                             .map(|(s, _)| s.to_string())
                             .unwrap_or(name.clone()),
+                        title_is_auto: false,
                         started_at: Utc::now(),
                         duration_ms: 60_000,
                         language: "ru".into(),
                         expected_speakers: None,
+                        expected_speakers_explicit: false,
                         participant_hints: Vec::new(),
                         tracks: vec![],
                         bookmarks: vec![],
@@ -886,6 +890,12 @@ impl Backend for DemoBackend {
         Ok(m.summary.clone().unwrap_or_default())
     }
 
+    async fn meeting_retranscribe(&self, _id: &str) -> Result<()> {
+        Err(Error::Invalid(
+            "stored audio is unavailable in demo mode".to_owned(),
+        ))
+    }
+
     async fn export_meeting(&self, id: &str, format: ExportFormat) -> Result<String> {
         let (title, body) = {
             let g = self.lock();
@@ -1020,10 +1030,12 @@ impl Backend for DemoBackend {
                 } else {
                     r.title.clone()
                 },
+                title_is_auto: false,
                 started_at: Utc::now() - chrono::Duration::milliseconds(dur as i64),
                 duration_ms: dur,
                 language: "ru".into(),
                 expected_speakers: None,
+                expected_speakers_explicit: false,
                 participant_hints: Vec::new(),
                 tracks: vec![],
                 bookmarks: r

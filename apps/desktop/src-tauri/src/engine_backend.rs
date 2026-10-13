@@ -465,6 +465,10 @@ impl Backend for EngineBackend {
             .ok_or_else(|| Error::Llm("the summary was not produced".to_owned()))
     }
 
+    async fn meeting_retranscribe(&self, id: &str) -> Result<()> {
+        self.engine.retranscribe(mid(id)?).await
+    }
+
     async fn export_meeting(&self, id: &str, format: crate::api::ExportFormat) -> Result<String> {
         let mid = mid(id)?;
         let (fmt, file) = match format {
@@ -504,6 +508,8 @@ impl Backend for EngineBackend {
         let start = StartOptions {
             title: title.clone(),
             expected_speakers: opts.expected_speakers,
+            expected_speakers_explicit: opts.expected_speakers.is_some()
+                && opts.participant_hints.is_empty(),
             mic: opts
                 .mic_device
                 .clone()

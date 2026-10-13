@@ -139,6 +139,9 @@ pub enum Stage {
 pub struct Meeting {
     pub id: MeetingId,
     pub title: String,
+    /// Whether the current title is an automatically generated placeholder awaiting a summary.
+    #[serde(default)]
+    pub title_is_auto: bool,
     pub started_at: DateTime<Utc>,
     pub duration_ms: Ms,
     /// BCP-47-ish language hint used for transcription (`ru`, `en`, `auto`).
@@ -146,6 +149,9 @@ pub struct Meeting {
     /// Expected number of remote speakers; `None` = detect automatically.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_speakers: Option<u8>,
+    /// Whether `expected_speakers` was explicitly chosen by the user instead of inferred from an invite.
+    #[serde(default)]
+    pub expected_speakers_explicit: bool,
     pub tracks: Vec<TrackInfo>,
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
@@ -179,6 +185,8 @@ mod tests {
         .expect("legacy meeting loads");
 
         assert!(meeting.participant_hints.is_empty());
+        assert!(!meeting.title_is_auto);
+        assert!(!meeting.expected_speakers_explicit);
         assert!(meeting.participants[0].suggestions.is_empty());
 
         meeting.participant_hints.push(ParticipantHint {
@@ -188,8 +196,13 @@ mod tests {
         meeting.participants[0]
             .suggestions
             .push("Анна Ковалёва".into());
+        meeting.title_is_auto = true;
+        meeting.expected_speakers = Some(4);
+        meeting.expected_speakers_explicit = true;
         let json = serde_json::to_value(&meeting).expect("meeting serializes");
         assert_eq!(json["participantHints"][0]["email"], "anna@example.com");
         assert_eq!(json["participants"][0]["suggestions"][0], "Анна Ковалёва");
+        assert_eq!(json["titleIsAuto"], true);
+        assert_eq!(json["expectedSpeakersExplicit"], true);
     }
 }

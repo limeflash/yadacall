@@ -29,6 +29,7 @@ fn meeting(title: &str) -> Meeting {
     Meeting {
         id: MeetingId::new(),
         title: title.to_owned(),
+        title_is_auto: false,
         started_at: Utc
             .with_ymd_and_hms(2026, 9, 28, 14, 30, 0)
             .single()
@@ -36,6 +37,7 @@ fn meeting(title: &str) -> Meeting {
         duration_ms: 60_000,
         language: "ru".to_owned(),
         expected_speakers: None,
+        expected_speakers_explicit: false,
         participant_hints: Vec::new(),
         tracks: vec![
             TrackInfo {

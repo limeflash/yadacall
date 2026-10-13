@@ -155,6 +155,7 @@ pub async fn summarize(
         .filter(|value| !value.trim().is_empty())
         .unwrap_or(&input.meeting_language)
         .to_owned();
+    let title_is_untitled = is_automatic_placeholder(&input.meeting.title);
     let system = system_prompt(input, &language)?;
     let transcript = render_transcript(&input.turns, &input.bookmarks);
     let full_prompt = format!(
@@ -181,7 +182,13 @@ pub async fn summarize(
             total_windows: 0,
         });
         let request = summary_request(system.clone(), full_prompt, options.output_reserve.max(256));
-        request_valid_summary(provider, request, input.meeting.duration_ms).await?
+        request_valid_summary(
+            provider,
+            request,
+            input.meeting.duration_ms,
+            title_is_untitled,
+        )
+        .await?
     } else {
         let window_budget = WINDOW_TOKEN_LIMIT.min(available.saturating_sub(512).max(256));
         let windows = make_windows(provider, &input.turns, &input.bookmarks, window_budget).await?;
@@ -207,8 +214,13 @@ pub async fn summarize(
                 prompt,
                 options.output_reserve.clamp(256, 2_000),
             );
-            let partial =
-                request_valid_summary(provider, request, input.meeting.duration_ms).await?;
+            let partial = request_valid_summary(
+                provider,
+                request,
+                input.meeting.duration_ms,
+                title_is_untitled,
+            )
+            .await?;
             partials.push(serde_json::to_string(&partial).map_err(|error| {
                 Error::Llm(format!("could not encode partial summary: {error}"))
             })?);
@@ -217,7 +229,7 @@ pub async fn summarize(
                 total_windows: total,
             });
         }
-        let merge_system = merge_prompt(&language);
+        let merge_system = merge_prompt(&language, title_is_untitled);
         let merge_input = format!(
             "Meeting: {}\nMeeting date: {}\nDuration: {}\nLanguage: {}\n\nPartial summaries (JSON):\n{}",
             input.meeting.title,
@@ -227,7 +239,13 @@ pub async fn summarize(
             partials.join("\n")
         );
         let request = summary_request(merge_system, merge_input, options.output_reserve.max(256));
-        request_valid_summary(provider, request, input.meeting.duration_ms).await?
+        request_valid_summary(
+            provider,
+            request,
+            input.meeting.duration_ms,
+            title_is_untitled,
+        )
+        .await?
     };
     to_core_summary(
         summary_json,
@@ -251,9 +269,10 @@ async fn request_valid_summary(
     provider: &dyn ChatProvider,
     request: ChatRequest,
     duration_ms: u64,
+    title_is_untitled: bool,
 ) -> Result<SummaryJson> {
     let first = provider.complete(request.clone()).await?;
-    match parse_and_validate(&first, duration_ms) {
+    match parse_and_validate(&first, duration_ms, title_is_untitled) {
         Ok(parsed) => Ok(parsed),
         Err(error) => {
             let mut retry = request;
@@ -268,7 +287,7 @@ async fn request_valid_summary(
                 );
             }
             let response = provider.complete(retry).await?;
-            parse_and_validate(&response, duration_ms).map_err(|second| {
+            parse_and_validate(&response, duration_ms, title_is_untitled).map_err(|second| {
                 Error::Llm(format!(
                     "summary JSON remained invalid after one retry: {second}"
                 ))
@@ -280,11 +299,23 @@ async fn request_valid_summary(
 fn parse_and_validate(
     response: &ChatResponse,
     duration_ms: u64,
+    title_is_untitled: bool,
 ) -> std::result::Result<SummaryJson, String> {
     let parsed: SummaryJson =
         serde_json::from_str(&response.text).map_err(|error| format!("invalid JSON: {error}"))?;
     if parsed.about.is_empty() || parsed.about.len() > 3 {
         return Err("about must contain between one and three paragraphs".to_owned());
+    }
+    if let Some(title) = parsed.title.as_deref() {
+        if !title_is_untitled {
+            return Err("title must be null when the meeting already has a title".to_owned());
+        }
+        if title.trim().is_empty() {
+            return Err("title must be null or contain a useful title".to_owned());
+        }
+        if is_generic_title(title) {
+            return Err("title must describe the meeting topic, not a generic summary".to_owned());
+        }
     }
     for decision in &parsed.decisions {
         let at_ms = parse_timestamp(&decision.at)
@@ -392,22 +423,81 @@ fn system_prompt(input: &SummaryInput, language: &str) -> Result<String> {
     } else {
         "Write in the meeting language unless the user requested another language. Use only facts stated aloud; do not invent attendees or context. Include a decision only when participants explicitly agreed to it. Include a task only when someone explicitly committed to doing it; use the named speaker or Me/me as owner when the user made the commitment. Resolve relative due dates against the meeting date. Anchor every decision and task to the time it was said. Leave lists empty when the transcript does not support an item."
     };
+    let title_rules = match (
+        language_key == "ru",
+        is_automatic_placeholder(&input.meeting.title),
+    ) {
+        (true, true) => {
+            "Текущее название создано автоматически: предложи короткое и конкретное название только по теме, явно подтверждённой разговором; если темы недостаточно, верни null. Не используй общие названия «Резюме встречи …» или «Итоги встречи»."
+        }
+        (true, false) => {
+            "Название встречи уже задано пользователем или календарём: не предлагай его менять и верни null в поле title."
+        }
+        (false, true) => {
+            "The current title is an automatic placeholder: suggest a short, specific title only when the topic is directly supported by the conversation; otherwise return null. Do not use generic titles such as “Meeting summary” or “Summary of meeting”."
+        }
+        (false, false) => {
+            "The meeting already has a user or calendar title: do not suggest a replacement and return null for title."
+        }
+    };
     Ok(format!(
-        "{template}\n\n{rules}\n\nReturn only JSON matching the supplied schema. `at` must use MM:SS, or HH:MM:SS for times over one hour. Keep `about` to one through three concise paragraphs."
+        "{template}\n\n{rules}\n\n{title_rules}\n\nReturn only JSON matching the supplied schema. `at` must use MM:SS, or HH:MM:SS for times over one hour. Keep `about` to one through three concise paragraphs."
     ))
 }
 
-fn merge_prompt(language: &str) -> String {
+fn merge_prompt(language: &str, title_is_untitled: bool) -> String {
+    let title_rule = if title_is_untitled {
+        "For title, keep a concise, specific topic title only when supported; otherwise use null. Reject generic summary titles."
+    } else {
+        "The meeting already has a title, so title must be null."
+    };
     if language
         .split('-')
         .next()
         .unwrap_or(language)
         .eq_ignore_ascii_case("ru")
     {
-        "Объедини частичные резюме в одно. Удали дубликаты, сохрани подтверждённые формулировки и временные метки, не добавляй фактов. При противоречиях предпочитай конкретные исходные факты. Возвращай только JSON по заданной схеме.".to_owned()
+        format!(
+            "Объедини частичные резюме в одно. Удали дубликаты, сохрани подтверждённые формулировки и временные метки, не добавляй фактов. При противоречиях предпочитай конкретные исходные факты. {title_rule} Возвращай только JSON по заданной схеме."
+        )
     } else {
-        "Merge the partial summaries into one. Deduplicate while preserving supported wording and timestamps. Add no facts. When details conflict, prefer concrete source facts. Return only JSON matching the requested schema.".to_owned()
+        format!(
+            "Merge the partial summaries into one. Deduplicate while preserving supported wording and timestamps. Add no facts. When details conflict, prefer concrete source facts. {title_rule} Return only JSON matching the requested schema."
+        )
     }
+}
+
+fn is_generic_title(title: &str) -> bool {
+    let normalized = title
+        .chars()
+        .flat_map(char::to_lowercase)
+        .filter(|character| character.is_alphanumeric())
+        .collect::<String>();
+    [
+        "резюмевстречи",
+        "итогивстречи",
+        "meetingsummary",
+        "summaryofmeeting",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
+}
+
+fn is_automatic_placeholder(title: &str) -> bool {
+    let Some((prefix, clock)) = title.trim().rsplit_once(' ') else {
+        return false;
+    };
+    let prefix = prefix.to_lowercase();
+    if !matches!(prefix.as_str(), "meeting" | "встреча") {
+        return false;
+    }
+    let Some((hour, minute)) = clock.split_once(':') else {
+        return false;
+    };
+    hour.len() == 2
+        && minute.len() == 2
+        && hour.chars().all(|character| character.is_ascii_digit())
+        && minute.chars().all(|character| character.is_ascii_digit())
 }
 
 fn render_transcript(turns: &[SummaryTurn], bookmarks: &[Bookmark]) -> String {
@@ -606,9 +696,57 @@ mod tests {
             json!({"text":"{}", "usage":{}, "timings":{}, "stop_reason":null}),
         )
         .expect("response");
-        assert!(parse_and_validate(&missing, 99_000).is_err());
+        assert!(parse_and_validate(&missing, 99_000, false).is_err());
         let extra = ChatResponse { text: r#"{"title":null,"about":["ok"],"decisions":[],"tasks":[],"open_questions":[],"extra":true}"#.to_owned(), usage: TokenUsage::default(), timings: Timings::default(), stop_reason: None };
-        assert!(parse_and_validate(&extra, 99_000).is_err());
+        assert!(parse_and_validate(&extra, 99_000, false).is_err());
+    }
+
+    #[test]
+    fn title_validation_only_accepts_specific_titles_for_untitled_meetings() {
+        let response = |title: &str| ChatResponse {
+            text: format!(
+                r#"{{"title":{title},"about":["ok"],"decisions":[],"tasks":[],"open_questions":[]}}"#
+            ),
+            usage: TokenUsage::default(),
+            timings: Timings::default(),
+            stop_reason: None,
+        };
+        assert!(parse_and_validate(&response("null"), 99_000, false).is_ok());
+        assert!(parse_and_validate(&response(r#""NB Week""#), 99_000, true).is_ok());
+        assert!(parse_and_validate(&response(r#""Specific title""#), 99_000, false).is_err());
+        for generic in [
+            r#""Резюме встречи NB Week""#,
+            r#""Meeting summary""#,
+            r#""Итоги встречи""#,
+        ] {
+            assert!(parse_and_validate(&response(generic), 99_000, true).is_err());
+        }
+    }
+
+    #[test]
+    fn summary_prompt_respects_the_title_policy() {
+        let mut input = SummaryInput {
+            meeting: MeetingMetadata {
+                id: None,
+                title: "NB Week".to_owned(),
+                started_at: Utc::now(),
+                duration_ms: 60_000,
+            },
+            turns: Vec::new(),
+            bookmarks: Vec::new(),
+            language: None,
+            template: SummaryTemplate::Standard,
+            meeting_language: "ru".to_owned(),
+        };
+        let named_prompt = system_prompt(&input, "ru").expect("prompt");
+        assert!(named_prompt.contains("пользователем или календарём"));
+        assert!(named_prompt.contains("верни null в поле title"));
+
+        input.meeting.title = "Встреча 11:16".to_owned();
+        assert!(is_automatic_placeholder(&input.meeting.title));
+        let untitled_prompt = system_prompt(&input, "ru").expect("prompt");
+        assert!(untitled_prompt.contains("Резюме встречи"));
+        assert!(untitled_prompt.contains("верни null"));
     }
 
     #[tokio::test]

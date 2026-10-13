@@ -119,6 +119,38 @@ pub fn call_scripts() -> Vec<TrackScript> {
     ]
 }
 
+/// A two-sided call with two utterances per remote voice to meet the minimum diarisation evidence.
+pub fn call_scripts_with_speaker_evidence() -> Vec<TrackScript> {
+    let mut sys = silence(500);
+    sys.extend(speech(A, 1300));
+    sys.extend(silence(500));
+    sys.extend(speech(A, 1300));
+    sys.extend(silence(3700));
+    sys.extend(speech(C, 1300));
+    sys.extend(silence(500));
+    sys.extend(speech(C, 1300));
+    sys.extend(silence(2400));
+    let mut mic = silence(600);
+    mic.extend(speech(A, 1300)); // acoustic echo of the other side
+    mic.extend(silence(500));
+    mic.extend(speech(A, 1300));
+    mic.extend(silence(1500));
+    mic.extend(speech(B, 2000));
+    mic.extend(silence(5600));
+    vec![
+        TrackScript {
+            kind: yc_core::meeting::TrackKind::System,
+            offset_ms: 0,
+            audio: sys,
+        },
+        TrackScript {
+            kind: yc_core::meeting::TrackKind::Mic,
+            offset_ms: 0,
+            audio: mic,
+        },
+    ]
+}
+
 /// Waits for an event matching `pred`.
 pub async fn wait_event(
     rx: &mut Receiver<EngineEvent>,

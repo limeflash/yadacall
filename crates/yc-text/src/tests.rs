@@ -11,6 +11,7 @@ fn meeting() -> Meeting {
     Meeting {
         id: MeetingId::new(),
         title: "Planning: окно?".to_owned(),
+        title_is_auto: false,
         started_at: Utc
             .with_ymd_and_hms(2026, 9, 28, 14, 30, 0)
             .single()
@@ -18,6 +19,7 @@ fn meeting() -> Meeting {
         duration_ms: 3_661_000,
         language: "ru".to_owned(),
         expected_speakers: None,
+        expected_speakers_explicit: false,
         participant_hints: Vec::new(),
         tracks: vec![
             TrackInfo {
@@ -190,9 +192,14 @@ fn renders_transcript_summary_and_claude_copy() {
             ),
         ],
     );
-    assert!(transcript.starts_with(
-        "---\ntitle: \"Planning: окно?\"\ndate: \"2026-09-28 14:30\"\nduration: \"01:01:01\""
-    ));
+    let local_date = meeting
+        .started_at
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M")
+        .to_string();
+    assert!(transcript.starts_with(&format!(
+        "---\ntitle: \"Planning: окно?\"\ndate: \"{local_date}\"\nduration: \"01:01:01\""
+    )));
     assert!(transcript.contains("**[00:00:04] Я:** Привет"));
     assert!(transcript.contains("**[00:00:05] Аня:** Здравствуйте"));
     assert!(transcript.contains("> 🔖 00:12 — важное"));
@@ -247,7 +254,12 @@ fn folder_names_are_portable_and_keep_cyrillic() {
     assert_eq!(sanitize_folder_name("com1.txt", 80), "_com1.txt");
     assert_eq!(sanitize_folder_name("Call: <>?* \"x\". ", 80), "Call x");
     let name = meeting_folder_name(&meeting());
-    assert!(name.starts_with("2026-09-28 14-30 Planning окно"));
+    let local_date = meeting()
+        .started_at
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H-%M")
+        .to_string();
+    assert!(name.starts_with(&format!("{local_date} Planning окно")));
     assert!(name.chars().count() <= 80);
 }
 

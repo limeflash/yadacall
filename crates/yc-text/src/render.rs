@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Local, TimeZone};
 use yc_core::{
     meeting::{Meeting, Participant},
     summary::Summary,
@@ -8,6 +9,7 @@ use yc_core::{
 
 /// Render transcript JSON data into the stable, human-readable `transcript.md` format.
 pub fn render_transcript_markdown(meeting: &Meeting, segments: &[Segment]) -> String {
+    let local_started_at = meeting.started_at.with_timezone(&Local);
     let names = speaker_names(meeting, segments);
     let mut used = Vec::new();
     let mut seen = HashSet::new();
@@ -38,7 +40,7 @@ pub fn render_transcript_markdown(meeting: &Meeting, segments: &[Segment]) -> St
     let mut output = format!(
         "---\ntitle: {}\ndate: {}\nduration: {}\n{}language: {}\nmodel: {}\n---\n\n",
         yaml_quote(&meeting.title),
-        yaml_quote(&meeting.started_at.format("%Y-%m-%d %H:%M").to_string()),
+        yaml_quote(&format_meeting_date(&local_started_at)),
         yaml_quote(&format_duration(meeting.duration_ms)),
         speaker_section,
         yaml_quote(&meeting.language),
@@ -80,6 +82,13 @@ pub fn render_transcript_markdown(meeting: &Meeting, segments: &[Segment]) -> St
     output.push_str(&lines.join("\n\n"));
     output.push('\n');
     output
+}
+
+fn format_meeting_date<Tz: TimeZone>(started_at: &DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    started_at.format("%Y-%m-%d %H:%M").to_string()
 }
 
 /// Render a structured summary in Russian with anchored timestamps.
@@ -227,4 +236,22 @@ fn short_timestamp(at_ms: u64) -> String {
 
 fn minute_timestamp(at_ms: u64) -> String {
     short_timestamp(at_ms)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{FixedOffset, TimeZone, Utc};
+
+    #[test]
+    fn transcript_date_formats_the_supplied_local_timezone() {
+        let started_at = Utc
+            .with_ymd_and_hms(2026, 10, 13, 8, 16, 0)
+            .single()
+            .expect("valid time");
+        let istanbul = FixedOffset::east_opt(3 * 60 * 60).expect("valid offset");
+        let local_started_at = started_at.with_timezone(&istanbul);
+
+        assert_eq!(format_meeting_date(&local_started_at), "2026-10-13 11:16");
+    }
 }
