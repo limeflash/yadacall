@@ -27,8 +27,8 @@ impl Preprocessor {
         Self::embedded(GIGAAM_PREPROCESSOR, "gigaam-v3-preprocessor", dir, backend)
     }
 
-    pub fn parakeet(dir: &Path, backend: Backend) -> Result<Self> {
-        let path = required_file(dir, "nemo128.onnx")?;
+    pub fn parakeet(dir: &Path, backend: Backend, filename: &str) -> Result<Self> {
+        let path = required_file(dir, filename)?;
         let session = AdaptiveSession::from_file(
             &path,
             backend,

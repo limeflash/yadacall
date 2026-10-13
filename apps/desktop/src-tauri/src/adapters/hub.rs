@@ -29,10 +29,9 @@ pub const EMBED_E5_SMALL: &str = "multilingual-e5-small-int8";
 /// Models the adapters can run. Catalog entries outside this list (other embedding models, Silero —
 /// which ships inside `yc-ml`) are not offered in the UI.
 pub fn is_supported(spec: &ModelSpec) -> bool {
-    matches!(
-        spec.id.as_str(),
-        ASR_GIGAAM | ASR_GIGAAM_CTC | ASR_PARAKEET | SPEAKER_CAMPPLUS | EMBED_E5_SMALL
-    ) || spec.kind == ModelKind::Llm
+    (spec.kind == ModelKind::Asr && spec.engine.is_some())
+        || matches!(spec.id.as_str(), SPEAKER_CAMPPLUS | EMBED_E5_SMALL)
+        || spec.kind == ModelKind::Llm
 }
 
 /// The catalog plus the directory it installs into.

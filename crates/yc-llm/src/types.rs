@@ -61,6 +61,14 @@ pub struct ChatRequest {
     pub max_tokens: u32,
     /// Optional sampling temperature. Providers that reject it omit it.
     pub temperature: Option<f32>,
+    /// Optional nucleus sampling probability.
+    pub top_p: Option<f32>,
+    /// Optional top-k sampling limit.
+    pub top_k: Option<u32>,
+    /// Optional minimum probability cutoff.
+    pub min_p: Option<f32>,
+    /// Optional presence penalty.
+    pub presence_penalty: Option<f32>,
     /// Optional constrained JSON output.
     pub json_schema: Option<JsonSchema>,
     /// Stop sequences.
@@ -75,6 +83,10 @@ impl ChatRequest {
             messages,
             max_tokens,
             temperature: None,
+            top_p: None,
+            top_k: None,
+            min_p: None,
+            presence_penalty: None,
             json_schema: None,
             stop: Vec::new(),
         }

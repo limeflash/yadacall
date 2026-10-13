@@ -751,6 +751,68 @@ mod tests {
     }
 
     #[test]
+    fn gigachat_lightning_decode_is_faster_than_tlite_on_m1_pro_profile() {
+        let hardware = m1_pro_profile();
+        let benchmarks = Benchmarks {
+            memory_bandwidth_gbps: 200.0,
+            gemm_gflops: 278.0,
+            ..Benchmarks::default()
+        };
+        let gigachat = predict(
+            &model("gigachat3.1-lightning-q4-k-m"),
+            &hardware,
+            &benchmarks,
+            &Calibration::default(),
+        );
+        let tlite = predict(
+            &model("t-lite-it-2.1-q4-k-m"),
+            &hardware,
+            &benchmarks,
+            &Calibration::default(),
+        );
+        assert!(
+            gigachat.est_tok_s > tlite.est_tok_s,
+            "GigaChat={:?}, T-lite={:?}",
+            gigachat.est_tok_s,
+            tlite.est_tok_s
+        );
+    }
+
+    #[test]
+    fn qwen35_four_b_hybrid_cache_is_well_below_dense_four_b_cache() {
+        let hybrid = model("qwen3.5-4b-q4-k-m");
+        let hybrid_bytes = estimate_kv_cache(&hybrid.cost).total_bytes;
+        let mut dense_cost = hybrid.cost.clone();
+        dense_cost.attention = AttentionCost::Standard;
+        dense_cost.global_layer_fraction = 1.0;
+        dense_cost.local_layer_fraction = 0.0;
+        let dense_bytes = estimate_kv_cache(&dense_cost).total_bytes;
+        assert!(
+            hybrid_bytes < dense_bytes / 2,
+            "hybrid={hybrid_bytes}, dense={dense_bytes}"
+        );
+    }
+
+    #[test]
+    fn yandex_and_tlite_memory_is_weights_plus_kv_and_execution_buffer() {
+        let hardware = m1_pro_profile();
+        let benchmarks = Benchmarks {
+            memory_bandwidth_gbps: 200.0,
+            gemm_gflops: 278.0,
+            ..Benchmarks::default()
+        };
+        for id in ["yandexgpt-5-lite-8b-q4-k-m", "t-lite-it-2.1-q4-k-m"] {
+            let model = model(id);
+            let weights = model.files.iter().map(|file| file.size).sum::<u64>();
+            let buffer = ((weights as f64 * model.cost.buffer_fraction) as u64).max(512 * MIB);
+            let expected = weights + estimate_kv_cache(&model.cost).total_bytes + buffer;
+            let prediction = predict(&model, &hardware, &benchmarks, &Calibration::default());
+            assert_eq!(prediction.mem_needed, expected, "{id}");
+            assert_eq!(model.requires.min_ram_bytes, expected, "{id} minimum RAM");
+        }
+    }
+
+    #[test]
     fn mla_and_hybrid_cache_sizes_match_their_layouts() {
         let mla = ModelCost {
             n_layers: 2,

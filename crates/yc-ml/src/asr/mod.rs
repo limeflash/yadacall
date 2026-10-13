@@ -21,6 +21,34 @@ pub enum AsrKind {
     Parakeet,
 }
 
+/// Optional artifact filenames supplied by a model catalog entry.
+#[derive(Debug, Clone, Default)]
+pub struct AsrFileNames {
+    /// Downloaded ONNX preprocessor graph, used by Parakeet.
+    pub preprocessor: Option<String>,
+    /// Encoder graph, used by RNNT or Parakeet.
+    pub encoder: Option<String>,
+    /// Decoder/predictor graph, used by GigaAM RNNT.
+    pub decoder: Option<String>,
+    /// Joint graph, used by GigaAM RNNT.
+    pub joint: Option<String>,
+    /// Combined decoder/joint graph, used by Parakeet.
+    pub decoder_joint: Option<String>,
+    /// Single ONNX graph, used by CTC.
+    pub model: Option<String>,
+    /// Token vocabulary file.
+    pub vocabulary: Option<String>,
+}
+
+/// Model identity and optional artifact names taken from the catalog.
+#[derive(Debug, Clone)]
+pub struct AsrModelConfig {
+    /// Stable catalog id returned by the recognizer's `ModelInfo`.
+    pub id: String,
+    /// Optional local artifact names.
+    pub files: AsrFileNames,
+}
+
 impl AsrKind {
     /// Stable CLI name for this model type.
     pub const fn as_str(self) -> &'static str {
@@ -61,10 +89,39 @@ impl AsrEngine {
         model_dir: &Path,
         backend: Backend,
     ) -> Result<Box<dyn SpeechRecognizer>> {
+        let id = match kind {
+            AsrKind::GigaAm => "gigaam-v3-e2e-rnnt-int8",
+            AsrKind::GigaAmCtc => "gigaam-v3-e2e-ctc-int8",
+            AsrKind::Parakeet => "parakeet-tdt-0.6b-v3-int8",
+        };
+        Self::load_configured(
+            kind,
+            model_dir,
+            backend,
+            AsrModelConfig {
+                id: id.to_owned(),
+                files: AsrFileNames::default(),
+            },
+        )
+    }
+
+    /// Loads an ASR model using its catalog identity and optional local filenames.
+    pub fn load_configured(
+        kind: AsrKind,
+        model_dir: &Path,
+        backend: Backend,
+        config: AsrModelConfig,
+    ) -> Result<Box<dyn SpeechRecognizer>> {
         match kind {
-            AsrKind::GigaAm => Ok(Box::new(gigaam::GigaAmRnnt::load(model_dir, backend)?)),
-            AsrKind::GigaAmCtc => Ok(Box::new(gigaam::GigaAmCtc::load(model_dir, backend)?)),
-            AsrKind::Parakeet => Ok(Box::new(parakeet::ParakeetTdt::load(model_dir, backend)?)),
+            AsrKind::GigaAm => Ok(Box::new(gigaam::GigaAmRnnt::load_configured(
+                model_dir, backend, config,
+            )?)),
+            AsrKind::GigaAmCtc => Ok(Box::new(gigaam::GigaAmCtc::load_configured(
+                model_dir, backend, config,
+            )?)),
+            AsrKind::Parakeet => Ok(Box::new(parakeet::ParakeetTdt::load_configured(
+                model_dir, backend, config,
+            )?)),
         }
     }
 }

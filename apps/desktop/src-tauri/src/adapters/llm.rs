@@ -14,12 +14,12 @@ use yc_core::{Error, Result};
 use yc_engine::ports::{
     AnswerEvent, AnswerRequest, Answerer, Summarizer, SummaryInput as EngineSummaryInput,
 };
-use yc_hub::catalog::{ModelKind, ModelSpec};
+use yc_hub::catalog::{ModelKind, ModelSpec, ReasoningMode};
 use yc_hub::predictor::Verdict;
 use yc_llm::{
-    ChatMessage, ChatProvider, ChatRequest, LocalServer, LocalServerConfig, MeetingMetadata,
-    OLLAMA_CLOUD_ACCOUNT, OLLAMA_CLOUD_URL, OLLAMA_LOCAL_URL, OllamaProvider, ProviderConfig,
-    SummaryInput, SummaryOptions, SummaryTemplate, SummaryTurn, answer_question,
+    ChatMessage, ChatProvider, ChatRequest, LocalSampling, LocalServer, LocalServerConfig,
+    MeetingMetadata, OLLAMA_CLOUD_ACCOUNT, OLLAMA_CLOUD_URL, OLLAMA_LOCAL_URL, OllamaProvider,
+    ProviderConfig, SummaryInput, SummaryOptions, SummaryTemplate, SummaryTurn, answer_question,
 };
 
 use super::hub::{Insights, ModelHub};
@@ -353,6 +353,18 @@ impl Llm {
         if slot.is_none() {
             let mut cfg = LocalServerConfig::new(runtime_dir, gguf);
             cfg.idle_timeout = SERVER_IDLE;
+            if let Some(options) = &spec.llm {
+                cfg.reasoning_off = options.reasoning == ReasoningMode::Off;
+                if let Some(sampling) = &options.sampling {
+                    cfg.sampling = LocalSampling {
+                        temperature: sampling.temperature,
+                        top_p: sampling.top_p,
+                        top_k: sampling.top_k,
+                        min_p: sampling.min_p,
+                        presence_penalty: sampling.presence_penalty,
+                    };
+                }
+            }
             let server = LocalServer::start(cfg, |_| {}).await?;
             *slot = Some(ServerSlot {
                 server,

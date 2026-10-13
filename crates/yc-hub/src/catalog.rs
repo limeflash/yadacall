@@ -45,13 +45,31 @@ pub struct ModelSpec {
     /// English description.
     #[serde(default)]
     pub description_en: String,
-    /// BCP-47 language tags, or `multilingual`.
+    /// Normalized model languages (`ru`, `en`, or `multilingual`).
     #[serde(default)]
     pub languages: Vec<String>,
+    /// Short, human-readable model vendor.
+    #[serde(default)]
+    pub vendor: String,
+    /// Model family used for grouping and search.
+    #[serde(default)]
+    pub family: String,
+    /// Machine-readable traits from the model-entry contract vocabulary.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// SPDX expression or a short upstream license name.
     pub license: String,
+    /// Link to the applicable license text or terms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_url: Option<String>,
+    /// Whether the license has custom or attribution terms that merit a UI notice.
+    #[serde(default)]
+    pub license_custom: bool,
     /// Project or model card URL.
     pub homepage: String,
+    /// Relative quality within this model kind; higher is better.
+    #[serde(default)]
+    pub quality_rank: i32,
     /// Product defaults this model satisfies (for example `ru`, `light`, `quality`).
     #[serde(default)]
     pub default_tiers: Vec<String>,
@@ -63,9 +81,101 @@ pub struct ModelSpec {
     /// Analytical predictor constants.
     #[serde(default)]
     pub cost: ModelCost,
+    /// Adapter family used to instantiate ASR catalog entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine: Option<ModelEngine>,
+    /// Optional local filenames for an ASR engine's model artifacts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine_files: Option<EngineFileNames>,
+    /// Per-model options for the local LLM runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm: Option<LlmOptions>,
     /// Upstream or integration work needed before this entry can be used by an adapter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub todo: Option<String>,
+}
+
+/// Adapter family stored in an ASR catalog entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ModelEngine {
+    /// Parakeet TDT encoder and joint decoder.
+    #[serde(rename = "parakeet-tdt")]
+    ParakeetTdt,
+    /// GigaAM v3 transducer.
+    #[serde(rename = "gigaam-rnnt")]
+    GigaAmRnnt,
+    /// GigaAM CTC model, including the multilingual release.
+    #[serde(rename = "gigaam-ctc")]
+    GigaAmCtc,
+}
+
+/// Optional local artifact names consumed by an ASR engine.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineFileNames {
+    /// ONNX preprocessor, when the engine uses a downloaded graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preprocessor: Option<String>,
+    /// Encoder graph for transducer engines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder: Option<String>,
+    /// Predictor/decoder graph for RNNT engines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoder: Option<String>,
+    /// Joint graph for RNNT engines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint: Option<String>,
+    /// Combined decoder/joint graph for Parakeet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoder_joint: Option<String>,
+    /// CTC or other single-model graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Token vocabulary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vocabulary: Option<String>,
+}
+
+/// Runtime options attached to an LLM catalog entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmOptions {
+    /// Whether llama.cpp should disable model reasoning tokens.
+    pub reasoning: ReasoningMode,
+    /// Model-card sampling values for local summary and RAG requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampling: Option<LlmSampling>,
+}
+
+/// Reasoning behavior supported by the pinned llama.cpp runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningMode {
+    /// Disable model reasoning/thinking for concise summaries and answers.
+    Off,
+    /// Leave the model/template default unchanged.
+    Default,
+}
+
+/// Optional sampling values supported by llama-server's OpenAI-compatible endpoint.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmSampling {
+    /// Sampling temperature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    /// Nucleus sampling probability.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    /// Top-k sampling limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<u32>,
+    /// Minimum probability cutoff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_p: Option<f32>,
+    /// Presence penalty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
 }
 
 /// Broad model category shown in the catalog.
@@ -101,6 +211,9 @@ pub struct ModelFile {
     /// Hugging Face repository, present for catalog refreshes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hf_repo: Option<String>,
+    /// Remote Hugging Face path when it differs from the installed local filename.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hf_path: Option<String>,
     /// GitHub release API, for release asset refreshes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_release_api: Option<String>,
@@ -150,7 +263,9 @@ pub struct ModelCost {
     #[serde(default)]
     pub active_params: f64,
     /// Weight bytes read for one generated token, including quantization overhead. For the
-    /// Gemma 4 26B-A4B entry this is the downloaded size × 3.8B active / 25.2B total parameters.
+    /// Gemma 4 26B-A4B and GigaChat 3.1 Lightning entries this is downloaded weight bytes ×
+    /// active parameters / total parameters; the MoE weights are assumed to be proportionally
+    /// distributed across experts.
     #[serde(default)]
     pub bytes_per_token: u64,
     /// Transformer layer count.
@@ -218,6 +333,9 @@ pub enum AttentionCost {
         #[serde(default)]
         full_attention_layers: u32,
         /// Total fixed recurrent-state memory for linear-attention layers.
+        /// For Qwen3.5 this is `linear_layers × 4 × (value_heads × key_dim × value_dim +
+        /// (2 × key_heads × key_dim + value_heads × value_dim) × convolution_kernel)` bytes:
+        /// f32 recurrent state plus f32 Q/K/V convolution history, from `config.json` dimensions.
         #[serde(default)]
         linear_state_bytes: u64,
     },
@@ -379,15 +497,16 @@ pub async fn refresh_huggingface(catalog: &mut Catalog, client: &reqwest::Client
                 .json()
                 .await
                 .map_err(network)?;
+            let remote_path = file.hf_path.as_deref().unwrap_or(&file.path);
             let entry = entries
                 .iter()
-                .find(|entry| entry.path == file.path && entry.kind == "file")
-                .ok_or_else(|| Error::NotFound(format!("{repo}/{}", file.path)))?;
+                .find(|entry| entry.path == remote_path && entry.kind == "file")
+                .ok_or_else(|| Error::NotFound(format!("{repo}/{remote_path}")))?;
             file.size = entry.size.unwrap_or(0);
             if let Some(oid) = entry.lfs.as_ref().and_then(|lfs| lfs.oid.as_deref()) {
                 file.sha256 = oid.to_ascii_lowercase();
             } else {
-                let url = hf_resolve_url(repo, &file.path);
+                let url = hf_resolve_url(repo, remote_path);
                 let bytes = client
                     .get(url)
                     .send()
@@ -401,7 +520,7 @@ pub async fn refresh_huggingface(catalog: &mut Catalog, client: &reqwest::Client
                 file.size = bytes.len() as u64;
                 file.sha256 = hex::encode(Sha256::digest(&bytes));
             }
-            file.urls = hf_urls(repo, &file.path);
+            file.urls = hf_urls(repo, remote_path);
         }
     }
     Ok(())
@@ -520,6 +639,115 @@ fn default_local_layer_fraction() -> f64 {
 
 fn network(error: reqwest::Error) -> Error {
     Error::Network(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn catalog_ids_metadata_files_and_llm_costs_are_complete() {
+        let catalog = embedded().expect("embedded catalog");
+        let mut ids = HashSet::new();
+        let allowed_tags = [
+            "ru-tuned",
+            "moe",
+            "english-only",
+            "reasoning-off",
+            "streaming",
+            "tiny",
+        ];
+        for model in &catalog.models {
+            assert!(ids.insert(&model.id), "duplicate model id {}", model.id);
+            assert!(
+                !model.vendor.trim().is_empty(),
+                "{} has no vendor",
+                model.id
+            );
+            assert!(
+                !model.family.trim().is_empty(),
+                "{} has no family",
+                model.id
+            );
+            assert!(
+                !model.license.trim().is_empty(),
+                "{} has no license",
+                model.id
+            );
+            assert!(model.quality_rank > 0, "{} has no qualityRank", model.id);
+            assert!(
+                model
+                    .languages
+                    .iter()
+                    .all(|language| { matches!(language.as_str(), "ru" | "en" | "multilingual") })
+            );
+            assert!(
+                model
+                    .tags
+                    .iter()
+                    .all(|tag| allowed_tags.contains(&tag.as_str()))
+            );
+            for file in &model.files {
+                assert!(file.size > 0, "{}:{} has no size", model.id, file.path);
+                assert!(
+                    file.sha256.len() == 64
+                        && file.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()),
+                    "{}:{} has an invalid SHA-256",
+                    model.id,
+                    file.path
+                );
+                assert!(
+                    file.urls.iter().any(|url| url.contains("huggingface.co/")),
+                    "{}:{} has no Hugging Face URL",
+                    model.id,
+                    file.path
+                );
+            }
+            if model.kind == ModelKind::Asr {
+                assert!(model.engine.is_some(), "{} has no ASR engine", model.id);
+            }
+            if model.kind == ModelKind::Llm {
+                assert!(
+                    model.cost.total_params > 0.0,
+                    "{} has no totalParams",
+                    model.id
+                );
+                assert!(
+                    model.cost.active_params > 0.0,
+                    "{} has no activeParams",
+                    model.id
+                );
+                assert!(
+                    model.cost.bytes_per_token > 0,
+                    "{} has no bytesPerToken",
+                    model.id
+                );
+                assert!(model.cost.n_layers > 0, "{} has no layer count", model.id);
+                assert!(model.cost.context > 0, "{} has no context", model.id);
+                assert!(model.llm.is_some(), "{} has no llm options", model.id);
+                match &model.cost.attention {
+                    AttentionCost::Standard => {
+                        assert!(model.cost.kv_heads > 0 && model.cost.head_dim > 0);
+                    }
+                    AttentionCost::Mla {
+                        kv_lora_rank,
+                        qk_rope_head_dim,
+                    } => {
+                        assert!(*kv_lora_rank > 0 && *qk_rope_head_dim > 0);
+                    }
+                    AttentionCost::Hybrid {
+                        full_attention_layers,
+                        linear_state_bytes,
+                    } => {
+                        assert!(*full_attention_layers > 0);
+                        assert!(*linear_state_bytes > 0);
+                        assert!(model.cost.kv_heads > 0 && model.cost.head_dim > 0);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]
