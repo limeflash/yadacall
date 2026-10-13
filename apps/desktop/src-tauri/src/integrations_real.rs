@@ -826,13 +826,11 @@ fn detected_url(call: &yc::DetectedCall) -> Option<String> {
     if let Some(code) = &call.meet_code {
         return Some(format!("meet.google.com/{code}"));
     }
-    call.url
-        .as_deref()
-        .map(|u| {
-            u.trim_start_matches("https://")
-                .trim_start_matches("http://")
-                .to_owned()
-        })
+    call.url.as_deref().map(|u| {
+        u.trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .to_owned()
+    })
 }
 
 struct CatalogEntry {

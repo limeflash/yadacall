@@ -17,8 +17,8 @@ pub mod permissions;
 pub mod shell;
 pub mod updates;
 
-use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
@@ -319,7 +319,10 @@ fn init_file_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
         return None;
     };
     if let Err(error) = std::fs::create_dir_all(&directory) {
-        eprintln!("could not create YadaCall log directory {}: {error}", directory.display());
+        eprintln!(
+            "could not create YadaCall log directory {}: {error}",
+            directory.display()
+        );
         init_stderr_logging(filter);
         return None;
     }
@@ -385,4 +388,21 @@ fn log_directory() -> Option<PathBuf> {
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 fn log_directory() -> Option<PathBuf> {
     None
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::log_directory;
+
+    #[test]
+    fn log_directory_is_inside_the_per_platform_log_location() {
+        let dir = log_directory().expect("a log directory on desktop platforms");
+        let text = dir.to_string_lossy().replace('\\', "/");
+        #[cfg(target_os = "macos")]
+        assert!(text.ends_with("Library/Logs/YadaCall"), "{text}");
+        #[cfg(target_os = "windows")]
+        assert!(text.ends_with("YadaCall/logs"), "{text}");
+        #[cfg(target_os = "linux")]
+        assert!(text.ends_with("yadacall"), "{text}");
+    }
 }

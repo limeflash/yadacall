@@ -9,7 +9,7 @@
   <key>NSAudioCaptureUsageDescription</key>
   <string>YadaCall записывает звук собеседников из системы (Zoom, Meet, Telegram…), чтобы расшифровать встречу. Всё остаётся на этом компьютере. / YadaCall captures system audio (Zoom, Meet, Telegram…) to transcribe the meeting. Everything stays on this computer.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>YadaCall читает только адрес активной вкладки со звонком в выбранном браузере, чтобы определить сервис и комнату. / YadaCall reads only the address of the active call tab in the selected browser to identify the service and room.</string>
+  <string>YadaCall читает только адреса вкладок браузера, который сейчас использует микрофон, чтобы найти страницу звонка (Meet, Teams, Zoom…). Содержимое страниц не читается, адреса остальных вкладок отбрасываются. / YadaCall reads only the tab addresses of the browser that is currently using the microphone to find the call page (Meet, Teams, Zoom…). Page contents are never read and other addresses are discarded.</string>
   <key>CFBundleLocalizations</key>
   <array><string>ru</string><string>en</string></array>
   <key>CFBundleDevelopmentRegion</key>
