@@ -3,8 +3,8 @@
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
   import { t } from "../i18n/index.svelte";
-  let { open = $bindable(false), title, children, footer, onclose }:
-    { open?: boolean; title: string; children: Snippet; footer?: Snippet; onclose?: () => void } = $props();
+  let { open = $bindable(false), title, children, footer, onclose, width = 540 }:
+    { open?: boolean; title: string; children: Snippet; footer?: Snippet; onclose?: () => void; width?: number } = $props();
   let panel = $state<HTMLElement | null>(null);
   let opener: HTMLElement | null = null;
   /** Moves the node to <body>: ancestors with a transform (screen-enter animations) would otherwise become the containing block of `position: fixed`. */
@@ -34,7 +34,7 @@
   <div use:portal class="portal">
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="veil" onclick={close}></div>
-  <div bind:this={panel} class="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} tabindex="-1" onkeydown={key}>
+  <div bind:this={panel} class="sheet" style="width: min({width}px, 100%)" role="dialog" aria-modal="true" aria-labelledby={titleId} tabindex="-1" onkeydown={key}>
     <header>
       <h2 id={titleId}>{title}</h2>
       <button type="button" class="x yc-press" aria-label={t("Закрыть")} onclick={close}><Icon name="x" size={16} /></button>
@@ -48,7 +48,7 @@
 <style>
   .veil { position: fixed; inset: 0; z-index: 30; background: var(--backdrop); animation: sheetFade 0.2s ease-out both; }
   .sheet {
-    position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; width: min(540px, 100%); box-sizing: border-box; display: flex; flex-direction: column;
+    position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; box-sizing: border-box; display: flex; flex-direction: column;
     background: var(--bg); border-left: 1px solid var(--border); box-shadow: -24px 0 60px rgba(0, 0, 0, 0.25); outline: none;
     --cat-bg: var(--bg); --cat-pad: 20px; animation: sheetIn 0.32s var(--ease-out-soft, ease-out) both;
   }

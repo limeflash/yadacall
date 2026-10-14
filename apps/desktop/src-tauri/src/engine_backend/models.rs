@@ -546,6 +546,7 @@ impl EngineBackend {
         Downloader::new(self.hub.root())?
             .remove_model(&spec)
             .await?;
+        tracing::info!("removed model {id} at the user's request");
         self.engine()
             .update_settings(|s| {
                 for slot in [

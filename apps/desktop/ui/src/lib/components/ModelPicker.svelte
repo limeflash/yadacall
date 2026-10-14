@@ -19,7 +19,7 @@
   import { bytes, mbps } from "../format";
   import { toast } from "../toast.svelte";
   import { activateModel, attachModels, modelAct, modelById, mstore, setPending } from "../modelsStore.svelte";
-  import { sorted } from "../models";
+  import { displayName, quantOf, sharesName, sorted } from "../models";
 
   let { kind, title, currentId = "", sheetTitle = "" }: {
     kind: Extract<ModelKind, "asr" | "llm">;
@@ -85,8 +85,8 @@
     {#if current}
       <VendorMark vendor={current.vendor} />
       <span class="who">
-        <span class="nm mg-mono yc-ellipsis">{current.name}</span>
-        <span class="sub">{bytes(current.sizeBytes)} · {t(current.estimate)}{#if auto} · {t("выбрана автоматически")}{/if}</span>
+        <span class="nm yc-ellipsis">{displayName(current)}</span>
+        <span class="sub yc-ellipsis">{bytes(current.sizeBytes)}{sharesName(current, mstore.models) ? ` · ${quantOf(current)}` : ""} · {t(current.estimate)}{#if auto} · {t("выбрана автоматически")}{/if}</span>
       </span>
       <StatusPill kind={pill[current.verdict].kind} label={t(pill[current.verdict].label)} sm />
     {:else}
@@ -104,7 +104,7 @@
     {@const ds = d?.state.state}
     <div class="dl yc-in" role="status">
       <span class="dltop">
-        <span class="dlt yc-ellipsis">{ds === "failed" ? t("Загрузка прервалась:") : ds === "paused" ? t("На паузе:") : t("Скачиваю:")} <b class="mg-mono">{pending.name}</b> — {t("станет основной")}</span>
+        <span class="dlt yc-ellipsis">{ds === "failed" ? t("Загрузка прервалась:") : ds === "paused" ? t("На паузе:") : t("Скачиваю:")} <b>{displayName(pending)}</b> — {t("станет основной")}</span>
         <span class="mg-mono pct">{pctOf(pending)}%</span>
         {#if ds === "paused"}<Button size="sm" onclick={() => modelAct(() => api.modelDownload(pending.id))}>{t("Продолжить")}</Button>
         {:else if ds === "failed"}<Button size="sm" onclick={() => modelAct(() => api.modelDownload(pending.id))}>{t("Повторить")}</Button>
@@ -117,7 +117,7 @@
   {/if}
 </div>
 
-<Sheet bind:open title={sheetTitle || title} onclose={() => (askId = null)}>
+<Sheet bind:open width={640} title={sheetTitle || title} onclose={() => (askId = null)}>
   <ModelCatalog kinds={[kind]} mode="pick" selectedId={askId ?? current?.id ?? null} preselectId={recommended?.id ?? null} onPick={pickModel} autofocusSearch />
   {#snippet footer()}
     {#if askModel}

@@ -32,9 +32,9 @@ export function createMockApi(): Api {
   if (typeof location !== "undefined" && /onboarding/.test(location.hash)) settings = { ...settings, onboarded: false };
 
   const meetings: DemoMeeting[] = demoMeetings();
-  const { hardware, models: seedModels, devices } = demoModels();
+  const { hardware, devices } = demoModels();
   const freshInstall = typeof location !== "undefined" && /onboarding/.test(location.hash);
-  const models: ModelEntry[] = mockCatalog(seedModels, freshInstall);
+  const models: ModelEntry[] = mockCatalog(freshInstall);
   const imports: ImportJob[] = [];
   let perms: Permissions = { microphone: freshInstall ? "notDetermined" : "granted", systemAudio: "notDetermined" };
 

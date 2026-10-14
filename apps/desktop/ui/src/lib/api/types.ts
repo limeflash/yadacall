@@ -156,6 +156,8 @@ export interface ModelEntry {
   /** Model family for grouping and search ("GigaAM", "Gemma 4", "QVikhr"). */
   family: string;
   languages: ModelLang[];
+  /** For "multilingual" models: how many languages ("25 языков"); absent means "many". */
+  languageCount?: number;
   /** Machine-readable traits: "ru-tuned", "moe", "english-only", "reasoning-off", "streaming", "tiny". Unknown ones are ignored. */
   tags: string[];
   /** Total parameters, e.g. 4.0e9. */

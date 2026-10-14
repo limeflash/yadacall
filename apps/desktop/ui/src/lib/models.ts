@@ -1,5 +1,6 @@
 /** Pure view logic for the Models screen: search, filters, sorting and grouping. No UI, no I/O. */
 import type { ModelEntry, ModelKind, ModelLang, Verdict } from "./api";
+import { plural, t } from "./i18n/index.svelte";
 
 export type Tab = "all" | ModelKind;
 export type FilterKey = "ru" | "multi" | "en" | "fits" | "installed";
@@ -184,6 +185,34 @@ export function monogram(vendor: string): string {
   if (!parts.length) return "?";
   if (/^\d/.test(parts[0])) return parts[0].slice(0, 2).toUpperCase();
   return parts.slice(0, 2).map((p) => [...p][0].toUpperCase()).join("");
+}
+
+/** Trailing precision / quantisation token of a catalog name: "int8", "fp16", "Q4_0", "Q4_K_M", "q4f16". */
+const QUANT_TAIL = /\s+(int[248]|fp(?:16|32)|bf16|q\d+f\d+|q\d+(?:_[a-z0-9]+)*)$/i;
+
+/** "Gemma 4 E2B Q4_0" → { title: "Gemma 4 E2B", quant: "Q4_0" }. Names without such a tail come back unchanged. */
+export function splitName(name: string): { title: string; quant: string } {
+  const m = QUANT_TAIL.exec(name);
+  return m ? { title: name.slice(0, m.index), quant: m[1] } : { title: name, quant: "" };
+}
+/** The name as shown on a card: no quantisation noise. */
+export const displayName = (m: Pick<ModelEntry, "name">) => splitName(m.name).title;
+export const quantOf = (m: Pick<ModelEntry, "name">) => splitName(m.name).quant;
+/** True when another model of the same kind would show the same clean name (two quantisations of one model): then the quantisation is worth showing. */
+export const sharesName = (m: ModelEntry, all: ModelEntry[]) => all.some((x) => x.id !== m.id && x.kind === m.kind && displayName(x) === displayName(m));
+
+/** Which language group a recommendation belongs to: speech models by language, summaries by machine, the rest on their own. */
+export type RecScope = "ru" | "multi" | "en" | "machine" | "kind";
+export const recScope = (m: ModelEntry): RecScope => (m.kind === "asr" ? asrLang(m) : m.kind === "llm" ? "machine" : "kind");
+/** Models competing for the same recommendation badge. A badge with no rival says nothing, so the UI hides it. */
+export const recRivals = (m: ModelEntry, all: ModelEntry[]) => all.filter((x) => x.kind === m.kind && recScope(x) === recScope(m)).length;
+
+/** Languages as plain text: "русский", "русский и английский", "25 языков". */
+export function langText(m: ModelEntry): string {
+  if (m.tags.includes("english-only")) return t("английский");
+  if (m.languages.includes("multilingual")) return m.languageCount ? `${m.languageCount} ${plural(m.languageCount, ["язык", "языка", "языков"], ["language", "languages"])}` : t("много языков");
+  const ru = m.languages.includes("ru"), en = m.languages.includes("en");
+  return ru && en ? t("русский и английский") : ru ? t("русский") : en ? t("английский") : "";
 }
 
 /** "4B", "0,6B", "118M"; the decimal separator follows the UI locale. */

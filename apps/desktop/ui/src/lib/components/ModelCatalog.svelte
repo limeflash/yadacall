@@ -19,11 +19,12 @@
   import { api } from "../api";
   import type { ModelEntry, ModelKind, Verdict } from "../api";
   import { i18n, locale, t } from "../i18n/index.svelte";
+  import { isMac } from "../platform";
   import { bytes, mbps } from "../format";
   import { toast } from "../toast.svelte";
   import { attachModels, diskBytes, isRequired, modelAct, mstore, onModelDone, removeModel } from "../modelsStore.svelte";
   import {
-    TAB_ORDER, KIND_ORDER, FILTER_ORDER, applyFilters, chipMatches, groupsFor, haystack, highlight, matchesTerms, paramsLabel, sorted, terms,
+    TAB_ORDER, KIND_ORDER, FILTER_ORDER, applyFilters, chipMatches, displayName, groupsFor, haystack, highlight, langText, matchesTerms, paramsLabel, quantOf, recRivals, recScope, sharesName, sorted, terms,
     type FilterKey, type Group, type Tab,
   } from "../models";
 
@@ -137,8 +138,46 @@
     if (m.activeParams) return t("{total}, активных {active}", { total: paramsLabel(m.params, dec), active: paramsLabel(m.activeParams, dec) });
     return paramsLabel(m.params, dec);
   }
-  const metaLine = (m: ModelEntry) => [bytes(m.sizeBytes), paramsText(m), m.vendor, m.license].filter(Boolean).join(" · ");
-  const langChips = (m: ModelEntry) => m.tags.includes("english-only") ? [] : m.languages.map((l) => (l === "ru" ? "RU" : l === "en" ? "EN" : t("Мульти")));
+  /** Line 2 of a card, one muted line: vendor · size · parameters · languages (+ the quantisation where two variants share a name). */
+  const metaLine = (m: ModelEntry) => [m.vendor, bytes(m.sizeBytes), m.params ? paramsLabel(m.params, dec) : "", langText(m), sharesName(m, mstore.models) ? quantOf(m) : ""].filter(Boolean).join(" · ");
+
+  /**
+   * The one recommendation badge. In a grouped tab the group header already names the language / the machine, so «Рекомендуем» is
+   * enough; in the flat "all" tab the badge says what it is the best for. Hidden when nothing competes with the model.
+   */
+  const grouped = $derived(tab !== "all");
+  function recLabel(m: ModelEntry) {
+    if (!m.recommended || recRivals(m, mstore.models) < 2) return "";
+    if (grouped) return t("Рекомендуем");
+    const sc = recScope(m);
+    return sc === "ru" ? t("Лучшая для русского") : sc === "multi" ? t("Лучшая для других языков") : sc === "en" ? t("Лучшая для английского") : sc === "machine" ? (isMac ? t("Лучшая для этого Mac") : t("Лучшая для этого компьютера")) : t("Рекомендуем");
+  }
+  const isMain = (m: ModelEntry) => m.active && m.installed && (m.kind === "asr" || m.kind === "llm");
+  /** At most one status badge: primary, else recommendation, else «needed for recording». */
+  function badge(m: ModelEntry): { kind: "main" | "rec" | "req"; text: string } | null {
+    if (isMain(m)) return { kind: "main", text: t("основная") };
+    const r = recLabel(m);
+    if (r) return { kind: "rec", text: r };
+    return isRequired(m) ? { kind: "req", text: t("нужна для записи") } : null;
+  }
+  const TAG_TEXT: Record<string, string> = {
+    "ru-tuned": "Русское дообучение", moe: "MoE — быстрая для размера", "english-only": "Только английский", "reasoning-off": "Рассуждения отключены автоматически", streaming: "Потоковая",
+  };
+  /** The meaningful traits worth a chip under the card (two at most); everything else lives in the details. */
+  function traitChips(m: ModelEntry): { text: string; warn?: boolean; href?: string }[] {
+    const out: { text: string; warn?: boolean; href?: string }[] = [];
+    if (m.licenseCustom) out.push({ text: t("Особая лицензия"), warn: true, href: m.licenseUrl });
+    if (m.tags.includes("ru-tuned")) out.push({ text: t(TAG_TEXT["ru-tuned"]) });
+    if (m.tags.includes("moe")) out.push({ text: t(TAG_TEXT.moe) });
+    return out.slice(0, 2);
+  }
+  const hostOf = (u?: string) => { try { return u ? new URL(u).hostname.replace(/^www\./, "") : ""; } catch { return ""; } };
+
+  /** Cards unfolded in the Models screen: the long description, licence, parameters and the rarely needed actions. */
+  let unfolded = $state<Set<string>>(new Set());
+  function unfold(id: string) { const n = new Set(unfolded); if (n.has(id)) n.delete(id); else n.add(id); unfolded = n; }
+  /** A click on the card toggles its details, unless it landed on a control inside it. */
+  function rowClick(e: MouseEvent, id: string) { if (!(e.target as HTMLElement).closest("a, button, input")) unfold(id); }
 
   async function bench(m: ModelEntry) {
     benching = m.id;
@@ -190,31 +229,29 @@
 <svelte:window onkeydown={onKey} />
 
 {#snippet name(m: ModelEntry)}
-  {#each highlight(m.name, ts) as p, i (i)}{#if p.hit}<mark>{p.s}</mark>{:else}{p.s}{/if}{/each}
+  {#each highlight(displayName(m), ts) as p, i (i)}{#if p.hit}<mark>{p.s}</mark>{:else}{p.s}{/if}{/each}
 {/snippet}
 
-<!-- Who it is, what it is like and how it will run here: shared by both modes. -->
+<!-- Who it is, what it is like and how it will run here: shared by both modes. Two text lines and, when it has any, a row of traits. -->
 {#snippet identity(m: ModelEntry)}
-  {@const lc = langChips(m)}
+  {@const b = badge(m)}
+  {@const chips = traitChips(m)}
+  {@const line2 = metaLine(m)}
   <VendorMark vendor={m.vendor} />
   <span class="body" title={t(m.blurb)}>
     <span class="l1">
-      <span class="nm mg-mono yc-ellipsis">{@render name(m)}</span>
-      {#if m.recommended}<span class="tg tg-rec">{t("Рекомендуем")}</span>{/if}
-      {#if m.active && m.installed && (m.kind === "asr" || m.kind === "llm")}<span class="yc-popin tag-main">{t("основная")}</span>{/if}
-      {#each lc as c (c)}<span class="tg mg-mono">{c}</span>{/each}
+      <span class="nm yc-ellipsis">{@render name(m)}</span>
+      {#if b}<span class="bdg bdg-{b.kind}" class:yc-popin={b.kind === "main"}>{b.text}</span>{/if}
     </span>
-    <span class="meta">{metaLine(m)}</span>
-    <span class="est"><span class="edot" style="background: var(--{verdictColor[m.verdict]})"></span>{measured[m.id] ? measuredLabel(m, measured[m.id]) : t(m.estimate)}</span>
-    {#if m.tags.includes("ru-tuned") || m.tags.includes("moe") || m.tags.includes("english-only") || m.licenseCustom}
+    <span class="l2" title={line2 + " · " + (measured[m.id] ? measuredLabel(m, measured[m.id]) : t(m.estimate))}>
+      <span class="l2t">{line2}</span><span class="l2e"><span class="edot" style="background: var(--{verdictColor[m.verdict]})"></span>{measured[m.id] ? measuredLabel(m, measured[m.id]) : t(m.estimate)}</span>
+    </span>
+    {#if chips.length}
       <span class="traits">
-        {#if m.tags.includes("ru-tuned")}<span class="tg tg-soft">{t("Русское дообучение")}</span>{/if}
-        {#if m.tags.includes("moe")}<span class="tg tg-soft">{t("MoE · быстрая для размера")}</span>{/if}
-        {#if m.tags.includes("english-only")}<span class="tg tg-soft">{t("Только английский")}</span>{/if}
-        {#if m.licenseCustom}
-          {#if m.licenseUrl && !pick}<a class="tg tg-warn" href={m.licenseUrl} target="_blank" rel="noopener noreferrer" title={t("Условия лицензии — откроются в браузере")}>{t("Особая лицензия")}<Icon name="externalLink" size={10} /></a>
-          {:else}<span class="tg tg-warn">{t("Особая лицензия")}</span>{/if}
-        {/if}
+        {#each chips as c (c.text)}
+          {#if c.warn && c.href && !pick}<a class="tg tg-warn" href={c.href} target="_blank" rel="noopener noreferrer" title={t("Условия лицензии — откроются в браузере")}>{c.text}<Icon name="externalLink" size={10} /></a>
+          {:else}<span class="tg" class:tg-warn={c.warn}>{c.text}</span>{/if}
+        {/each}
       </span>
     {/if}
   </span>
@@ -245,11 +282,37 @@
 {/snippet}
 
 {#snippet trash(m: ModelEntry)}
-  {#if isRequired(m)}
-    <span class="tg tg-req" title={t("Без неё запись не работает")}>{t("нужна для записи")}</span>
-  {:else}
-    <IconButton variant="flat" aria-label={hasPartial(m) ? t("Отменить и удалить") : t("Удалить модель {name}", { name: m.name })} aria-expanded={confirmId === m.id} onclick={() => (confirmId = confirmId === m.id ? null : m.id)}><Icon name="trash" size={14} /></IconButton>
-  {/if}
+  <IconButton variant="flat" aria-label={hasPartial(m) ? t("Отменить и удалить") : t("Удалить модель {name}", { name: m.name })} aria-expanded={confirmId === m.id} onclick={() => (confirmId = confirmId === m.id ? null : m.id)}><Icon name="trash" size={14} /></IconButton>
+{/snippet}
+
+<!-- The unfolded part of a card: everything that is not needed to choose a model, plus measure / remove. -->
+{#snippet details(m: ModelEntry)}
+  {@const quant = quantOf(m)}
+  {@const traits = m.tags.filter((x) => x in TAG_TEXT).map((x) => t(TAG_TEXT[x]))}
+  {@const canRemove = (m.installed || hasPartial(m)) && !isRequired(m)}
+  {@const canMeasure = m.installed && !m.download && m.benchmarkable !== false}
+  <div class="details yc-in" id="d-{uid}-{m.id}">
+    <p class="blurb">{t(m.blurb)}</p>
+    <dl class="facts">
+      {#if paramsText(m)}<dt>{t("Параметры")}</dt><dd>{paramsText(m)}</dd>{/if}
+      {#if quant}<dt>{t("Квантование")}</dt><dd class="mg-mono">{quant}</dd>{/if}
+      <dt>{t("Лицензия")}</dt>
+      <dd>
+        {#if m.licenseUrl}<a class="lnk" href={m.licenseUrl} target="_blank" rel="noopener noreferrer">{m.license}<Icon name="externalLink" size={10} /></a>{:else}{m.license}{/if}
+        {#if m.licenseCustom}<span class="tg tg-warn">{t("Особая лицензия")}</span>{/if}
+      </dd>
+      {#if m.homepage}<dt>{t("Страница")}</dt><dd><a class="lnk" href={m.homepage} target="_blank" rel="noopener noreferrer">{hostOf(m.homepage)}<Icon name="externalLink" size={10} /></a></dd>{/if}
+      {#if traits.length}<dt>{t("Особенности")}</dt><dd>{traits.join(" · ")}</dd>{/if}
+    </dl>
+    {#if isRequired(m)}
+      <p class="req">{t("Без неё запись не работает — удалить нельзя.")}</p>
+    {:else if canRemove || canMeasure}
+      <div class="dacts">
+        {#if canMeasure}<Button size="sm" variant="ghost" disabled={benching === m.id} onclick={() => bench(m)}>{benching === m.id ? t("Меряю…") : t("Измерить")}</Button>{/if}
+        {#if canRemove}<Button size="sm" variant="ghost" aria-expanded={confirmId === m.id} onclick={() => (confirmId = confirmId === m.id ? null : m.id)}><Icon name="trash" size={13} />{hasPartial(m) ? t("Отменить и удалить") : t("Удалить")}</Button>{/if}
+      </div>
+    {/if}
+  </div>
 {/snippet}
 
 {#snippet manageCard(m: ModelEntry)}
@@ -257,35 +320,40 @@
   {@const ds = d?.state.state}
   {@const vp = verdictPill[m.verdict]}
   {@const canPrimary = m.kind === "asr" || m.kind === "llm"}
-  <div class="card" style="border-color: {m.active && m.installed ? 'var(--accent-line)' : ds === 'failed' ? 'var(--warning-line)' : 'var(--border)'}">
-    <div class="row">
+  {@const busy = ds === "running" || ds === "queued"}
+  {@const open = unfolded.has(m.id)}
+  <div class="card manage" class:main={isMain(m)} class:fail={ds === "failed"}>
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="row" onclick={(e) => rowClick(e, m.id)}>
       {@render identity(m)}
 
-      {#if !m.installed || ds === "failed"}<span class="vp"><StatusPill kind={vp.kind} label={t(vp.label)} sm /></span>{/if}
-
-      {#if m.installed && !m.active && canPrimary}
-        <Button size="sm" onclick={() => modelAct(() => api.modelSetActive(m.id))}>{t("Сделать основной")}</Button>
-        {@render trash(m)}
-      {:else if m.installed && !d}
-        {#if m.benchmarkable !== false}<Button size="sm" variant="ghost" disabled={benching === m.id} onclick={() => bench(m)}>{benching === m.id ? t("Меряю…") : t("Измерить")}</Button>{/if}
-        {@render trash(m)}
-      {:else if !m.installed && !d}
-        <Button size="sm" disabled={m.verdict === "wontRun"} onclick={() => modelAct(() => api.modelDownload(m.id))}>
-          <svg class="yc-ic" width="12" height="12" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>{t("Скачать")}
-        </Button>
-      {:else if ds === "running" || ds === "queued"}
-        <span class="mg-mono yc-num pct">{pctOf(m)}%</span>
-        <IconButton variant="flat" aria-label={t("Пауза")} onclick={() => modelAct(() => api.modelPause(m.id))}><svg class="yc-ic" width="13" height="13" viewBox="0 0 24 24" style="stroke-width: 3"><path d="M8 5v14M16 5v14" /></svg></IconButton>
-        <IconButton variant="flat" aria-label={t("Отменить загрузку")} onclick={() => modelAct(() => api.modelCancel(m.id))}><Icon name="x" size={14} /></IconButton>
-      {:else if ds === "paused"}
-        <Button size="sm" onclick={() => modelAct(() => api.modelDownload(m.id))}>{t("Продолжить")}</Button>
-        {@render trash(m)}
-      {:else if ds === "verifying"}
-        <span class="verifying"><svg class="yc-ic yc-spin" width="13" height="13" viewBox="0 0 24 24" style="color: var(--accent-text); stroke-width: 3"><path d="M12 3a9 9 0 1 0 9 9" /></svg>{t("проверяю")}</span>
-      {:else if ds === "failed"}
-        <Button size="sm" onclick={() => modelAct(() => api.modelDownload(m.id))}><Icon name="refresh" size={12} />{t("Повторить")}</Button>
-        {@render trash(m)}
-      {/if}
+      <span class="side">
+        <span class="s-pill">
+          {#if busy}<span class="mg-mono yc-num pct">{pctOf(m)}%</span>
+          {:else if ds !== "verifying"}<StatusPill kind={vp.kind} label={t(vp.label)} sm />{/if}
+        </span>
+        <span class="s-act">
+          {#if busy}
+            <IconButton variant="flat" aria-label={t("Пауза")} onclick={() => modelAct(() => api.modelPause(m.id))}><svg class="yc-ic" width="13" height="13" viewBox="0 0 24 24" style="stroke-width: 3"><path d="M8 5v14M16 5v14" /></svg></IconButton>
+            <IconButton variant="flat" aria-label={t("Отменить загрузку")} onclick={() => modelAct(() => api.modelCancel(m.id))}><Icon name="x" size={14} /></IconButton>
+          {:else if ds === "paused"}
+            <Button size="sm" onclick={() => modelAct(() => api.modelDownload(m.id))}>{t("Продолжить")}</Button>
+          {:else if ds === "verifying"}
+            <span class="verifying"><svg class="yc-ic yc-spin" width="13" height="13" viewBox="0 0 24 24" style="color: var(--accent-text); stroke-width: 3"><path d="M12 3a9 9 0 1 0 9 9" /></svg>{t("проверяю")}</span>
+          {:else if ds === "failed"}
+            <Button size="sm" onclick={() => modelAct(() => api.modelDownload(m.id))}><Icon name="refresh" size={12} />{t("Повторить")}</Button>
+          {:else if !m.installed}
+            <Button size="sm" disabled={m.verdict === "wontRun"} onclick={() => modelAct(() => api.modelDownload(m.id))}>
+              <svg class="yc-ic" width="12" height="12" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>{t("Скачать")}
+            </Button>
+          {:else if !m.active && canPrimary}
+            <Button size="sm" onclick={() => modelAct(() => api.modelSetActive(m.id))}>{t("Сделать основной")}</Button>
+          {/if}
+        </span>
+        <button type="button" class="chev-btn yc-press" class:open aria-expanded={open} aria-controls="d-{uid}-{m.id}" aria-label={t("Подробности: {name}", { name: displayName(m) })} onclick={() => unfold(m.id)}>
+          <Icon name="chevronRight" size={13} />
+        </button>
+      </span>
     </div>
 
     {#if d && ds !== "done"}
@@ -304,6 +372,7 @@
         </span>
       </div>
     {/if}
+    {#if open}{@render details(m)}{/if}
     {#if confirmId === m.id}{@render removePanel(m)}{/if}
   </div>
 {/snippet}
@@ -312,6 +381,7 @@
   {@const on = effectiveId === m.id}
   {@const dead = m.verdict === "wontRun"}
   {@const vp = verdictPill[m.verdict]}
+  {@const removable = (m.installed || hasPartial(m)) && !isRequired(m)}
   <div class="pickwrap">
     <div class="pickline">
     <button type="button" role="radio" aria-checked={on} aria-disabled={dead} class="card pickrow" class:on class:dead
@@ -320,11 +390,10 @@
       {@render identity(m)}
       <span class="pickside">
         <StatusPill kind={vp.kind} label={t(vp.label)} sm />
-        <span class="state">{#if m.installed}<Icon name="check" size={11} />{t("установлена")}{:else if m.download}{pctOf(m)}%{/if}</span>
+        <span class="state" class:rm={removable}>{#if m.installed}<Icon name="check" size={11} />{t("установлена")}{:else if m.download}{pctOf(m)}%{/if}</span>
       </span>
-      {#if m.installed || hasPartial(m)}<span class="rmgap" aria-hidden="true"></span>{/if}
     </button>
-    {#if m.installed || hasPartial(m)}<span class="rmbtn">{@render trash(m)}</span>{/if}
+    {#if removable}<span class="rmbtn">{@render trash(m)}</span>{/if}
     </div>
     {#if confirmId === m.id}{@render removePanel(m)}{/if}
   </div>
@@ -380,7 +449,7 @@
         {#if items.length}
           {@const capped = !narrowed && !more.has(k) && items.length > FOLD}
           <section class="sect">
-            <div class="sh"><SectionLabel as="h2">{t(kindInfo[k].title)}</SectionLabel><span class="gcount mg-mono">{items.length}</span></div>
+            <div class="sh"><SectionLabel as="h2">{t(kindInfo[k].title)}</SectionLabel><span class="gcount">{items.length}</span></div>
             {@render cards(capped ? items.slice(0, FOLD) : items, t(kindInfo[k].title))}
             {#if !narrowed && items.length > FOLD}
               <button type="button" class="more yc-press" aria-expanded={!capped} onclick={() => toggleMore(k)}>
@@ -401,11 +470,11 @@
             <div class="sh">
               {#if g.foldable && ts.length === 0}
                 <button type="button" class="fold yc-press" aria-expanded={open} onclick={() => (wontOpen = !wontOpen)}>
-                  <span class="gdot {g.tone}"></span><span class="mg-label">{t(g.title)}</span><span class="gcount mg-mono">{g.items.length}</span>
+                  <span class="gdot {g.tone}"></span><span class="mg-label">{t(g.title)}</span><span class="gcount">{g.items.length}</span>
                   <span class="chev" class:up={open}><Icon name="chevronRight" size={12} /></span>
                 </button>
               {:else}
-                <span class="gdot {g.tone ?? 'none'}"></span><SectionLabel as="h3">{t(g.title)}</SectionLabel><span class="gcount mg-mono">{g.items.length}</span>
+                <span class="gdot {g.tone ?? 'none'}"></span><SectionLabel as="h3">{t(g.title)}</SectionLabel><span class="gcount">{g.items.length}</span>
               {/if}
             </div>
           {/if}
@@ -425,7 +494,7 @@
   .panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .sect { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .sh { display: flex; align-items: center; gap: 8px; padding: 6px 4px 0; }
-  .gcount { font-size: 11px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .gcount { font-size: 11px; font-weight: 500; color: var(--faint); font-variant-numeric: tabular-nums; }
   .gdot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--faint); }
   .gdot.ok { background: var(--ok); } .gdot.warn { background: var(--warning); } .gdot.bad { background: var(--danger); } .gdot.none { display: none; }
   .tabsub { margin: 2px 4px 0; font-size: 12px; color: var(--muted); }
@@ -437,49 +506,79 @@
   .more:hover { background: var(--surface-2); }
   .more .chev { color: inherit; }
 
-  .list { display: flex; flex-direction: column; gap: 6px; }
-  .card { position: relative; display: flex; flex-direction: column; gap: 9px; padding: 11px 12px 11px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); transition: border-color 0.3s; text-align: left; color: inherit; font: inherit; }
-  .row { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
-  .nm { font-size: 13px; font-weight: 700; min-width: 0; max-width: 100%; }
+  .list { display: flex; flex-direction: column; gap: 6px; container-type: inline-size; }
+  /* One card, every mode: [mark] [name + badge / one muted line / trait chips] [verdict · action · chevron]. The mark and the right-hand
+     controls sit at fixed offsets from the top, so rows stay level however many text lines a card has. */
+  .card { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); transition: border-color 0.2s, background 0.2s; text-align: left; color: inherit; font: inherit; }
+  .card.main { border-color: var(--accent-line); }
+  .card.fail { border-color: var(--warning-line); }
+  .manage .row { cursor: pointer; }
+  .manage:hover { border-color: color-mix(in oklch, var(--border) 55%, var(--muted)); }
+  .manage.main:hover { border-color: var(--accent-line); }
+  .row { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+  .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; height: 20px; }
+  .nm { font-size: 13.5px; font-weight: 650; letter-spacing: -0.01em; min-width: 0; flex: 0 1 auto; }
   .nm :global(mark) { background: color-mix(in oklch, var(--accent) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
-  .meta { font-size: 12px; color: var(--muted); }
-  .est { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .l2 { display: flex; align-items: center; min-width: 0; height: 18px; font-size: 12px; color: var(--muted); }
+  .l2t { flex: 0 1 auto; min-width: 6em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .l2e { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .l2e { margin-left: 12px; }
   .edot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-  .traits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-  .tg { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px; border-radius: 9px; background: var(--surface-2); color: var(--muted); font-size: 10.5px; font-weight: 700; white-space: nowrap; text-decoration: none; }
-  .tg.mg-mono { font-size: 10px; letter-spacing: 0.02em; }
-  .tg-rec { background: var(--accent-soft); color: var(--accent-text); border: 1px solid var(--accent-line); }
-  .tg-soft { background: transparent; border: 1px solid var(--border); }
-  .tg-warn { background: color-mix(in oklch, var(--warning) 14%, var(--surface)); color: var(--warning-text); border: 1px solid var(--warning-line); }
+  .traits { display: flex; gap: 4px; margin-top: 5px; min-width: 0; overflow: hidden; }
+  .tg { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--border); color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; text-decoration: none; }
+  .tg-warn { color: var(--warning-text); border-color: var(--warning-line); background: color-mix(in oklch, var(--warning) 8%, transparent); }
   a.tg-warn:hover { text-decoration: underline; }
-  .tag-main { flex: none; height: 18px; padding: 0 8px; border-radius: 9px; background: var(--accent); color: var(--ink-on-accent); font-size: 10.5px; font-weight: 800; display: inline-flex; align-items: center; }
-  .tg-req { background: var(--accent-soft); color: var(--accent-text); border: 1px solid var(--accent-line); }
+  /* the one status badge */
+  .bdg { flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 9px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+  .bdg-main { background: var(--accent); color: var(--ink-on-accent); font-weight: 800; }
+  .bdg-rec { background: var(--accent-soft); color: var(--accent-text); }
+  .pickrow.on .bdg-rec { background: color-mix(in oklch, var(--accent) 22%, transparent); }
+  .bdg-req { background: var(--surface-2); color: var(--muted); }
+
+  .side { flex: none; margin-top: 3px; display: grid; grid-template-columns: 90px 138px 24px; align-items: center; column-gap: 6px; }
+  .s-pill { display: flex; justify-content: flex-end; }
+  .s-act { display: flex; justify-content: flex-end; align-items: center; gap: 2px; min-width: 0; }
+  .s-act :global(.mg-btn) { white-space: nowrap; }
+  .chev-btn { width: 24px; height: 24px; border: 0; border-radius: 8px; background: none; color: var(--faint); display: grid; place-items: center; cursor: pointer; transform: rotate(90deg); transition: transform 0.2s, color 0.15s; }
+  .chev-btn.open { transform: rotate(-90deg); }
+  .manage:hover .chev-btn, .chev-btn:focus-visible { color: var(--muted); }
+  .chev-btn:focus-visible { outline: 2px solid var(--accent-line); }
+  /* Narrow window: the verdict is still the coloured dot on line 2; the pill makes room for the name and its badge. */
+  @container (max-width: 760px) { .s-pill :global(.mg-status) { display: none; } .side { grid-template-columns: auto 138px 24px; column-gap: 6px; } }
+  .pct { font-size: 12.5px; font-weight: 700; color: var(--accent-text); }
+  .verifying { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .dl { display: flex; flex-direction: column; gap: 6px; padding-left: 46px; }
+  .dlline { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .pbar { position: relative; display: block; height: 5px; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
+  .pbar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width 0.2s; }
+
+  .details { display: flex; flex-direction: column; gap: 10px; margin-left: 46px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .blurb { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text); text-wrap: pretty; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 5px 16px; margin: 0; font-size: 12px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .lnk { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); text-decoration: none; }
+  .lnk:hover { text-decoration: underline; }
+  .dacts { display: flex; gap: 4px; margin: 0 -8px -2px; }
+  .req { margin: 0; font-size: 12px; color: var(--muted); }
   .confirm { display: flex; flex-direction: column; gap: 9px; padding: 10px 12px; border: 1px solid var(--warning-line); border-radius: 11px; background: color-mix(in oklch, var(--warning) 9%, var(--surface)); font-size: 12.5px; line-height: 1.45; }
   .confirm p { margin: 0; color: var(--text); }
   .confirm .acts { display: flex; gap: 8px; }
-  .vp { flex: none; }
-  .pct { font-size: 13px; font-weight: 700; color: var(--accent-text); }
-  .verifying { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
-  .dl { display: flex; flex-direction: column; gap: 6px; }
-  .dlline { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-  .pbar { position: relative; display: block; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
-  .pbar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width 0.2s; }
 
   .pickwrap { display: flex; flex-direction: column; gap: 6px; }
   .pickline { position: relative; }
-  .rmbtn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: inline-flex; }
-  .rmgap { flex: none; width: 30px; }
-  .pickrow { flex-direction: row; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; cursor: pointer; }
+  .rmbtn { position: absolute; right: 6px; top: 36px; display: inline-flex; }
+  .state.rm { padding-right: 26px; }
+  .pickrow { flex-direction: row; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; cursor: pointer; }
   .pickrow:hover:not(.dead) { border-color: var(--accent-line); }
   .pickrow.on { border-color: var(--accent-line); background: var(--accent-soft); }
   .pickrow.dead { opacity: 0.55; cursor: not-allowed; }
   .pickrow:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
-  .radio { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--faint); display: grid; place-items: center; }
+  .radio { flex: none; width: 18px; height: 18px; margin-top: 8px; border-radius: 50%; border: 2px solid var(--faint); display: grid; place-items: center; }
   .pickrow.on .radio { border-color: var(--accent); }
   .radio span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-  .pickside { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .pickside { flex: none; margin-top: 2px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .state { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); min-height: 14px; }
 
   .rt { display: flex; align-items: center; gap: 10px; padding: 2px 6px 0; font-size: 11px; color: var(--muted); }

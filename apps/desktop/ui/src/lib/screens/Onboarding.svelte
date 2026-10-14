@@ -22,7 +22,7 @@
   import { bytes } from "../format";
   import { toast } from "../toast.svelte";
   import { activateModel, attachModels, modelAct, modelById, mstore, setPending } from "../modelsStore.svelte";
-  import { recommendFor, type SpokenLang } from "../models";
+  import { displayName, langText, recommendFor, type SpokenLang } from "../models";
 
   type Mode = "local" | "ollama" | "api" | "off";
   const STEPS = [
@@ -159,8 +159,8 @@
   <div class="mcard">
     <VendorMark vendor={m.vendor} size={40} />
     <span class="two">
-      <span class="mn"><span class="nm mg-mono">{m.name}</span>{#if rec && m.id === rec.id}<span class="tg">{t("Рекомендуем")}</span>{/if}</span>
-      <span class="s">{m.vendor} · {bytes(m.sizeBytes)}{m.installed ? ` · ${t("уже установлена")}` : ""}</span>
+      <span class="mn"><span class="nm">{displayName(m)}</span>{#if rec && m.id === rec.id}<span class="tg">{t("Рекомендуем")}</span>{/if}</span>
+      <span class="s">{[m.vendor, bytes(m.sizeBytes), langText(m), m.installed ? t("уже установлена") : ""].filter(Boolean).join(" · ")}</span>
       <span class="s forecast">{t(m.estimate)}</span>
     </span>
     <StatusPill kind={pill[m.verdict].kind} label={t(pill[m.verdict].label)} sm />
@@ -292,8 +292,8 @@
           </div>
           <div class="card">
             <div class="row"><span class="k">{t("Язык созвонов")}</span><span class="v">{langName}</span></div>
-            <div class="row bt"><span class="k">{t("Распознавание")}</span><span class="v mg-mono">{asr?.name ?? "—"}{asr ? ` · ${bytes(asr.sizeBytes)}` : ""}</span></div>
-            <div class="row bt"><span class="k">{t("Итоги")}</span><span class="v mg-mono">{mode === "local" ? `${llm?.name ?? "—"}${llm ? ` · ${bytes(llm.sizeBytes)}` : ""}` : mode === "ollama" ? `Ollama · ${found?.name ?? ""}` : mode === "api" ? "API" : t("Без итогов")}</span></div>
+            <div class="row bt"><span class="k">{t("Распознавание")}</span><span class="v mg-mono">{asr ? displayName(asr) : "—"}{asr ? ` · ${bytes(asr.sizeBytes)}` : ""}</span></div>
+            <div class="row bt"><span class="k">{t("Итоги")}</span><span class="v mg-mono">{mode === "local" ? `${llm ? displayName(llm) : "—"}${llm ? ` · ${bytes(llm.sizeBytes)}` : ""}` : mode === "ollama" ? `Ollama · ${found?.name ?? ""}` : mode === "api" ? "API" : t("Без итогов")}</span></div>
             <div class="row bt"><span class="k">{t("Разрешения")}</span><span class="v">{perms.microphone === "granted" && perms.systemAudio === "granted" ? t("выданы") : t("выдашь позже")}</span></div>
             <div class="row bt"><span class="k">{t("Календарь")}</span><span class="v">{accounts.length ? accounts.map((a) => a.email).join(", ") : t("пропущен")}</span></div>
           </div>
@@ -314,7 +314,7 @@
   </footer>
 </div>
 
-<Sheet open={sheet !== null} title={sheet === "llm" ? t("Модель для итогов") : t("Модель расшифровки")} onclose={() => (sheet = null)}>
+<Sheet width={640} open={sheet !== null} title={sheet === "llm" ? t("Модель для итогов") : t("Модель расшифровки")} onclose={() => (sheet = null)}>
   {#if sheet}
     <ModelCatalog kinds={[sheet]} mode="pick" selectedId={sheet === "asr" ? asr?.id ?? null : llm?.id ?? null} preselectId={(sheet === "asr" ? recAsr : recLlm)?.id ?? null} onPick={(id) => choose(sheet!, id)} autofocusSearch />
   {/if}
