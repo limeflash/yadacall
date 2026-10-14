@@ -4,7 +4,10 @@ use std::{
     collections::VecDeque,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -12,7 +15,7 @@ use rand::RngCore;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
-    sync::{Mutex as AsyncMutex, watch},
+    sync::{Mutex as AsyncMutex, OwnedRwLockReadGuard, RwLock, watch},
     task::JoinHandle,
 };
 use yc_core::{Error, Result};
@@ -87,6 +90,8 @@ struct Inner {
     child: AsyncMutex<Option<Child>>,
     stderr: Arc<Mutex<VecDeque<String>>>,
     last_activity: Mutex<Instant>,
+    in_flight: AtomicUsize,
+    request_gate: Arc<RwLock<()>>,
     stop: watch::Sender<bool>,
     #[cfg(windows)]
     job: Mutex<Option<std::os::windows::io::OwnedHandle>>,
@@ -125,6 +130,8 @@ impl LocalServer {
             child: AsyncMutex::new(None),
             stderr: Arc::new(Mutex::new(VecDeque::with_capacity(80))),
             last_activity: Mutex::new(Instant::now()),
+            in_flight: AtomicUsize::new(0),
+            request_gate: Arc::new(RwLock::new(())),
             stop,
             #[cfg(windows)]
             job: Mutex::new(None),
@@ -183,17 +190,19 @@ struct ActivityProvider {
 #[async_trait::async_trait]
 impl ChatProvider for ActivityProvider {
     async fn complete(&self, request: ChatRequest) -> Result<ChatResponse> {
-        touch(&self.inner);
+        let _guard = RequestGuard::new(self.inner.clone()).await;
         self.provider
             .complete(with_local_sampling(request, self.sampling))
             .await
     }
 
     async fn stream(&self, request: ChatRequest) -> Result<ChatStream> {
-        touch(&self.inner);
-        self.provider
+        let guard = RequestGuard::new(self.inner.clone()).await;
+        let stream = self
+            .provider
             .stream(with_local_sampling(request, self.sampling))
-            .await
+            .await?;
+        Ok(track_stream(stream, guard))
     }
 
     fn provider_id(&self) -> &str {
@@ -204,8 +213,29 @@ impl ChatProvider for ActivityProvider {
     }
 
     async fn count_tokens(&self, text: &str) -> Result<Option<usize>> {
-        touch(&self.inner);
+        let _guard = RequestGuard::new(self.inner.clone()).await;
         self.provider.count_tokens(text).await
+    }
+}
+
+struct RequestGuard {
+    inner: Arc<Inner>,
+    _gate: OwnedRwLockReadGuard<()>,
+}
+
+impl RequestGuard {
+    async fn new(inner: Arc<Inner>) -> Self {
+        let gate = inner.request_gate.clone().read_owned().await;
+        inner.in_flight.fetch_add(1, Ordering::AcqRel);
+        touch(&inner);
+        Self { inner, _gate: gate }
+    }
+}
+
+impl Drop for RequestGuard {
+    fn drop(&mut self) {
+        self.inner.in_flight.fetch_sub(1, Ordering::AcqRel);
+        touch(&self.inner);
     }
 }
 
@@ -213,6 +243,15 @@ fn touch(inner: &Inner) {
     if let Ok(mut last_activity) = inner.last_activity.lock() {
         *last_activity = Instant::now();
     }
+}
+
+fn track_stream(mut stream: ChatStream, guard: RequestGuard) -> ChatStream {
+    Box::pin(async_stream::stream! {
+        let _guard = guard;
+        while let Some(item) = futures_util::StreamExt::next(&mut stream).await {
+            yield item;
+        }
+    })
 }
 
 fn with_local_sampling(mut request: ChatRequest, sampling: LocalSampling) -> ChatRequest {
@@ -234,12 +273,7 @@ async fn supervise(inner: Arc<Inner>, help: String) {
             }
             _ = tokio::time::sleep(Duration::from_secs(1)) => {}
         }
-        let idle = inner
-            .last_activity
-            .lock()
-            .map(|last| last.elapsed())
-            .unwrap_or_default();
-        if idle >= inner.config.idle_timeout {
+        if let Some(_gate) = idle_stop_guard(&inner).await {
             tracing::debug!("stopping idle llama-server");
             kill_child(&inner).await;
             return;
@@ -279,6 +313,30 @@ async fn supervise(inner: Arc<Inner>, help: String) {
                 }
             }
         }
+    }
+}
+
+async fn idle_stop_guard(inner: &Arc<Inner>) -> Option<tokio::sync::OwnedRwLockWriteGuard<()>> {
+    let idle = inner
+        .last_activity
+        .lock()
+        .map(|last| last.elapsed())
+        .unwrap_or_default();
+    if idle < inner.config.idle_timeout || inner.in_flight.load(Ordering::Acquire) != 0 {
+        return None;
+    }
+
+    // Exclude a request starting between the idle check and process termination.
+    let gate = inner.request_gate.clone().write_owned().await;
+    let idle = inner
+        .last_activity
+        .lock()
+        .map(|last| last.elapsed())
+        .unwrap_or_default();
+    if inner.in_flight.load(Ordering::Acquire) == 0 && idle >= inner.config.idle_timeout {
+        Some(gate)
+    } else {
+        None
     }
 }
 
@@ -531,9 +589,102 @@ fn attach_job(inner: &Inner, child: &Child) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LocalSampling, add_optional_flag, with_local_sampling};
-    use crate::{ChatMessage, ChatRequest};
+    use std::{
+        collections::VecDeque,
+        sync::{Arc, Mutex, atomic::Ordering},
+        time::Duration,
+    };
+
+    use super::{
+        Inner, LocalSampling, LocalServerConfig, RequestGuard, add_optional_flag, idle_stop_guard,
+        track_stream, with_local_sampling,
+    };
+    use crate::{ChatDelta, ChatMessage, ChatRequest, ChatStream};
+    use futures_util::{StreamExt, stream};
     use tokio::process::Command;
+
+    fn test_inner(idle_timeout: Duration) -> Arc<Inner> {
+        let (stop, _) = tokio::sync::watch::channel(false);
+        let mut config = LocalServerConfig::new("runtime", "model");
+        config.idle_timeout = idle_timeout;
+        Arc::new(Inner {
+            config,
+            executable: "llama-server".into(),
+            port: 0,
+            api_key: String::new(),
+            child: tokio::sync::Mutex::new(None),
+            stderr: Arc::new(Mutex::new(VecDeque::new())),
+            last_activity: Mutex::new(std::time::Instant::now()),
+            in_flight: std::sync::atomic::AtomicUsize::new(0),
+            request_gate: Arc::new(tokio::sync::RwLock::new(())),
+            stop,
+            #[cfg(windows)]
+            job: Mutex::new(None),
+        })
+    }
+
+    #[tokio::test]
+    async fn long_request_prevents_idle_stop_and_resets_idle_clock_on_completion() {
+        let inner = test_inner(Duration::from_millis(30));
+        let guard = RequestGuard::new(inner.clone()).await;
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(idle_stop_guard(&inner).await.is_none());
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 1);
+
+        drop(guard);
+        assert!(idle_stop_guard(&inner).await.is_none());
+        tokio::time::sleep(Duration::from_millis(35)).await;
+        assert!(idle_stop_guard(&inner).await.is_some());
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn streamed_request_stays_in_flight_until_stream_ends_or_is_dropped() {
+        let inner = test_inner(Duration::from_millis(20));
+        let guard = RequestGuard::new(inner.clone()).await;
+        let response: ChatStream = Box::pin(stream::iter([Ok(ChatDelta {
+            text: "token".to_owned(),
+            stop_reason: None,
+            usage: None,
+        })]));
+        let mut tracked = track_stream(response, guard);
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 1);
+        assert!(tracked.next().await.is_some());
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 1);
+        assert!(tracked.next().await.is_none());
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 0);
+
+        let guard = RequestGuard::new(inner.clone()).await;
+        let pending: ChatStream = Box::pin(stream::pending());
+        let tracked = track_stream(pending, guard);
+        drop(tracked);
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn request_errors_and_cancelled_futures_release_the_guard() {
+        let inner = test_inner(Duration::from_secs(1));
+        let result: Result<(), &'static str> = async {
+            let _guard = RequestGuard::new(inner.clone()).await;
+            Err("request failed")
+        }
+        .await;
+        assert_eq!(result, Err("request failed"));
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 0);
+
+        let request_inner = inner.clone();
+        let task = tokio::spawn(async move {
+            let _guard = RequestGuard::new(request_inner).await;
+            std::future::pending::<()>().await;
+        });
+        while inner.in_flight.load(Ordering::Acquire) == 0 {
+            tokio::task::yield_now().await;
+        }
+        task.abort();
+        let _ = task.await;
+        assert_eq!(inner.in_flight.load(Ordering::Acquire), 0);
+    }
 
     #[test]
     fn includes_supported_optional_flags_and_drops_unknown_ones() {
