@@ -226,8 +226,8 @@
       "id": "parakeet-tdt-0.6b-v2-int8",
       "kind": "asr",
       "name": "Parakeet TDT 0.6B v2 int8",
-      "descriptionRu": "Англоязычная модель распознавания речи; результат Open ASR лучше v3 по отчёту авторов.",
-      "descriptionEn": "English-only speech recognizer; its reported Open ASR score is better than v3.",
+      "descriptionRu": "Англоязычная модель распознавания речи; результат Open ASR лучше v3 по отчёту авторов. Только английский. На английских созвонах уступает Parakeet Ultra (21,5% ошибок против 15,8%).",
+      "descriptionEn": "English-only speech recognizer; its reported Open ASR score is better than v3. English only. Behind Parakeet Ultra on English calls (21.5% WER vs 15.8%).",
       "languages": [
         "en"
       ],
@@ -240,7 +240,7 @@
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
       "licenseCustom": true,
       "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx",
-      "qualityRank": 94,
+      "qualityRank": 88,
       "defaultTiers": [],
       "files": [
         {
@@ -392,8 +392,8 @@
       "id": "gigaam-multilingual-ctc-int8",
       "kind": "asr",
       "name": "GigaAM Multilingual CTC int8",
-      "descriptionRu": "Мультиязычная CTC-модель для русского, английского, казахского, кыргызского и узбекского.",
-      "descriptionEn": "Multilingual CTC recognizer for Russian, English, Kazakh, Kyrgyz and Uzbek.",
+      "descriptionRu": "Мультиязычная CTC-модель для русского, английского, казахского, кыргызского и узбекского. Пишет без знаков препинания и заглавных букв; на русском немного уступает GigaAM v3.",
+      "descriptionEn": "Multilingual CTC recognizer for Russian, English, Kazakh, Kyrgyz and Uzbek. Outputs no punctuation or capitals; slightly behind GigaAM v3 on Russian.",
       "languages": [
         "ru",
         "en"
@@ -407,7 +407,7 @@
       "licenseUrl": "https://spdx.org/licenses/MIT.html",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/ai-sage/GigaAM-Multilingual",
-      "qualityRank": 93,
+      "qualityRank": 84,
       "defaultTiers": [],
       "files": [
         {
@@ -758,8 +758,8 @@
       "id": "gemma-4-e2b-q4-0",
       "kind": "llm",
       "name": "Gemma 4 E2B Q4_0",
-      "descriptionRu": "Локальная языковая модель для суммаризации встреч.",
-      "descriptionEn": "Local language model for meeting summaries.",
+      "descriptionRu": "Локальная языковая модель для суммаризации встреч. Наш тест итогов: 83 из 100 на тестовых встречах, 55 на настоящем созвоне.",
+      "descriptionEn": "Local language model for meeting summaries. Our summary benchmark: 83/100 on test meetings, 55 on a real call.",
       "languages": [
         "multilingual"
       ],
@@ -808,7 +808,7 @@
       "vendor": "Google",
       "family": "Gemma 4",
       "tags": [],
-      "qualityRank": 72,
+      "qualityRank": 88,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "llm": {
@@ -867,7 +867,7 @@
       "vendor": "Google",
       "family": "Gemma 4",
       "tags": [],
-      "qualityRank": 74,
+      "qualityRank": 89,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "llm": {
@@ -928,7 +928,7 @@
       "vendor": "Google",
       "family": "Gemma 4",
       "tags": [],
-      "qualityRank": 82,
+      "qualityRank": 90,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "llm": {
@@ -987,7 +987,7 @@
       "vendor": "Google",
       "family": "Gemma 4",
       "tags": [],
-      "qualityRank": 84,
+      "qualityRank": 91,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "llm": {
@@ -1050,7 +1050,7 @@
       "tags": [
         "moe"
       ],
-      "qualityRank": 94,
+      "qualityRank": 96,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "llm": {
@@ -1168,7 +1168,7 @@
       "vendor": "Google",
       "family": "Gemma 4",
       "tags": [],
-      "qualityRank": 96,
+      "qualityRank": 94,
       "licenseCustom": false,
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "llm": {
@@ -1193,7 +1193,7 @@
       "licenseUrl": "https://huggingface.co/Qwen/Qwen3.5-2B/blob/main/LICENSE",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF",
-      "qualityRank": 76,
+      "qualityRank": 70,
       "defaultTiers": [],
       "files": [
         {
@@ -1246,8 +1246,8 @@
       "id": "qwen3.5-4b-q4-k-m",
       "kind": "llm",
       "name": "Qwen3.5 4B Q4_K_M",
-      "descriptionRu": "Сбалансированная мультиязычная модель для подробных сводок и вопросов по встречам.",
-      "descriptionEn": "Balanced multilingual model for detailed meeting summaries and questions.",
+      "descriptionRu": "Сбалансированная мультиязычная модель для подробных сводок и вопросов по встречам. Наш тест итогов: 82 из 100 на тестовых встречах и 83 на настоящем созвоне — лучшая из проверенных.",
+      "descriptionEn": "Balanced multilingual model for detailed meeting summaries and questions. Our summary benchmark: 82/100 on test meetings and 83 on a real call — best of those tested.",
       "languages": [
         "multilingual"
       ],
@@ -1260,7 +1260,7 @@
       "licenseUrl": "https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/LICENSE",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF",
-      "qualityRank": 88,
+      "qualityRank": 92,
       "defaultTiers": [],
       "files": [
         {
@@ -1327,7 +1327,7 @@
       "licenseUrl": "https://huggingface.co/Qwen/Qwen3.5-9B/blob/main/LICENSE",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF",
-      "qualityRank": 95,
+      "qualityRank": 93,
       "defaultTiers": [],
       "files": [
         {
@@ -1380,8 +1380,8 @@
       "id": "gigachat3.1-lightning-q4-k-m",
       "kind": "llm",
       "name": "GigaChat 3.1 Lightning Q4_K_M",
-      "descriptionRu": "Русско-английская MoE-модель для быстрых кратких сводок.",
-      "descriptionEn": "Russian-English MoE model for fast, concise summaries.",
+      "descriptionRu": "Русско-английская MoE-модель для быстрых кратких сводок. Наш тест итогов: 80 из 100 (проверена частично). Медленно читает длинные встречи.",
+      "descriptionEn": "Russian-English MoE model for fast, concise summaries. Our summary benchmark: 80/100 (partially tested). Slow on long meetings.",
       "languages": [
         "ru",
         "en"
@@ -1396,7 +1396,7 @@
       "licenseUrl": "https://spdx.org/licenses/MIT.html",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF",
-      "qualityRank": 94,
+      "qualityRank": 86,
       "defaultTiers": [],
       "files": [
         {
@@ -1445,8 +1445,8 @@
       "id": "t-lite-it-2.1-q4-k-m",
       "kind": "llm",
       "name": "T-lite-it-2.1 Q4_K_M",
-      "descriptionRu": "По данным Т-Банка, показывает сильные результаты на русскоязычных тестах.",
-      "descriptionEn": "T-Bank reports strong results on Russian-language benchmarks.",
+      "descriptionRu": "По данным Т-Банка, показывает сильные результаты на русскоязычных тестах. Наш тест итогов: 72 из 100 на тестовых встречах, 35 на настоящем созвоне; путает дни недели.",
+      "descriptionEn": "T-Bank reports strong results on Russian-language benchmarks. Our summary benchmark: 72/100 on test meetings, 35 on a real call; mixes up weekdays.",
       "languages": [
         "ru"
       ],
@@ -1460,7 +1460,7 @@
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/t-tech/T-lite-it-2.1-GGUF",
-      "qualityRank": 100,
+      "qualityRank": 80,
       "defaultTiers": [],
       "files": [
         {
@@ -1525,7 +1525,7 @@
       "licenseUrl": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct/blob/main/LICENSE",
       "licenseCustom": true,
       "homepage": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
-      "qualityRank": 91,
+      "qualityRank": 78,
       "defaultTiers": [],
       "files": [
         {
@@ -1573,8 +1573,8 @@
       "id": "qvikhr-3-4b-q4-k-m",
       "kind": "llm",
       "name": "QVikhr-3 4B Q4_K_M",
-      "descriptionRu": "Русско-английская модель с сильным результатом на Ru Arena; отключаем рассуждения для сводок.",
-      "descriptionEn": "Russian-English model with a strong Ru Arena result; reasoning is disabled for summaries.",
+      "descriptionRu": "Русско-английская модель с сильным результатом на Ru Arena; отключаем рассуждения для сводок. Наш тест итогов: 68 из 100.",
+      "descriptionEn": "Russian-English model with a strong Ru Arena result; reasoning is disabled for summaries. Our summary benchmark: 68/100.",
       "languages": [
         "ru",
         "en"
@@ -1589,7 +1589,7 @@
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/Vikhrmodels/QVikhr-3-4B-Instruction-GGUF",
-      "qualityRank": 90,
+      "qualityRank": 72,
       "defaultTiers": [],
       "files": [
         {
@@ -1654,7 +1654,7 @@
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/Vikhrmodels/QVikhr-3-1.7B-Instruction-noreasoning-GGUF",
-      "qualityRank": 75,
+      "qualityRank": 60,
       "defaultTiers": [],
       "files": [
         {
@@ -1719,7 +1719,7 @@
       "licenseUrl": "https://spdx.org/licenses/Apache-2.0.html",
       "licenseCustom": false,
       "homepage": "https://huggingface.co/RefalMachine/RuadaptQwen3-4B-Instruct-GGUF",
-      "qualityRank": 84,
+      "qualityRank": 74,
       "defaultTiers": [],
       "files": [
         {
