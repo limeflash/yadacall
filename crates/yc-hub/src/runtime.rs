@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     Error, Result, benchmark,
-    calibration::{Calibration, CalibrationMetric, Measurement},
+    calibration::{COST_EPOCH, Calibration, CalibrationMetric, Measurement},
     catalog::{ModelFile, ModelKind, ModelSpec, RuntimeSpec, RuntimeSupportAsset},
     downloader::{DownloadControl, Downloader, model_storage_dir},
     hw, predictor,
@@ -361,6 +361,7 @@ pub async fn benchmark_model(
         predicted,
         measured,
         measured_at_unix: now,
+        cost_epoch: COST_EPOCH,
     });
     calibration.record(Measurement {
         model_id: model.id.clone(),
@@ -370,6 +371,7 @@ pub async fn benchmark_model(
         predicted: predicted_prefill,
         measured: measured_prefill,
         measured_at_unix: now,
+        cost_epoch: COST_EPOCH,
     });
     calibration.save(&calibration_path)?;
     Ok(LlmBenchmark {

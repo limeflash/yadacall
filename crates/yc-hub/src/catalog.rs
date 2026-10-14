@@ -241,6 +241,9 @@ pub struct Requirements {
 }
 
 /// Cost constants shared by the analytical estimates.
+///
+/// Bump [`crate::calibration::COST_EPOCH`] whenever these catalog cost fields change, so old
+/// model-to-kind calibration factors are ignored while direct model measurements remain usable.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCost {

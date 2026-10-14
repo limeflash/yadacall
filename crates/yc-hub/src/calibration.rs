@@ -6,6 +6,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result, catalog::ModelKind};
 
+/// Catalog cost revision used by shared kind/backend calibration factors.
+///
+/// Bump this whenever model cost fields in `catalog/models.json` change. Direct measurements remain
+/// useful across revisions, but shared factors from older cost estimates do not.
+pub const COST_EPOCH: u32 = 1;
+
 /// Calibration records stored in the app data directory as JSON.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +41,9 @@ pub struct Measurement {
     pub measured: f64,
     /// Unix time when the benchmark completed.
     pub measured_at_unix: u64,
+    /// Catalog cost revision used to produce `predicted`.
+    #[serde(default)]
+    pub cost_epoch: u32,
 }
 
 /// Throughput path represented by one calibration sample.
@@ -60,7 +69,8 @@ impl Calibration {
     }
 
     /// Append a measurement and keep the most recent 100 records.
-    pub fn record(&mut self, measurement: Measurement) {
+    pub fn record(&mut self, mut measurement: Measurement) {
+        measurement.cost_epoch = COST_EPOCH;
         self.measurements.push(measurement);
         if self.measurements.len() > 100 {
             let extra = self.measurements.len() - 100;
@@ -78,11 +88,55 @@ impl Calibration {
         self.factor_for(kind, backend, CalibrationMetric::Prefill)
     }
 
+    /// Return the median of up to the three most recent valid measurements for a model.
+    pub fn measured(
+        &self,
+        model_id: &str,
+        kind: ModelKind,
+        backend: &str,
+        metric: CalibrationMetric,
+    ) -> Option<f64> {
+        let mut recent = self
+            .measurements
+            .iter()
+            .filter(|item| {
+                item.model_id == model_id
+                    && item.kind == kind
+                    && item.backend == backend
+                    && item.metric == metric
+                    && item.measured.is_finite()
+                    && item.measured > 0.0
+            })
+            .collect::<Vec<_>>();
+        recent.sort_by_key(|item| item.measured_at_unix);
+        let mut values = recent
+            .into_iter()
+            .rev()
+            .take(3)
+            .map(|item| item.measured)
+            .collect::<Vec<_>>();
+        if values.is_empty() {
+            return None;
+        }
+        values.sort_by(f64::total_cmp);
+        let middle = values.len() / 2;
+        Some(if values.len() % 2 == 0 {
+            (values[middle - 1] + values[middle]) / 2.0
+        } else {
+            values[middle]
+        })
+    }
+
     fn factor_for(&self, kind: ModelKind, backend: &str, metric: CalibrationMetric) -> Option<f64> {
         let mut factors = self
             .measurements
             .iter()
-            .filter(|item| item.kind == kind && item.backend == backend && item.metric == metric)
+            .filter(|item| {
+                item.kind == kind
+                    && item.backend == backend
+                    && item.metric == metric
+                    && item.cost_epoch == COST_EPOCH
+            })
             .filter(|item| item.predicted > 0.0 && item.measured > 0.0)
             .map(|item| item.measured / item.predicted)
             .filter(|factor| factor.is_finite())
@@ -97,7 +151,7 @@ impl Calibration {
         } else {
             factors[middle]
         };
-        Some(median.clamp(0.1, 10.0))
+        Some(median.clamp(0.25, 4.0))
     }
 
     /// Save calibration JSON atomically.
@@ -132,8 +186,12 @@ mod tests {
             }]
         }"#;
         let calibration: Calibration = serde_json::from_str(data).unwrap();
-        assert_eq!(calibration.factor(ModelKind::Llm, "metal"), Some(1.25));
+        assert_eq!(calibration.factor(ModelKind::Llm, "metal"), None);
         assert_eq!(calibration.prefill_factor(ModelKind::Llm, "metal"), None);
+        assert_eq!(
+            calibration.measured("gemma", ModelKind::Llm, "metal", CalibrationMetric::Primary),
+            Some(50.0)
+        );
     }
 
     #[test]
@@ -151,12 +209,56 @@ mod tests {
                 predicted,
                 measured,
                 measured_at_unix: 1,
+                cost_epoch: COST_EPOCH,
             });
         }
         assert_eq!(calibration.factor(ModelKind::Llm, "metal"), Some(2.0));
         assert_eq!(
             calibration.prefill_factor(ModelKind::Llm, "metal"),
             Some(1.5)
+        );
+    }
+
+    #[test]
+    fn recording_stamps_current_epoch_and_factor_is_clamped() {
+        let mut calibration = Calibration::default();
+        calibration.record(Measurement {
+            model_id: "gemma".to_owned(),
+            kind: ModelKind::Llm,
+            metric: CalibrationMetric::Primary,
+            backend: "metal".to_owned(),
+            predicted: 1.0,
+            measured: 100.0,
+            measured_at_unix: 1,
+            cost_epoch: 0,
+        });
+        assert_eq!(calibration.measurements[0].cost_epoch, COST_EPOCH);
+        assert_eq!(calibration.factor(ModelKind::Llm, "metal"), Some(4.0));
+    }
+
+    #[test]
+    fn direct_measurement_uses_median_of_three_most_recent_samples() {
+        let mut calibration = Calibration::default();
+        for (measured_at_unix, measured) in [(1, 100.0), (2, 32.0), (3, 34.0), (4, 29.0)] {
+            calibration.measurements.push(Measurement {
+                model_id: "gigaam".to_owned(),
+                kind: ModelKind::Asr,
+                metric: CalibrationMetric::Primary,
+                backend: "coreml".to_owned(),
+                predicted: 1.0,
+                measured,
+                measured_at_unix,
+                cost_epoch: 0,
+            });
+        }
+        assert_eq!(
+            calibration.measured(
+                "gigaam",
+                ModelKind::Asr,
+                "coreml",
+                CalibrationMetric::Primary
+            ),
+            Some(32.0)
         );
     }
 }

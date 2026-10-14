@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     benchmark::Benchmarks,
-    calibration::Calibration,
+    calibration::{Calibration, CalibrationMetric},
     catalog::{AttentionCost, ModelCost, ModelKind, ModelSpec},
     hw::{GpuInfo, HardwareProfile},
 };
@@ -75,14 +75,22 @@ pub fn predict(
     let mut tok_s = None;
     let mut prefill = None;
     let mut summary_secs = None;
+    let mut directly_measured = false;
     let mem_needed: u64;
 
     match model.kind {
         ModelKind::Asr => {
             let cost = model.cost.gflop_per_audio_sec.max(0.01);
             let raw = benchmarks.gemm_gflops.max(0.1) / cost * model.cost.efficiency.max(0.01);
+            let measured = calibration.measured(
+                &model.id,
+                ModelKind::Asr,
+                &backend,
+                CalibrationMetric::Primary,
+            );
+            directly_measured = measured.is_some();
             let factor = calibration.factor(ModelKind::Asr, &backend).unwrap_or(1.0);
-            let speed = raw * factor;
+            let speed = measured.unwrap_or(raw * factor);
             realtime = Some(speed);
             mem_needed = model
                 .requires
@@ -103,7 +111,11 @@ pub fn predict(
                 "ASR estimate = {:.1} GFLOP/s measured GEMM ÷ {:.2} GFLOP per audio second × {:.0}% backend efficiency",
                 benchmarks.gemm_gflops, cost, model.cost.efficiency * 100.0
             ));
-            if factor != 1.0 {
+            if let Some(speed) = measured {
+                reasons.push(format!(
+                    "using direct measured ASR throughput for this model: {speed:.1}× realtime"
+                ));
+            } else if factor != 1.0 {
                 reasons.push(format!(
                     "measured ASR calibration scales estimate by {factor:.2}×"
                 ));
@@ -157,8 +169,21 @@ pub fn predict(
             let weights = model.files.iter().map(|file| file.size).sum::<u64>();
             let (bytes_per_token, using_weight_fallback) = decode_bytes_per_token(model, weights);
             let raw = bandwidth * 1_000_000_000.0 * model.cost.efficiency / bytes_per_token;
+            let measured_decode = calibration.measured(
+                &model.id,
+                ModelKind::Llm,
+                &backend,
+                CalibrationMetric::Primary,
+            );
+            let measured_prefill = calibration.measured(
+                &model.id,
+                ModelKind::Llm,
+                &backend,
+                CalibrationMetric::Prefill,
+            );
+            directly_measured = measured_decode.is_some() || measured_prefill.is_some();
             let factor = calibration.factor(ModelKind::Llm, &backend).unwrap_or(1.0);
-            let mut speed = raw * factor;
+            let mut speed = measured_decode.unwrap_or(raw * factor);
             let (params_b, parameter_basis) = if model.cost.active_params > 0.0 {
                 (
                     model.cost.active_params / 1_000_000_000.0,
@@ -177,7 +202,7 @@ pub fn predict(
             let prefill_factor = calibration
                 .prefill_factor(ModelKind::Llm, &backend)
                 .unwrap_or(1.0);
-            let prefill_speed = raw_prefill * prefill_factor;
+            let prefill_speed = measured_prefill.unwrap_or(raw_prefill * prefill_factor);
             let cache = estimate_kv_cache(&model.cost);
             let compute_buffer =
                 ((weights as f64 * model.cost.buffer_fraction.max(0.0)) as u64).max(512 * MIB);
@@ -233,12 +258,20 @@ pub fn predict(
                 "one-hour summary estimate uses 9,000 prompt tokens ÷ {prefill_speed:.1} prefill tok/s + 800 output tokens ÷ {:.1} decode tok/s",
                 speed.max(0.1)
             ));
-            if factor != 1.0 {
+            if let Some(speed) = measured_decode {
+                reasons.push(format!(
+                    "using direct measured LLM decode throughput for this model: {speed:.1} tok/s"
+                ));
+            } else if factor != 1.0 {
                 reasons.push(format!(
                     "measured LLM calibration scales decode estimate by {factor:.2}×"
                 ));
             }
-            if prefill_factor != 1.0 {
+            if let Some(speed) = measured_prefill {
+                reasons.push(format!(
+                    "using direct measured LLM prefill throughput for this model: {speed:.1} tok/s"
+                ));
+            } else if prefill_factor != 1.0 {
                 reasons.push(format!(
                     "measured LLM prefill calibration scales estimate by {prefill_factor:.2}×"
                 ));
@@ -272,6 +305,7 @@ pub fn predict(
         available: mem_available,
         total_ram: hardware.total_ram_bytes,
         russian: false,
+        measured: directly_measured,
     });
     let headline_ru = headline(HeadlineInputs {
         kind: model.kind,
@@ -283,6 +317,7 @@ pub fn predict(
         available: mem_available,
         total_ram: hardware.total_ram_bytes,
         russian: true,
+        measured: directly_measured,
     });
     Prediction {
         model_id: model.id.clone(),
@@ -556,6 +591,7 @@ struct HeadlineInputs {
     available: u64,
     total_ram: u64,
     russian: bool,
+    measured: bool,
 }
 
 fn headline(inputs: HeadlineInputs) -> String {
@@ -569,6 +605,7 @@ fn headline(inputs: HeadlineInputs) -> String {
         available,
         total_ram,
         russian,
+        measured,
     } = inputs;
     if verdict == Verdict::WontRun && memory <= available {
         return if russian {
@@ -596,9 +633,15 @@ fn headline(inputs: HeadlineInputs) -> String {
         ModelKind::Asr => {
             let rate = realtime.unwrap_or_default();
             if russian {
-                format!("≈ {rate:.0}× реального времени")
+                format!(
+                    "≈ {rate:.0}× реального времени{}",
+                    if measured { " · замер" } else { "" }
+                )
             } else {
-                format!("≈ {rate:.0}× realtime")
+                format!(
+                    "≈ {rate:.0}× realtime{}",
+                    if measured { " · measured" } else { "" }
+                )
             }
         }
         ModelKind::Llm => {
@@ -606,9 +649,15 @@ fn headline(inputs: HeadlineInputs) -> String {
             let memory = memory as f64 / GIB;
             let total_ram = total_ram as f64 / GIB;
             if russian {
-                format!("≈ {rate:.0} ток/с · {memory:.1} из {total_ram:.0} ГБ")
+                format!(
+                    "≈ {rate:.0} ток/с · {memory:.1} из {total_ram:.0} ГБ{}",
+                    if measured { " · замер" } else { "" }
+                )
             } else {
-                format!("≈ {rate:.0} tok/s · {memory:.1} of {total_ram:.0} GB")
+                format!(
+                    "≈ {rate:.0} tok/s · {memory:.1} of {total_ram:.0} GB{}",
+                    if measured { " · measured" } else { "" }
+                )
             }
         }
         ModelKind::Embed => {
@@ -879,6 +928,84 @@ mod tests {
         assert_eq!(
             prediction.mem_needed,
             weights + expected_kv_bytes + compute_buffer
+        );
+    }
+
+    #[test]
+    fn asr_uses_direct_measurement_even_from_an_old_cost_epoch() {
+        let model = model("gigaam-v3-e2e-rnnt-int8");
+        let calibration = Calibration {
+            measurements: vec![crate::calibration::Measurement {
+                model_id: model.id.clone(),
+                kind: ModelKind::Asr,
+                metric: CalibrationMetric::Primary,
+                backend: "coreml".to_owned(),
+                predicted: 50.0,
+                measured: 32.6,
+                measured_at_unix: 100,
+                cost_epoch: 0,
+            }],
+        };
+        let prediction = predict(
+            &model,
+            &m1_pro_profile(),
+            &Benchmarks {
+                gemm_gflops: 278.0,
+                ..Benchmarks::default()
+            },
+            &calibration,
+        );
+
+        assert_eq!(prediction.est_realtime_x, Some(32.6));
+        assert!(prediction.headline_en.contains("measured"));
+        assert!(
+            prediction
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("direct measured"))
+        );
+    }
+
+    #[test]
+    fn llm_decode_and_prefill_use_direct_measurements() {
+        let model = model("gemma-4-e2b-q4-0");
+        let mut calibration = Calibration::default();
+        for (metric, measured) in [
+            (CalibrationMetric::Primary, 17.5),
+            (CalibrationMetric::Prefill, 222.0),
+        ] {
+            calibration.record(crate::calibration::Measurement {
+                model_id: model.id.clone(),
+                kind: ModelKind::Llm,
+                metric,
+                backend: "metal".to_owned(),
+                predicted: 999.0,
+                measured,
+                measured_at_unix: 100,
+                cost_epoch: 0,
+            });
+        }
+        let prediction = predict(
+            &model,
+            &m1_pro_profile(),
+            &Benchmarks {
+                memory_bandwidth_gbps: 200.0,
+                gemm_gflops: 278.0,
+                ..Benchmarks::default()
+            },
+            &calibration,
+        );
+
+        assert_eq!(prediction.est_tok_s, Some(17.5));
+        assert_eq!(prediction.est_prefill_tok_s, Some(222.0));
+        assert!(prediction.headline_en.contains("measured"));
+        assert_eq!(
+            prediction
+                .reasons
+                .iter()
+                .filter(|reason| reason.contains("direct measured LLM"))
+                .count(),
+            2
         );
     }
 }

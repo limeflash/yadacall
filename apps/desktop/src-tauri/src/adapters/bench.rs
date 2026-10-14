@@ -5,7 +5,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use yc_core::ports::{EmbedKind, SpeakerEmbedder, SpeechRecognizer};
 use yc_core::{Error, Result};
-use yc_hub::calibration::{CalibrationMetric, Measurement};
+use yc_hub::calibration::{COST_EPOCH, CalibrationMetric, Measurement};
 use yc_hub::catalog::{ModelKind, ModelSpec};
 use yc_hub::runtime;
 use yc_ml::{AsrEngine, Backend, CampPlusEmbedder};
@@ -100,6 +100,7 @@ async fn asr(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<Me
         predicted: predicted.est_realtime_x.unwrap_or_default(),
         measured: x,
         measured_at_unix: now_unix(),
+        cost_epoch: COST_EPOCH,
     })?;
     Ok(Measured { value: x })
 }
@@ -140,6 +141,7 @@ async fn embed(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Result<
         predicted: predicted_rate,
         measured: passages,
         measured_at_unix: now_unix(),
+        cost_epoch: COST_EPOCH,
     })?;
     Ok(Measured { value: passages })
 }
@@ -193,6 +195,7 @@ async fn speaker(hub: &ModelHub, insights: &Insights, spec: &ModelSpec) -> Resul
         predicted: 0.0,
         measured: x,
         measured_at_unix: now_unix(),
+        cost_epoch: COST_EPOCH,
     })?;
     Ok(Measured { value: x })
 }

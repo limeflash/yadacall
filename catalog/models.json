@@ -1422,7 +1422,7 @@
         "headDim": 0,
         "context": 32768,
         "bufferFraction": 0.12,
-        "efficiency": 0.55,
+        "efficiency": 0.2,
         "localLayerFraction": 0.0,
         "globalLayerFraction": 1.0,
         "attention": {
