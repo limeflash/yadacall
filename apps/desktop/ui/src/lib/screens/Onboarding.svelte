@@ -18,7 +18,7 @@
   import { saveSettings, theme } from "../state.svelte";
   import { t, i18n } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
-  import { isMac } from "../platform";
+  import { isMac, overlayTitleBar } from "../platform";
   import { bytes } from "../format";
   import { toast } from "../toast.svelte";
   import { activateModel, attachModels, modelAct, modelById, mstore, setPending } from "../modelsStore.svelte";
@@ -167,13 +167,8 @@
   </div>
 {/snippet}
 
-<div class="wrap">
-  <div class="top">
-    <Segmented variant="lang" label={t("Язык")} value={i18n.lang} onchange={(v) => saveSettings({ uiLanguage: v })} options={[{ value: "ru", label: "RU" }, { value: "en", label: "EN" }]} />
-    <ThemeToggle dark={theme.resolved === "dark"} onchange={(v) => saveSettings({ theme: v })} />
-  </div>
-
-  <div class="inner">
+<div class="wrap" class:mac={overlayTitleBar}>
+  <header class="head">
     <nav aria-label={t("Шаги")}>
       <ol class="dots">
         {#each STEPS as st, i (st.id)}
@@ -184,12 +179,18 @@
       </ol>
       <p class="count mg-mono">{step + 1} / {STEPS.length}{step > 0 ? ` · ${t(STEPS[step].title)}` : ""}</p>
     </nav>
+    <div class="top">
+      <Segmented variant="lang" label={t("Язык")} value={i18n.lang} onchange={(v) => saveSettings({ uiLanguage: v })} options={[{ value: "ru", label: "RU" }, { value: "en", label: "EN" }]} />
+      <ThemeToggle dark={theme.resolved === "dark"} onchange={(v) => saveSettings({ theme: v })} />
+    </div>
+  </header>
 
+  <main class="stage">
     {#key step}
       <section class="step" class:back aria-labelledby="ob-h">
         {#if step === 0}
           <div class="hero">
-            <div class="yc-float" style="width: 112px; height: 112px"><Mascot size={112} accent={theme.accent} /></div>
+            <div class="yc-float mascot"><Mascot size="100%" accent={theme.accent} /></div>
             <h1 id="ob-h" class="yc-balance">{t("Привет! Я YadaCall")}</h1>
             <p class="lead yc-pretty">{t("Записываю звонки, расшифровываю их и собираю итоги. Настроим всё за пару минут.")}</p>
           </div>
@@ -222,7 +223,7 @@
         {:else if step === 3}
           <h1 id="ob-h">{t("Итоги встреч")}</h1>
           <p class="lead">{t("После встречи — короткое резюме, решения и задачи. Можно не собирать: останется расшифровка и поиск.")}</p>
-          <div role="radiogroup" aria-label={t("Чем собирать итоги")} class="opts">
+          <div role="radiogroup" aria-label={t("Чем собирать итоги")} class="opts grid">
             {#each modeOptions as o (o.id)}
               <button type="button" role="radio" aria-checked={mode === o.id} aria-disabled={o.off} class="opt yc-press" class:on={mode === o.id} class:off={o.off} onclick={() => { if (!o.off) { mode = o.id; persist(); } }}>
                 <span aria-hidden="true" class="radio"></span>
@@ -286,7 +287,7 @@
           <p class="note"><Icon name="info" size={13} />{t("Можно пропустить: потом это в Настройки → Подключения.")}</p>
         {:else}
           <div class="hero tight">
-            <div class="yc-float" style="width: 84px; height: 84px"><Mascot size={84} accent={theme.accent} /></div>
+            <div class="yc-float mascot sm"><Mascot size="100%" accent={theme.accent} /></div>
             <h1 id="ob-h" class="yc-balance">{t("Всё готово")}</h1>
           </div>
           <div class="card">
@@ -300,8 +301,9 @@
         {/if}
       </section>
     {/key}
+  </main>
 
-    <div class="foot">
+  <footer class="foot">
       <Button variant="ghost" onclick={prev} disabled={step === 0 || finishing} style={step === 0 ? "visibility: hidden" : ""}>{t("Назад")}</Button>
       <span class="hintk"><kbd class="mg-kbd">Enter</kbd> {t("далее")} · <kbd class="mg-kbd">Esc</kbd> {t("назад")}</span>
       {#if step === LAST}
@@ -309,8 +311,7 @@
       {:else}
         <Button variant="primary" onclick={next} disabled={!canNext}>{step === 0 ? t("Поехали") : step === 5 && !accounts.length ? t("Пропустить") : t("Далее")}</Button>
       {/if}
-    </div>
-  </div>
+  </footer>
 </div>
 
 <Sheet open={sheet !== null} title={sheet === "llm" ? t("Модель для итогов") : t("Модель расшифровки")} onclose={() => (sheet = null)}>
@@ -321,10 +322,21 @@
 </Sheet>
 
 <style>
-  .wrap { min-height: 100vh; height: 100%; box-sizing: border-box; position: relative; display: flex; align-items: flex-start; justify-content: center; padding: clamp(56px, 11vh, 120px) 20px 32px; background: var(--bg); overflow-y: auto; }
-  .top { position: absolute; top: 16px; right: 18px; display: flex; align-items: center; gap: 10px; z-index: 25; }
-  .inner { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 22px; margin: 0 auto; }
-  nav { display: flex; flex-direction: column; gap: 8px; }
+  /* Full-height page that never scrolls: step bar on top, content centred in the remaining height, footer pinned.
+     Vertical rhythm (--g) and the mascot scale with the viewport height. */
+  .wrap {
+    --g: clamp(8px, 1.9vh, 16px);
+    --inset-top: 20px;
+    height: 100%; box-sizing: border-box; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; justify-items: center;
+    padding: var(--inset-top) 20px clamp(14px, 3vh, 28px); background: var(--bg); overflow: hidden;
+  }
+  /* macOS overlay title bar: keep clear of the traffic lights (y 20–32) and the 28px drag strip. */
+  .wrap.mac { --inset-top: 38px; }
+  .head { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr); align-items: center; column-gap: 16px; }
+  .head nav { grid-column: 2; }
+  .top { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 10px; margin-right: -2px; }
+  .stage { width: 100%; max-width: 480px; min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--g) 0; }
+  nav { display: flex; flex-direction: column; gap: 6px; }
   .dots { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
   .dot { flex: 1; }
   .seg { display: block; width: 100%; height: 16px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
@@ -335,23 +347,27 @@
   .seg:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; border-radius: 4px; }
   .count { margin: 0; font-size: 11.5px; color: var(--muted); }
 
-  .step { display: flex; flex-direction: column; gap: 14px; min-height: 330px; animation: stepIn 0.4s var(--ease-out-soft, ease-out) both; }
+  .step { width: 100%; display: flex; flex-direction: column; gap: var(--g); animation: stepIn 0.4s var(--ease-out-soft, ease-out) both; }
   .step.back { animation-name: stepBack; }
   @keyframes stepIn { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: none; } }
   @keyframes stepBack { from { opacity: 0; transform: translateX(-22px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .step { animation: none; } }
 
-  h1 { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 800; letter-spacing: -0.035em; }
-  .lead { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
-  .hero { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding-top: 4px; }
-  .hero.tight { gap: 8px; }
-  .facts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-  .facts li { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: 13.5px; line-height: 1.4; }
+  h1 { margin: 0; font-size: clamp(21px, 3.5vh, 24px); line-height: 1.2; font-weight: 800; letter-spacing: -0.035em; }
+  .lead { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+  .hero { display: flex; flex-direction: column; align-items: center; gap: calc(var(--g) * 0.8); text-align: center; }
+  .mascot { width: clamp(72px, 17vh, 150px); height: clamp(72px, 17vh, 150px); }
+  .mascot.sm { width: clamp(64px, 12vh, 96px); height: clamp(64px, 12vh, 96px); }
+  .facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--g) * 0.6); }
+  .facts li { display: flex; align-items: center; gap: 12px; padding: clamp(7px, 1.4vh, 11px) 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: 13.5px; line-height: 1.4; }
   .ic { width: 30px; height: 30px; flex: none; border-radius: 9px; background: var(--surface-2); color: var(--muted); display: grid; place-items: center; }
   .facts .ic { background: var(--accent-soft); color: var(--accent-text); }
 
-  .opts { display: flex; flex-direction: column; gap: 8px; }
-  .opt { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color 0.2s, background-color 0.2s; }
+  .opts { display: flex; flex-direction: column; gap: calc(var(--g) * 0.5); }
+  .opts.grid { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--g) * 0.6); }
+  .opts.grid .opt { align-items: flex-start; }
+  .opts.grid .radio { margin-top: 3px; }
+  .opt { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; padding: clamp(7px, 1.3vh, 11px) 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color 0.2s, background-color 0.2s; }
   .opt:hover:not(.off) { border-color: var(--accent-line); }
   .opt.on { border-color: var(--accent); background: var(--accent-soft); }
   .opt.off { opacity: 0.5; cursor: not-allowed; }
@@ -361,9 +377,9 @@
   .two { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .ot { font-size: 14px; font-weight: 700; }
   .s { font-size: 12px; color: var(--muted); }
-  .sub { display: flex; flex-direction: column; gap: 10px; }
+  .sub { display: flex; flex-direction: column; gap: calc(var(--g) * 0.6); }
 
-  .mcard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--accent-line); border-radius: 14px; background: var(--surface); }
+  .mcard { display: flex; align-items: center; gap: 12px; padding: clamp(8px, 1.5vh, 12px) 14px; border: 1px solid var(--accent-line); border-radius: 14px; background: var(--surface); }
   .mn { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
   .nm { font-size: 13.5px; font-weight: 700; }
   .tg { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); border: 1px solid var(--accent-line); font-size: 10.5px; font-weight: 700; }
@@ -375,12 +391,12 @@
   .note.big { font-size: 13px; color: var(--text); }
 
   .card { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
-  .row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: clamp(8px, 1.6vh, 13px) 16px; }
   .bt { border-top: 1px solid var(--border); }
   .k { flex: none; width: 120px; font-size: 12.5px; color: var(--muted); }
   .v { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 
-  .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .foot { width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .hintk { flex: 1; text-align: center; font-size: 11px; color: var(--muted); }
   .hintk :global(.mg-kbd) { display: inline-flex; height: 18px; min-width: 18px; font-size: 10px; vertical-align: middle; }
   .hintf { font-size: 12px; color: var(--muted); }
