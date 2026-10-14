@@ -453,9 +453,37 @@ impl Downloader {
         remove_directory(&self.root.join("models").join(model_id)).await
     }
 
-    /// Remove the repository-keyed model directory for a catalog entry.
+    /// Remove this catalog entry's files, preserving files owned by sibling entries.
     pub async fn remove_model(&self, model: &ModelSpec) -> Result<()> {
-        remove_directory(&model_storage_dir(&self.root, model)?).await
+        let directory = model_storage_dir(&self.root, model)?;
+        let catalog = crate::catalog::embedded()?;
+        let siblings = catalog
+            .models
+            .iter()
+            .filter(|candidate| {
+                candidate.id != model.id
+                    && model_storage_dir(&self.root, candidate).is_ok_and(|dir| dir == directory)
+            })
+            .collect::<Vec<_>>();
+
+        for file in &model.files {
+            let relative = safe_relative_path(&file.path)?;
+            if siblings.iter().any(|sibling| {
+                sibling
+                    .files
+                    .iter()
+                    .any(|other| safe_relative_path(&other.path).is_ok_and(|p| p == relative))
+            }) {
+                continue;
+            }
+            let target = directory.join(relative);
+            remove_file_if_present(&target).await?;
+            remove_file_if_present(&append_suffix(&target, ".part")).await?;
+            remove_file_if_present(&append_suffix(&append_suffix(&target, ".part"), ".json"))
+                .await?;
+        }
+        prune_empty_directories(&directory).await?;
+        Ok(())
     }
 
     /// Remove a downloaded runtime directory.
@@ -2279,6 +2307,35 @@ async fn remove_directory(path: &Path) -> Result<()> {
     }
 }
 
+async fn prune_empty_directories(path: &Path) -> Result<()> {
+    let mut pending = vec![path.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let mut entries = match tokio::fs::read_dir(&directory).await {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        let mut children = Vec::new();
+        while let Some(entry) = entries.next_entry().await? {
+            if entry.file_type().await?.is_dir() {
+                children.push(entry.path());
+            }
+        }
+        if children.is_empty() {
+            match tokio::fs::remove_dir(&directory).await {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) if error.kind() == io::ErrorKind::DirectoryNotEmpty => {}
+                Err(error) => return Err(error.into()),
+            }
+        } else {
+            pending.push(directory);
+            pending.extend(children);
+        }
+    }
+    Ok(())
+}
+
 async fn atomic_install(source: &Path, destination: &Path) -> Result<()> {
     let source = source.to_path_buf();
     let destination = destination.to_path_buf();
@@ -2348,6 +2405,41 @@ mod tests {
     use crate::catalog::{ModelCost, ModelKind, ModelSpec, Requirements};
     use yc_core::events::{DownloadState, EngineEvent};
 
+    /// Models users already have on disk must keep their directory: a changed storage key makes an
+    /// installed model look missing (adding `hfRepo` to an entry changes it). Shipped in 0.1.3.
+    #[test]
+    fn shipped_models_keep_their_storage_directories() {
+        let root = Path::new("/data");
+        let catalog = crate::catalog::embedded().expect("embedded catalog");
+        for (id, dir) in [
+            ("gigaam-v3-e2e-rnnt-int8", "istupakov__gigaam-v3-onnx"),
+            ("gigaam-v3-e2e-ctc-int8", "istupakov__gigaam-v3-onnx"),
+            (
+                "parakeet-tdt-0.6b-v3-int8",
+                "istupakov__parakeet-tdt-0.6b-v3-onnx",
+            ),
+            ("silero-vad-v5", "silero-vad-v5"),
+            ("speaker-campplus-zh-en-16k", "speaker-campplus-zh-en-16k"),
+            (
+                "multilingual-e5-small-int8",
+                "Xenova__multilingual-e5-small",
+            ),
+            ("gemma-4-e2b-q4-0", "ggml-org__gemma-4-E2B-it-GGUF"),
+            ("gemma-4-e4b-q4-0", "ggml-org__gemma-4-E4B-it-GGUF"),
+        ] {
+            let spec = catalog
+                .models
+                .iter()
+                .find(|model| model.id == id)
+                .unwrap_or_else(|| panic!("{id} left the catalog"));
+            assert_eq!(
+                model_storage_dir(root, spec).expect("storage dir"),
+                root.join("models").join(dir),
+                "{id} moved to another directory"
+            );
+        }
+    }
+
     const LARGE_FILE_SIZE: usize = 32 * 1024 * 1024 + 129;
 
     #[test]
@@ -2359,6 +2451,82 @@ mod tests {
             path,
             Path::new("/cache/models/ggml-org__gemma-4-E2B-it-GGUF")
         );
+    }
+
+    #[tokio::test]
+    async fn removing_catalog_entry_preserves_sibling_and_cleans_partial_state() {
+        let root = temp_dir("remove-shared-model");
+        let downloader = Downloader::new(&root).expect("downloader");
+        let catalog = crate::catalog::embedded().expect("catalog");
+        let rnnt = crate::catalog::model(&catalog, "gigaam-v3-e2e-rnnt-int8").unwrap();
+        let ctc = crate::catalog::model(&catalog, "gigaam-v3-e2e-ctc-int8").unwrap();
+        let directory = model_storage_dir(&root, ctc).unwrap();
+        assert_eq!(directory, model_storage_dir(&root, rnnt).unwrap());
+        tokio::fs::create_dir_all(&directory).await.unwrap();
+        let rnnt_path = directory.join(&rnnt.files[0].path);
+        let ctc_path = directory.join(&ctc.files[0].path);
+        let ctc_part = super::append_suffix(&ctc_path, ".part");
+        let ctc_state = super::append_suffix(&ctc_part, ".json");
+        for path in [&rnnt_path, &ctc_path, &ctc_part, &ctc_state] {
+            tokio::fs::write(path, b"test").await.unwrap();
+        }
+
+        downloader.remove_model(ctc).await.unwrap();
+
+        assert!(rnnt_path.exists(), "the sibling RNNT artifact remains");
+        assert!(!ctc_path.exists());
+        assert!(!ctc_part.exists());
+        assert!(!ctc_state.exists());
+        assert!(directory.exists());
+        let _ = tokio::fs::remove_dir_all(root).await;
+    }
+
+    #[tokio::test]
+    async fn removing_last_entry_prunes_its_directory_and_partial_state() {
+        let root = temp_dir("remove-last-model");
+        let downloader = Downloader::new(&root).expect("downloader");
+        let file = spec_for("nested/model.bin", 4, String::new(), vec![]);
+        let spec = ModelSpec {
+            id: "private-test-model".to_owned(),
+            kind: ModelKind::Asr,
+            name: "private test model".to_owned(),
+            description_ru: String::new(),
+            description_en: String::new(),
+            languages: Vec::new(),
+            vendor: String::new(),
+            family: String::new(),
+            tags: Vec::new(),
+            license: "MIT".to_owned(),
+            license_url: None,
+            license_custom: false,
+            homepage: String::new(),
+            quality_rank: 0,
+            default_tiers: Vec::new(),
+            files: vec![file],
+            requires: Requirements::default(),
+            cost: ModelCost::default(),
+            engine: None,
+            engine_files: None,
+            llm: None,
+            todo: None,
+        };
+        let directory = model_storage_dir(&root, &spec).unwrap();
+        let file = directory.join(&spec.files[0].path);
+        let part = super::append_suffix(&file, ".part");
+        let state = super::append_suffix(&part, ".json");
+        tokio::fs::create_dir_all(file.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&part, b"partial").await.unwrap();
+        tokio::fs::write(&state, b"state").await.unwrap();
+
+        downloader.remove_model(&spec).await.unwrap();
+
+        assert!(!directory.exists());
+        assert!(!file.exists());
+        assert!(!part.exists());
+        assert!(!state.exists());
+        let _ = tokio::fs::remove_dir_all(root).await;
     }
 
     #[tokio::test]

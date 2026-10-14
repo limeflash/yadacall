@@ -200,12 +200,17 @@ impl VoiceActivityDetector for SileroVad {
         self.samples_received = self.samples_received.saturating_add(pcm.len() as u64);
         self.frame_buffer.extend_from_slice(pcm);
         let mut regions = Vec::new();
-        while self.frame_buffer.len() >= FRAME_SAMPLES {
+        let mut consumed = 0;
+        while self.frame_buffer.len() - consumed >= FRAME_SAMPLES {
             let mut frame = [0.0; FRAME_SAMPLES];
-            frame.copy_from_slice(&self.frame_buffer[..FRAME_SAMPLES]);
-            self.frame_buffer.drain(..FRAME_SAMPLES);
-            self.process_frame(&frame, &mut regions)?;
+            frame.copy_from_slice(&self.frame_buffer[consumed..consumed + FRAME_SAMPLES]);
+            consumed += FRAME_SAMPLES;
+            if let Err(error) = self.process_frame(&frame, &mut regions) {
+                self.compact_frame_buffer(consumed);
+                return Err(error);
+            }
         }
+        self.compact_frame_buffer(consumed);
         Ok(regions)
     }
 
@@ -223,9 +228,62 @@ impl VoiceActivityDetector for SileroVad {
     }
 }
 
+impl SileroVad {
+    /// Drop all complete frames consumed by the last push in one linear move.
+    fn compact_frame_buffer(&mut self, consumed: usize) {
+        if consumed == 0 {
+            return;
+        }
+        self.frame_buffer.copy_within(consumed.., 0);
+        self.frame_buffer
+            .truncate(self.frame_buffer.len() - consumed);
+    }
+}
+
 fn model_error(model: &str, error: impl std::fmt::Display) -> Error {
     Error::Model {
         model: model.to_owned(),
         message: error.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn large_push_matches_one_second_pushes() {
+        let cache = std::env::temp_dir().join(format!(
+            "yc-vad-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&cache).expect("create temporary model cache");
+        let audio = (0..16_000 * 20)
+            .map(|sample| {
+                let second = sample / 16_000;
+                if (2..6).contains(&second) || (10..15).contains(&second) {
+                    (2.0 * std::f32::consts::PI * 220.0 * sample as f32 / 16_000.0).sin() * 0.2
+                } else {
+                    0.0
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut single = SileroVad::load(Backend::Cpu, &cache).expect("VAD model");
+        let mut chunked = SileroVad::load(Backend::Cpu, &cache).expect("VAD model");
+
+        let mut single_regions = single.push(&audio).expect("single large push");
+        single_regions.extend(single.flush());
+        let mut chunked_regions = Vec::new();
+        for chunk in audio.chunks(16_000) {
+            chunked_regions.extend(chunked.push(chunk).expect("one-second push"));
+        }
+        chunked_regions.extend(chunked.flush());
+
+        assert_eq!(single_regions, chunked_regions);
+        std::fs::remove_dir_all(cache).expect("remove temporary model cache");
     }
 }

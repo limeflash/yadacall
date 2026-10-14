@@ -543,18 +543,9 @@ impl EngineBackend {
         if self.engine().recording().is_some() {
             return Err(Error::Invalid("a recording is in progress".into()));
         }
-        let dir = self.hub.dir(&spec)?;
-        for f in &spec.files {
-            let p = dir.join(&f.path);
-            let mut part = p.clone().into_os_string();
-            part.push(".part");
-            let mut state = part.clone();
-            state.push(".json");
-            for q in [p, part.into(), state.into()] {
-                let _ = std::fs::remove_file::<std::path::PathBuf>(q);
-            }
-        }
-        prune_empty(&dir);
+        Downloader::new(self.hub.root())?
+            .remove_model(&spec)
+            .await?;
         self.engine()
             .update_settings(|s| {
                 for slot in [
@@ -608,17 +599,6 @@ impl EngineBackend {
 
 fn file_complete(dir: &Path, rel: &str, size: u64) -> bool {
     std::fs::metadata(dir.join(rel)).is_ok_and(|m| m.len() == size)
-}
-
-fn prune_empty(dir: &Path) {
-    if let Ok(rd) = std::fs::read_dir(dir) {
-        for e in rd.flatten() {
-            if e.path().is_dir() {
-                prune_empty(&e.path());
-            }
-        }
-    }
-    let _ = std::fs::remove_dir(dir); // only succeeds when empty
 }
 
 #[cfg(test)]

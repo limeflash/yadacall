@@ -182,13 +182,7 @@ pub async fn summarize(
             total_windows: 0,
         });
         let request = summary_request(system.clone(), full_prompt, options.output_reserve.max(256));
-        request_valid_summary(
-            provider,
-            request,
-            input.meeting.duration_ms,
-            title_is_untitled,
-        )
-        .await?
+        request_valid_summary(provider, request, title_is_untitled).await?
     } else {
         let window_budget = WINDOW_TOKEN_LIMIT.min(available.saturating_sub(512).max(256));
         let windows = make_windows(provider, &input.turns, &input.bookmarks, window_budget).await?;
@@ -214,13 +208,7 @@ pub async fn summarize(
                 prompt,
                 options.output_reserve.clamp(256, 2_000),
             );
-            let partial = request_valid_summary(
-                provider,
-                request,
-                input.meeting.duration_ms,
-                title_is_untitled,
-            )
-            .await?;
+            let partial = request_valid_summary(provider, request, title_is_untitled).await?;
             partials.push(serde_json::to_string(&partial).map_err(|error| {
                 Error::Llm(format!("could not encode partial summary: {error}"))
             })?);
@@ -239,18 +227,13 @@ pub async fn summarize(
             partials.join("\n")
         );
         let request = summary_request(merge_system, merge_input, options.output_reserve.max(256));
-        request_valid_summary(
-            provider,
-            request,
-            input.meeting.duration_ms,
-            title_is_untitled,
-        )
-        .await?
+        request_valid_summary(provider, request, title_is_untitled).await?
     };
     to_core_summary(
         summary_json,
         &language,
         &format!("{}:{}", provider.provider_id(), provider.model()),
+        input.meeting.duration_ms,
     )
 }
 
@@ -272,11 +255,10 @@ fn summary_request(system: String, prompt: String, max_tokens: usize) -> ChatReq
 async fn request_valid_summary(
     provider: &dyn ChatProvider,
     request: ChatRequest,
-    duration_ms: u64,
     title_is_untitled: bool,
 ) -> Result<SummaryJson> {
     let first = provider.complete(request.clone()).await?;
-    match parse_and_validate(&first, duration_ms, title_is_untitled) {
+    match parse_and_validate(&first, title_is_untitled) {
         Ok(parsed) => Ok(parsed),
         Err(error) => {
             let mut retry = request;
@@ -291,7 +273,7 @@ async fn request_valid_summary(
                 );
             }
             let response = provider.complete(retry).await?;
-            parse_and_validate(&response, duration_ms, title_is_untitled).map_err(|second| {
+            parse_and_validate(&response, title_is_untitled).map_err(|second| {
                 Error::Llm(format!(
                     "summary JSON remained invalid after one retry: {second}"
                 ))
@@ -302,7 +284,6 @@ async fn request_valid_summary(
 
 fn parse_and_validate(
     response: &ChatResponse,
-    duration_ms: u64,
     title_is_untitled: bool,
 ) -> std::result::Result<SummaryJson, String> {
     let mut parsed: SummaryJson = serde_json::from_str(json_body(&response.text))
@@ -317,26 +298,8 @@ fn parse_and_validate(
     }) {
         parsed.title = None;
     }
-    for decision in &parsed.decisions {
-        let at_ms = parse_timestamp(&decision.at)
-            .ok_or_else(|| format!("invalid decision timestamp `{}`", decision.at))?;
-        if at_ms > duration_ms {
-            return Err(format!(
-                "decision timestamp `{}` exceeds meeting duration",
-                decision.at
-            ));
-        }
-    }
-    for task in &parsed.tasks {
-        let at_ms = parse_timestamp(&task.at)
-            .ok_or_else(|| format!("invalid task timestamp `{}`", task.at))?;
-        if at_ms > duration_ms {
-            return Err(format!(
-                "task timestamp `{}` exceeds meeting duration",
-                task.at
-            ));
-        }
-    }
+    // Timestamps are optional in the domain model. Bad anchors are dropped after parsing, without
+    // spending a retry or discarding the summary; invalid JSON/schema and empty `about` still retry.
     Ok(parsed)
 }
 
@@ -353,7 +316,12 @@ fn json_body(text: &str) -> &str {
     }
 }
 
-fn to_core_summary(value: SummaryJson, language: &str, model: &str) -> Result<Summary> {
+fn to_core_summary(
+    value: SummaryJson,
+    language: &str,
+    model: &str,
+    duration_ms: u64,
+) -> Result<Summary> {
     Ok(Summary {
         title: value.title,
         about: value.about,
@@ -363,9 +331,7 @@ fn to_core_summary(value: SummaryJson, language: &str, model: &str) -> Result<Su
             .map(|decision| {
                 Ok(Decision {
                     text: decision.text,
-                    at_ms: Some(parse_timestamp(&decision.at).ok_or_else(|| {
-                        Error::Llm(format!("invalid decision timestamp `{}`", decision.at))
-                    })?),
+                    at_ms: valid_anchor(&decision.at, duration_ms),
                 })
             })
             .collect::<Result<Vec<_>>>()?,
@@ -377,9 +343,7 @@ fn to_core_summary(value: SummaryJson, language: &str, model: &str) -> Result<Su
                     text: task.text,
                     owner: task.owner,
                     due: task.due,
-                    at_ms: Some(parse_timestamp(&task.at).ok_or_else(|| {
-                        Error::Llm(format!("invalid task timestamp `{}`", task.at))
-                    })?),
+                    at_ms: valid_anchor(&task.at, duration_ms),
                     done: false,
                 })
             })
@@ -388,6 +352,10 @@ fn to_core_summary(value: SummaryJson, language: &str, model: &str) -> Result<Su
         language: language.to_owned(),
         model: model.to_owned(),
     })
+}
+
+fn valid_anchor(value: &str, duration_ms: u64) -> Option<u64> {
+    parse_timestamp(value).filter(|at_ms| *at_ms <= duration_ms)
 }
 
 fn summary_schema() -> JsonSchema {
@@ -716,9 +684,9 @@ mod tests {
             json!({"text":"{}", "usage":{}, "timings":{}, "stop_reason":null}),
         )
         .expect("response");
-        assert!(parse_and_validate(&missing, 99_000, false).is_err());
+        assert!(parse_and_validate(&missing, false).is_err());
         let extra = ChatResponse { text: r#"{"title":null,"about":["ok"],"decisions":[],"tasks":[],"open_questions":[],"extra":true}"#.to_owned(), usage: TokenUsage::default(), timings: Timings::default(), stop_reason: None };
-        assert!(parse_and_validate(&extra, 99_000, false).is_err());
+        assert!(parse_and_validate(&extra, false).is_err());
     }
 
     #[test]
@@ -732,7 +700,7 @@ mod tests {
             stop_reason: None,
         };
         let title = |text: &str, untitled: bool| {
-            parse_and_validate(&response(text), 99_000, untitled)
+            parse_and_validate(&response(text), untitled)
                 .expect("a title problem must not fail the summary")
                 .title
         };
@@ -748,6 +716,25 @@ mod tests {
         ] {
             assert_eq!(title(generic, true), None);
         }
+    }
+
+    #[test]
+    fn malformed_and_out_of_range_anchors_do_not_discard_summary() {
+        let response = ChatResponse {
+            text: r#"{"title":null,"about":["ok"],"decisions":[{"text":"bad format","at":"2026:11:10"},{"text":"too late","at":"02:00"},{"text":"good","at":"00:30"}],"tasks":[{"text":"bad format","owner":null,"due":null,"at":"nope"},{"text":"too late","owner":null,"due":null,"at":"01:30"}],"open_questions":[]}"#.to_owned(),
+            usage: TokenUsage::default(),
+            timings: Timings::default(),
+            stop_reason: None,
+        };
+        let parsed = parse_and_validate(&response, false)
+            .expect("bad timestamps should not discard otherwise valid summary");
+        let summary = to_core_summary(parsed, "en", "test", 60_000).expect("core summary");
+        assert_eq!(summary.about, ["ok"]);
+        assert_eq!(summary.decisions[0].at_ms, None);
+        assert_eq!(summary.decisions[1].at_ms, None);
+        assert_eq!(summary.decisions[2].at_ms, Some(30_000));
+        assert_eq!(summary.tasks[0].at_ms, None);
+        assert_eq!(summary.tasks[1].at_ms, None);
     }
 
     #[test]

@@ -19,8 +19,10 @@ use yc_hub::runtime::{self, RuntimeBackend};
 pub const ASR_GIGAAM: &str = "gigaam-v3-e2e-rnnt-int8";
 /// GigaAM v3 e2e CTC.
 pub const ASR_GIGAAM_CTC: &str = "gigaam-v3-e2e-ctc-int8";
-/// Parakeet TDT 0.6B v3 (25 languages, the default for everything but `ru`).
-pub const ASR_PARAKEET: &str = "parakeet-tdt-0.6b-v3-int8";
+/// Parakeet TDT 0.6B v3 Ultra (the default for everything but `ru`).
+pub const ASR_PARAKEET: &str = "parakeet-tdt-0.6b-v3-ultra-int8";
+/// Original v3 model retained as an installed-model fallback.
+pub const ASR_PARAKEET_V3: &str = "parakeet-tdt-0.6b-v3-int8";
 /// CAM++ speaker embeddings.
 pub const SPEAKER_CAMPPLUS: &str = "speaker-campplus-zh-en-16k";
 /// Default text-embedding model.
@@ -110,13 +112,18 @@ impl ModelHub {
         }
     }
 
-    /// The installed ASR model to use: the user's choice if installed, else the language default, else
-    /// any installed one.
+    /// The installed ASR model to use: the user's choice if installed, else the language default,
+    /// then other compatible installed models (including the original v3 for existing users).
     pub fn pick_asr(&self, language: &str, chosen: Option<&str>) -> Result<&ModelSpec> {
-        let candidates =
-            chosen
-                .into_iter()
-                .chain([Self::default_asr(language), ASR_GIGAAM, ASR_PARAKEET]);
+        let language_fallbacks = if language.eq_ignore_ascii_case("ru") {
+            [ASR_GIGAAM, ASR_PARAKEET, ASR_PARAKEET_V3]
+        } else {
+            [ASR_PARAKEET, ASR_PARAKEET_V3, ASR_GIGAAM]
+        };
+        let candidates = chosen
+            .into_iter()
+            .chain([Self::default_asr(language)])
+            .chain(language_fallbacks);
         for id in candidates {
             if let Ok(spec) = self.spec(id)
                 && self.is_installed(spec)
@@ -370,6 +377,15 @@ mod tests {
             hub.pick_asr("ru", Some(ASR_GIGAAM_CTC)).unwrap().id,
             ASR_GIGAAM
         );
+    }
+
+    #[test]
+    fn installed_original_parakeet_v3_remains_a_fallback_without_downloading_ultra() {
+        let tmp = tempfile::tempdir().unwrap();
+        let hub = ModelHub::new(tmp.path()).unwrap();
+        install(&hub, ASR_PARAKEET_V3);
+        assert_eq!(hub.pick_asr("en", None).unwrap().id, ASR_PARAKEET_V3);
+        assert!(!hub.is_installed(hub.spec(ASR_PARAKEET).unwrap()));
     }
 
     #[test]

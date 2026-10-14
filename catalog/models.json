@@ -148,16 +148,14 @@
       "id": "parakeet-tdt-0.6b-v3-int8",
       "kind": "asr",
       "name": "Parakeet TDT 0.6B v3 int8",
-      "descriptionRu": "Мультиязычное распознавание 25 европейских языков.",
-      "descriptionEn": "Multilingual recognition for 25 European languages.",
+      "descriptionRu": "25 языков; запасной вариант для старых установок (Ultra точнее по замерам).",
+      "descriptionEn": "25 languages; retained for existing installs (Ultra scored better in our benchmark).",
       "languages": [
         "multilingual"
       ],
       "license": "CC-BY-4.0",
       "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-      "defaultTiers": [
-        "multilingual"
-      ],
+      "defaultTiers": [],
       "files": [
         {
           "path": "encoder-model.int8.onnx",
@@ -307,8 +305,8 @@
       "id": "parakeet-tdt-0.6b-v3-ultra-int8",
       "kind": "asr",
       "name": "Parakeet TDT 0.6B v3 Ultra int8",
-      "descriptionRu": "Порт ONNX от сообщества для fine-tune Moondream; авторы сообщают об улучшении русского FLEURS.",
-      "descriptionEn": "Community ONNX port of the Moondream fine-tune; its authors report a better Russian FLEURS score.",
+      "descriptionRu": "В наших тестах: WER RU 17,5% против 22,3%; EN Earnings-22 15,8% против 21,2%; LibriSpeech 2,4% против 3,4%; путаница некириллических языков 2,5% против 5,2% у v3.",
+      "descriptionEn": "Our tests: RU WER 17.5% vs 22.3%; EN Earnings-22 15.8% vs 21.2%; LibriSpeech 2.4% vs 3.4%; non-Cyrillic confusion 2.5% vs 5.2% for v3.",
       "languages": [
         "multilingual"
       ],
@@ -319,8 +317,10 @@
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
       "licenseCustom": true,
       "homepage": "https://huggingface.co/moondream/parakeet-ultra",
-      "qualityRank": 89,
-      "defaultTiers": [],
+      "qualityRank": 96,
+      "defaultTiers": [
+        "multilingual"
+      ],
       "files": [
         {
           "path": "encoder-model.int8.onnx",
@@ -473,7 +473,6 @@
             "https://raw.githubusercontent.com/snakers4/silero-vad/v5.1.2/src/silero_vad/data/silero_vad.onnx",
             "https://huggingface.co/deepghs/silero-vad-onnx/resolve/main/silero_vad.onnx?download=true"
           ],
-          "hfRepo": "deepghs/silero-vad-onnx",
           "optional": false
         }
       ],
@@ -518,7 +517,6 @@
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
             "https://huggingface.co/bitsydarel/campplus-onnx/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx?download=true"
           ],
-          "hfRepo": "bitsydarel/campplus-onnx",
           "optional": false
         }
       ],
