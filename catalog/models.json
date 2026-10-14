@@ -69,7 +69,7 @@
       },
       "cost": {
         "params": 200000000,
-        "gflopPerAudioSec": 3.0,
+        "gflopPerAudioSec": 5.0,
         "efficiency": 0.6,
         "bytes": 226430792
       },
@@ -77,7 +77,6 @@
       "vendor": "Сбер",
       "family": "GigaAM",
       "tags": [
-        "ru-tuned",
         "tiny"
       ],
       "qualityRank": 100,
@@ -128,7 +127,7 @@
       },
       "cost": {
         "params": 200000000,
-        "gflopPerAudioSec": 3.5,
+        "gflopPerAudioSec": 5.0,
         "efficiency": 0.6,
         "bytes": 224895354
       },
@@ -136,7 +135,6 @@
       "vendor": "Сбер",
       "family": "GigaAM",
       "tags": [
-        "ru-tuned",
         "tiny"
       ],
       "qualityRank": 86,
@@ -209,7 +207,7 @@
       },
       "cost": {
         "params": 600000000,
-        "gflopPerAudioSec": 12.0,
+        "gflopPerAudioSec": 6.0,
         "efficiency": 0.6,
         "bytes": 670619706
       },
@@ -218,7 +216,7 @@
       "family": "Parakeet",
       "tags": [],
       "qualityRank": 90,
-      "licenseCustom": true,
+      "licenseCustom": false,
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
       "engine": "parakeet-tdt"
     },
@@ -238,7 +236,7 @@
       ],
       "license": "CC-BY-4.0",
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "licenseCustom": true,
+      "licenseCustom": false,
       "homepage": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx",
       "qualityRank": 88,
       "defaultTiers": [],
@@ -296,7 +294,7 @@
       "cost": {
         "params": 600000000,
         "bytes": 661331448,
-        "gflopPerAudioSec": 12.0,
+        "gflopPerAudioSec": 6.0,
         "efficiency": 0.6
       },
       "engine": "parakeet-tdt"
@@ -315,7 +313,7 @@
       "tags": [],
       "license": "CC-BY-4.0",
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "licenseCustom": true,
+      "licenseCustom": false,
       "homepage": "https://huggingface.co/moondream/parakeet-ultra",
       "qualityRank": 96,
       "defaultTiers": [
@@ -377,7 +375,7 @@
       "cost": {
         "params": 600000000,
         "bytes": 667974518,
-        "gflopPerAudioSec": 12.0,
+        "gflopPerAudioSec": 6.0,
         "efficiency": 0.6
       },
       "engine": "parakeet-tdt",
@@ -441,7 +439,7 @@
       "cost": {
         "params": 220000000,
         "bytes": 224762597,
-        "gflopPerAudioSec": 3.5,
+        "gflopPerAudioSec": 5.2,
         "efficiency": 0.6
       },
       "engine": "gigaam-ctc",
@@ -1389,8 +1387,7 @@
       "vendor": "Сбер",
       "family": "GigaChat",
       "tags": [
-        "moe",
-        "ru-tuned"
+        "moe"
       ],
       "license": "MIT",
       "licenseUrl": "https://spdx.org/licenses/MIT.html",
@@ -1518,9 +1515,7 @@
       ],
       "vendor": "Яндекс",
       "family": "YandexGPT",
-      "tags": [
-        "ru-tuned"
-      ],
+      "tags": [],
       "license": "YandexGPT-5-Lite",
       "licenseUrl": "https://huggingface.co/yandex/YandexGPT-5-Lite-8B-instruct/blob/main/LICENSE",
       "licenseCustom": true,
