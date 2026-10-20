@@ -9,10 +9,18 @@
   import { t, plural } from "../i18n/index.svelte";
   import { href } from "../router.svelte";
   import { toast } from "../toast.svelte";
+  import { invoke } from "@tauri-apps/api/core";
 
   type Filter = "all" | "on" | "soon";
   let items = $state<Connection[]>([]);
   let filter = $state<Filter>("all");
+  let executable = $state("");
+  let allowWrite = $state(false);
+  onMount(() => { invoke<string>("executable_path").then((p) => (executable = p)).catch(() => {}); });
+  const args = $derived(allowWrite ? ["--mcp", "--allow-write"] : ["--mcp"]);
+  const desktopConfig = $derived(JSON.stringify({ mcpServers: { yadacall: { command: executable, args } } }, null, 2));
+  const codeCommand = $derived(`claude mcp add yadacall -- "${executable}" ${args.join(" ")}`);
+  async function copy(value: string) { try { await navigator.clipboard.writeText(value); toast(t("Скопировано")); } catch { toast.error(t("Не удалось скопировать")); } }
 
   async function load() { items = await integrations.connections(); }
   onMount(() => { load(); return onIntegrationEvent((e) => { if (e.type === "agendaChanged") load(); }); });
@@ -40,6 +48,17 @@
       </header>
 
       <FilterChips label={t("Какие сервисы показать")} value={filter} onchange={(v) => (filter = v)} {options} />
+
+      <section class="mcp-card">
+        <div class="mcp-title">{t("Подключить к Claude (MCP)")}</div>
+        <p>{t("Агент увидит тексты встреч, итоги и задачи. Звук не передаётся; агент может отправлять текст в свою облачную модель.")}</p>
+        <code>{executable || t("Путь к приложению загружается…")}</code>
+        <label class="mcp-toggle"><span>{t("Разрешить агенту отмечать задачи выполненными")}</span><input type="checkbox" bind:checked={allowWrite} /></label>
+        <div class="mcp-actions">
+          <button type="button" class="yc-press act" disabled={!executable} onclick={() => copy(desktopConfig)}>{t("Claude Desktop: скопировать JSON")}</button>
+          <button type="button" class="yc-press act" disabled={!executable} onclick={() => copy(codeCommand)}>{t("Claude Code: скопировать команду")}</button>
+        </div>
+      </section>
 
       <div class="grid">
         {#each list as c (c.id)}
@@ -103,4 +122,10 @@
   .act.primary { border: 0; background: var(--accent); color: var(--ink-on-accent); font-weight: 800; }
   .summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: 12.5px; color: var(--muted); }
   .note { display: flex; align-items: flex-start; gap: 7px; padding: 2px 2px 0; font-size: 12px; color: var(--muted); }
+  .mcp-card { display: flex; flex-direction: column; gap: 10px; padding: 15px; border: 1px solid var(--accent-line); border-radius: 16px; background: var(--surface); }
+  .mcp-title { font-size: 15px; font-weight: 800; }
+  .mcp-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+  .mcp-card code { overflow-wrap: anywhere; padding: 8px; border-radius: 8px; background: var(--surface-2); font-size: 11px; }
+  .mcp-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+  .mcp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>
