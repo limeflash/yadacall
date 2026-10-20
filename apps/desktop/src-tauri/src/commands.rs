@@ -414,6 +414,14 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// Return the current executable path for MCP client configuration.
+#[tauri::command]
+pub fn executable_path() -> String {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 /// Checks the configured release endpoint for a newer application version.
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> R<crate::updates::UpdateStatus> {

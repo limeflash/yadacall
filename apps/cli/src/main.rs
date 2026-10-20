@@ -39,6 +39,15 @@ enum Command {
     Ics(cmd::google::IcsArgs),
     /// Detect a Google Meet / Zoom / Teams call that is in progress.
     DetectCall(cmd::detect_call::DetectArgs),
+    /// Serve meeting data to MCP clients over stdio.
+    Mcp(McpArgs),
+}
+
+#[derive(clap::Args)]
+struct McpArgs {
+    /// Enable the complete_task write tool.
+    #[arg(long)]
+    allow_write: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -64,6 +73,7 @@ fn main() -> anyhow::Result<()> {
         Command::Google(args) => block_on(cmd::google::run(args))?,
         Command::Ics(args) => block_on(cmd::google::run_ics(args))?,
         Command::DetectCall(args) => block_on(cmd::detect_call::run(args))?,
+        Command::Mcp(args) => block_on(yc_mcp::serve(None, None, args.allow_write))?,
     }
 }
 

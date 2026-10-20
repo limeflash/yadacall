@@ -38,6 +38,28 @@ pub struct Store {
 }
 
 impl Store {
+    /// Open an existing library index without creating files or applying migrations.
+    pub fn open_read_only(
+        library_root: impl Into<PathBuf>,
+        database_path: impl Into<PathBuf>,
+    ) -> Result<Self> {
+        register_sqlite_vec();
+        let library_root = library_root.into();
+        let database_path = database_path.into();
+        let connection = Connection::open_with_flags(
+            database_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(storage_error)?;
+        connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(storage_error)?;
+        Ok(Self {
+            library_root,
+            connection: Mutex::new(connection),
+        })
+    }
+
     /// Open a meeting library and its index database, creating either when absent.
     pub fn open(
         library_root: impl Into<PathBuf>,
@@ -306,6 +328,36 @@ impl Store {
         }
         let mut connection = self.lock()?;
         db::configure_embedding_model(&mut connection, model_id, dimensions)
+    }
+
+    /// Return the active indexed embedding model and dimensions without changing the index.
+    pub fn active_embedding_model(&self) -> Result<Option<(String, usize)>> {
+        let connection = self.lock()?;
+        let model = connection
+            .query_row(
+                "SELECT value FROM meta WHERE key='embedding_model_id'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(storage_error)?;
+        let dimensions = connection
+            .query_row(
+                "SELECT value FROM meta WHERE key='embedding_dims'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(storage_error)?;
+        match (model, dimensions) {
+            (Some(model), Some(dimensions)) => {
+                let dimensions = dimensions.parse::<usize>().map_err(|error| {
+                    Error::Storage(format!("invalid embedding dimension metadata: {error}"))
+                })?;
+                Ok(Some((model, dimensions)))
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Store one embedding per indexed chunk for a meeting, replacing its previous vectors.
