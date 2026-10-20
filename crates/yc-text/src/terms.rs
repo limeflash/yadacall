@@ -51,6 +51,8 @@ const STOPLIST: &[&str] = &[
     "телеграммы",
     "телеграмме",
     "телеграмму",
+    "клад",
+    "кладе",
     "слабо",
     "слабый",
     "миро",
@@ -66,6 +68,33 @@ const BUILTIN: &[Builtin] = &[
         false,
         &["гугл мит", "гугл миты"],
     ),
+    (
+        "YadaCall",
+        Kind::Brand,
+        false,
+        &[
+            "ядакол",
+            "ядакал",
+            "ядаколл",
+            "едокол",
+            "ядао",
+            "яда колл",
+            "яда кол",
+        ],
+    ),
+    (
+        "Claude",
+        Kind::Brand,
+        false,
+        &["клод", "клода", "клоду", "клодом", "клоде"],
+    ),
+    (
+        "NumBuster",
+        Kind::Brand,
+        false,
+        &["намбастер", "нам бастер"],
+    ),
+    ("MCP", Kind::Exact, false, &["эм си пи", "эмсипи"]),
     ("Zoom", Kind::Brand, false, &[]),
     ("Telegram", Kind::Brand, false, &[]),
     ("Slack", Kind::Brand, true, &["слэк"]),
@@ -278,6 +307,11 @@ fn score(term: &Term, words: &[String], latin: bool, cyrillic_text: bool) -> Opt
         Kind::Jargon if !latin => None,
         Kind::Brand | Kind::Jargon => {
             let source = tokens(&term.canonical).len();
+            // Multiword pronunciations for one-word brands must be listed aliases, not fuzzy windows
+            // that can accidentally absorb a neighbouring ordinary word.
+            if source == 1 && words.len() > 1 {
+                return None;
+            }
             if words.len() + 1 < source || words.len() > source + 1 {
                 return None;
             }
@@ -498,6 +532,13 @@ mod tests {
             ("Deploi завтра", "Deploy завтра"),
             ("Release готов", "Release готов"),
             ("нужен аб тест", "нужен A/B-тест"),
+            ("ядакол и ядакал", "YadaCall и YadaCall"),
+            ("ядаколл, едокол, ядао", "YadaCall, YadaCall, YadaCall"),
+            ("яда колл и яда кол", "YadaCall и YadaCall"),
+            ("вызови Клода и Клоду", "вызови Claude и Claude"),
+            ("с Клодом, о Клоде", "с Claude, о Claude"),
+            ("намбастер и нам бастер", "NumBuster и NumBuster"),
+            ("эм си пи и эмсипи", "MCP и MCP"),
         ] {
             assert_eq!(fixed(heard), expected, "{heard}");
         }
@@ -531,6 +572,13 @@ mod tests {
             fixed("zoomer, apiary, miroslav"),
             "zoomer, apiary, miroslav"
         );
+    }
+
+    #[test]
+    fn protects_ordinary_words_near_term_aliases() {
+        for text in ["клад", "кладе", "бастер"] {
+            assert_eq!(fixed(text), text);
+        }
     }
 
     #[test]
