@@ -10,6 +10,7 @@ use crate::api::{
     KeepAudio, KeysSet, Settings, SettingsPatch, SummaryMode, SummarySettings, ThemeChoice,
     UiLanguage,
 };
+use crate::bookmark_screenshot::BookmarkScreenshot;
 use crate::paths;
 
 /// What we learned about the system-audio permission (macOS has no query API).
@@ -32,6 +33,9 @@ pub struct AppPrefs {
     /// The default text-embedding model was installed, or the user removed or cancelled it: the app
     /// does not queue it again by itself.
     pub embedder_settled: bool,
+    /// Live bookmark capture preference. Kept at its default for old app-prefs files.
+    #[serde(default)]
+    pub bookmark_screenshot: BookmarkScreenshot,
 }
 
 impl Default for AppPrefs {
@@ -41,6 +45,7 @@ impl Default for AppPrefs {
             mini_player: true,
             system_audio: SystemAudioKnown::Unknown,
             embedder_settled: false,
+            bookmark_screenshot: BookmarkScreenshot::Window,
         }
     }
 }
@@ -114,6 +119,7 @@ pub fn to_api(
         library_dir: paths::collapse_home(s.library_dir.as_deref().unwrap_or(effective_library)),
         hotkey_record: s.hotkeys.toggle_recording.clone(),
         hotkey_bookmark: s.hotkeys.bookmark.clone(),
+        bookmark_screenshot: app.bookmark_screenshot,
         launch_at_login: s.launch_at_login,
         recording_reminder: s.recording_reminder,
         recognize_voices: s.recognise_voices,
@@ -197,6 +203,9 @@ pub fn apply_patch(s: &mut es::Settings, app: &mut AppPrefs, p: &SettingsPatch) 
     }
     if let Some(v) = p.mini_player {
         app.mini_player = v;
+    }
+    if let Some(v) = p.bookmark_screenshot {
+        app.bookmark_screenshot = v;
     }
     if let Some(v) = p.onboarded {
         app.onboarded = v;

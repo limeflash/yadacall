@@ -14,7 +14,7 @@ import { demoAsk, demoMeetings, demoModels, LIVE_SCRIPT, type DemoMeeting } from
 const SETTINGS_KEY = "yadacall.mock.settings";
 const defaults: Settings = {
   theme: "dark", accent: "#7dd3a0", uiLanguage: "ru", meetingLanguage: "auto", keepAudio: "30d", libraryDir: "~/YadaCall",
-  hotkeyRecord: "Alt+Shift+R", hotkeyBookmark: "Alt+Shift+M", launchAtLogin: false, recordingReminder: true, recognizeVoices: true, terms: [], miniPlayer: true,
+  hotkeyRecord: "Alt+Shift+R", hotkeyBookmark: "Alt+Shift+M", bookmarkScreenshot: "window", launchAtLogin: false, recordingReminder: true, recognizeVoices: true, terms: [], miniPlayer: true,
   summaries: { mode: "local", model: "", keysSet: { ...noKeys, anthropic: true } }, onboarded: true,
 };
 
@@ -65,7 +65,7 @@ export function createMockApi(): Api {
   const freshInstall = typeof location !== "undefined" && /onboarding/.test(location.hash);
   const models: ModelEntry[] = mockCatalog(freshInstall);
   const imports: ImportJob[] = [];
-  let perms: Permissions = { microphone: freshInstall ? "notDetermined" : "granted", systemAudio: "notDetermined" };
+  let perms: Permissions = { microphone: freshInstall ? "notDetermined" : "granted", systemAudio: "notDetermined", screenRecording: "granted" };
 
   // ---- processing meeting: progress loops as in the design ------------------------------------------
   const proc = meetings.find((m) => m.meeting.status.state === "processing");

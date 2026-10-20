@@ -48,6 +48,7 @@ impl Error {
 pub enum PermissionKind {
     Microphone,
     SystemAudio,
+    ScreenRecording,
 }
 
 impl std::fmt::Display for PermissionKind {
@@ -55,6 +56,7 @@ impl std::fmt::Display for PermissionKind {
         f.write_str(match self {
             PermissionKind::Microphone => "microphone",
             PermissionKind::SystemAudio => "system audio",
+            PermissionKind::ScreenRecording => "screen recording",
         })
     }
 }

@@ -11,7 +11,7 @@
   import SummarySection from "./SummarySection.svelte";
   import ModelPicker from "../components/ModelPicker.svelte";
   import { api, integrations } from "../api";
-  import type { Connection, Permissions, ThemeChoice, KeepAudio } from "../api";
+  import type { Connection, Permissions, ThemeChoice, KeepAudio, PermissionKind, BookmarkScreenshot } from "../api";
   import { app, saveSettings, theme, update, checkForUpdates, installUpdate } from "../state.svelte";
   import { t, plural, i18n } from "../i18n/index.svelte";
   import { go } from "../router.svelte";
@@ -51,6 +51,11 @@
     { id: "dark", label: "Тёмная", A: D, B: D, clip: "none" },
   ];
   const keepOptions = $derived<{ value: KeepAudio; label: string }[]>([{ value: "none", label: t("Не хранить") }, { value: "7d", label: t("7 дней") }, { value: "30d", label: t("30 дней") }, { value: "forever", label: t("Всегда") }]);
+  const screenshotOptions = $derived<{ value: BookmarkScreenshot; label: string }[]>([
+    { value: "off", label: t("Нет") },
+    { value: "window", label: t("Активное окно") },
+    { value: "screen", label: t("Экран с окном") },
+  ]);
 
   function accelKeys(a: string): string[] {
     const pretty = prettyAccel(a);
@@ -68,7 +73,7 @@
     capturing = null;
   }
   async function pickFolder() { const f = await api.pickFolder(); if (f) saveSettings({ libraryDir: f }); }
-  async function askPerm(k: "microphone" | "systemAudio") { perms = await api.requestPermission(k); }
+  async function askPerm(k: PermissionKind) { perms = await api.requestPermission(k); }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -159,18 +164,23 @@
           <Switch checked={s.recordingReminder} onchange={(v) => saveSettings({ recordingReminder: v })} />
         </label>
         <label class="grow bt"><span style="flex: 1; min-width: 0; font-size: 14px">{t("Мини-плеер поверх окон")}</span><Switch checked={s.miniPlayer} onchange={(v) => saveSettings({ miniPlayer: v })} /></label>
+        <div class="grow bt" style="display: block">
+          <span style="display: block; font-size: 14px; margin-bottom: 9px">{t("Снимок к закладке")}</span>
+          <Segmented variant="thumb" label={t("Снимок к закладке")} value={s.bookmarkScreenshot} onchange={(v) => saveSettings({ bookmarkScreenshot: v })} options={screenshotOptions} />
+          <div class="hint" style="padding-top: 7px">{t("Снимки хранятся только в папке встречи")}</div>
+        </div>
       </div>
 
       {#if perms}
         <div style="padding: 14px 4px 0"><SectionLabel as="h2">{t("Разрешения")}</SectionLabel></div>
         <div class="group">
-          {#each [["microphone", "Микрофон", "Ваш голос"], ["systemAudio", "Звук собеседников", isMac ? "macOS отдаёт его через разрешение «Запись экрана»" : "Системный звук"]] as [k, label, sub], i (k)}
-            {@const st = perms[k as "microphone"]}
+        {#each [["microphone", "Микрофон", "Ваш голос"], ["systemAudio", "Звук собеседников", isMac ? "macOS отдаёт его через разрешение «Запись экрана»" : "Системный звук"], ...(isMac ? [["screenRecording", "Запись экрана", "Нужно для снимков к закладкам"]] : [])] as [k, label, sub], i (k)}
+            {@const st = perms[k as PermissionKind]}
             <div class="grow" class:bt={i > 0}>
               <span class="two" style="flex: 1"><span style="font-size: 14px">{t(label)}</span><span class="sub">{t(sub)}</span></span>
               {#if st === "granted"}<StatusPill kind="ok" label={t("Разрешено")} sm />
-              {:else if st === "denied"}<Button size="sm" onclick={() => api.openSystemSettings(k as "microphone")}>{t("Открыть настройки")}</Button>
-              {:else}<Button size="sm" onclick={() => askPerm(k as "microphone")}>{t("Разрешить")}</Button>{/if}
+              {:else if st === "denied"}<Button size="sm" onclick={() => api.openSystemSettings(k as PermissionKind)}>{t("Открыть настройки")}</Button>
+              {:else}<Button size="sm" onclick={() => askPerm(k as PermissionKind)}>{t("Разрешить")}</Button>{/if}
             </div>
           {/each}
         </div>

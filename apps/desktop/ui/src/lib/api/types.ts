@@ -83,6 +83,8 @@ export type EngineEvent =
   | { type: "trackSilent"; meeting: string; track: TrackKind; silentForMs: Ms }
   | { type: "deviceChanged"; track: TrackKind; device: string }
   | { type: "liveSegment"; meeting: string; segment: Segment }
+  | { type: "bookmarkUpdated"; meeting: string; bookmark: Bookmark }
+  | { type: "screenshotPermissionRequired" }
   | { type: "status"; meeting: string; status: MeetingStatus }
   | { type: "download"; item: string; doneBytes: number; totalBytes: number; bytesPerSec: number; state: DownloadState }
   | { type: "notice"; level: NoticeLevel; message: string };
@@ -105,12 +107,12 @@ export interface MeetingListItem {
 export interface MeetingDetail {
   meeting: Meeting;
   turns: Turn[];
+  /** Absolute path used to build a scoped asset URL for meeting files. */
+  dirPath?: string;
   summary?: Summary;
   /** `asset://` URL of the mixed audio when it is still on disk. */
   audioUrl?: string;
   hasAudio: boolean;
-  /** Absolute path of the meeting folder, when the backend exposes it: lets the UI turn `Bookmark.screenshot` into a file URL. */
-  dirPath?: string;
 }
 
 export type ExportFormat = "md" | "json";
@@ -231,6 +233,7 @@ export type UpdateEvent =
 export type ThemeChoice = "system" | "light" | "dark";
 export type UiLanguage = "ru" | "en";
 export type KeepAudio = "none" | "7d" | "30d" | "forever";
+export type BookmarkScreenshot = "off" | "window" | "screen";
 export type OllamaBase = "local" | "cloud";
 export type ApiProvider = "anthropic" | "openAiCompatible" | "openRouter" | "lmStudio";
 /** How summaries (and Ask answers) are produced. */
@@ -256,6 +259,7 @@ export interface Settings {
   libraryDir: string;
   hotkeyRecord: string;
   hotkeyBookmark: string;
+  bookmarkScreenshot: BookmarkScreenshot;
   launchAtLogin: boolean;
   recordingReminder: boolean;
   recognizeVoices: boolean;
@@ -270,8 +274,8 @@ export type SettingsPatch = Partial<Omit<Settings, "summaries">> & { summaries?:
 
 // ---- permissions ---------------------------------------------------------------------------------
 export type PermissionState = "granted" | "denied" | "notDetermined";
-export interface Permissions { microphone: PermissionState; systemAudio: PermissionState }
-export type PermissionKind = "microphone" | "systemAudio";
+export interface Permissions { microphone: PermissionState; systemAudio: PermissionState; screenRecording: PermissionState }
+export type PermissionKind = "microphone" | "systemAudio" | "screenRecording";
 
 /** Everything the UI can ask of the engine. Implemented by Tauri `invoke` and by the browser mock. */
 export interface Api {

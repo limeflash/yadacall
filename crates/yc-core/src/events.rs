@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Ms;
-use crate::meeting::{MeetingId, MeetingStatus, TrackKind};
+use crate::meeting::{Bookmark, MeetingId, MeetingStatus, TrackKind};
 use crate::transcript::Segment;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -34,6 +34,13 @@ pub enum EngineEvent {
         meeting: MeetingId,
         segment: Segment,
     },
+    /// A live bookmark gained its asynchronously captured screenshot.
+    BookmarkUpdated {
+        meeting: MeetingId,
+        bookmark: Bookmark,
+    },
+    /// macOS denied screenshot capture; the UI can offer the Screen Recording settings pane.
+    ScreenshotPermissionRequired,
     /// Post-call status/progress of a meeting.
     Status {
         meeting: MeetingId,

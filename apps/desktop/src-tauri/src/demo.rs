@@ -252,6 +252,7 @@ impl DemoBackend {
             perms: Permissions {
                 microphone: PermissionState::Granted,
                 system_audio: PermissionState::NotDetermined,
+                screen_recording: PermissionState::Granted,
             },
             rec: None,
             imports: Vec::new(),
@@ -994,6 +995,7 @@ impl Backend for DemoBackend {
         Ok(MeetingDetail {
             meeting: m.meeting.clone(),
             turns: m.turns.clone(),
+            dir_path: String::new(),
             summary: m.summary.clone(),
             audio_url: None,
             has_audio: m.has_audio,
@@ -1584,6 +1586,7 @@ impl Backend for DemoBackend {
         match kind {
             PermissionKind::Microphone => g.perms.microphone = PermissionState::Granted,
             PermissionKind::SystemAudio => g.perms.system_audio = PermissionState::Granted,
+            PermissionKind::ScreenRecording => g.perms.screen_recording = PermissionState::Granted,
         }
         Ok(g.perms)
     }

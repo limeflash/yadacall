@@ -150,6 +150,7 @@ impl Engine {
             self.store.get_meeting(id)?.folder
         };
         self.adopt_audio(dir, &folder, &tracks)?;
+        self.adopt_screenshots(dir, &folder)?;
         let _ = std::fs::remove_dir_all(dir);
 
         let auto_title = meta.title_auto.then(|| meta.title.clone());
@@ -237,6 +238,29 @@ impl Engine {
                     && src.is_file()
                 {
                     move_file(&src, &audio_dir.join(name))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Moves live bookmark screenshots into the durable meeting folder with the transcript.
+    fn adopt_screenshots(&self, dir: &Path, folder: &str) -> Result<()> {
+        let source = dir.join("shots");
+        if !source.is_dir() {
+            return Ok(());
+        }
+        let target = self.library_root().join(folder).join("shots");
+        std::fs::create_dir_all(&target)?;
+        for entry in std::fs::read_dir(&source)? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                let destination = target.join(entry.file_name());
+                match std::fs::rename(entry.path(), &destination) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        std::fs::copy(entry.path(), destination)?;
+                    }
                 }
             }
         }

@@ -51,6 +51,9 @@ pub struct MeetingListItem {
 pub struct MeetingDetail {
     pub meeting: Meeting,
     pub turns: Vec<Turn>,
+    /// Absolute meeting folder path for safely scoped asset URLs.
+    #[serde(default)]
+    pub dir_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<Summary>,
     /// `asset://` URL of the mixed audio when it is still on disk.
@@ -563,6 +566,7 @@ pub struct Settings {
     pub library_dir: String,
     pub hotkey_record: String,
     pub hotkey_bookmark: String,
+    pub bookmark_screenshot: crate::bookmark_screenshot::BookmarkScreenshot,
     pub launch_at_login: bool,
     pub recording_reminder: bool,
     pub recognize_voices: bool,
@@ -584,6 +588,7 @@ impl Default for Settings {
             library_dir: "~/YadaCall".into(),
             hotkey_record: "Alt+Shift+R".into(),
             hotkey_bookmark: "Alt+Shift+M".into(),
+            bookmark_screenshot: crate::bookmark_screenshot::BookmarkScreenshot::Window,
             launch_at_login: false,
             recording_reminder: true,
             recognize_voices: true,
@@ -613,6 +618,7 @@ pub struct SettingsPatch {
     pub library_dir: Option<String>,
     pub hotkey_record: Option<String>,
     pub hotkey_bookmark: Option<String>,
+    pub bookmark_screenshot: Option<crate::bookmark_screenshot::BookmarkScreenshot>,
     pub launch_at_login: Option<bool>,
     pub recording_reminder: Option<bool>,
     pub recognize_voices: Option<bool>,
@@ -689,6 +695,7 @@ pub enum PermissionState {
 pub struct Permissions {
     pub microphone: PermissionState,
     pub system_audio: PermissionState,
+    pub screen_recording: PermissionState,
 }
 
 pub use yc_core::error::PermissionKind;

@@ -63,6 +63,11 @@ export const en: Record<string, string> = {
   "Напоминать предупредить о записи": "Remind me to warn people about recording", "Перед стартом подскажет сказать собеседникам, что идёт запись": "Before starting, reminds you to tell the others that you're recording",
   "Мини-плеер поверх окон": "Mini-player above windows", "Разрешения": "Permissions", "Ваш голос": "Your voice", "Звук собеседников": "Other side's audio",
   "macOS отдаёт его через разрешение «Запись экрана»": "macOS provides it through the “Screen Recording” permission", "Системный звук": "System audio",
+  "Снимок к закладке": "Bookmark screenshot", "Нет": "None", "Активное окно": "Active window", "Экран с окном": "Screen with the window",
+  "Снимки хранятся только в папке встречи": "Screenshots are stored only in the meeting folder", "Нужно для снимков к закладкам": "Needed for bookmark screenshots",
+  "Запись экрана": "Screen Recording",
+  "Чтобы сохранять снимки, разреши запись экрана": "Allow Screen Recording to save screenshots", "Открыть снимок к закладке": "Open bookmark screenshot",
+  "Снимок экрана к закладке {time}": "Screenshot for bookmark at {time}",
   "Системный звук записывается без дополнительных разрешений": "System audio is captured without extra permissions", "Разрешено": "Allowed", "Разрешить": "Allow", "Открыть настройки": "Open settings",
   "исходники на GitHub": "source on GitHub", "Язык": "Language",
   // models

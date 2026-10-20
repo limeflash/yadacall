@@ -4,6 +4,7 @@
 
 pub mod adapters;
 pub mod api;
+pub mod bookmark_screenshot;
 pub mod commands;
 pub mod demo;
 pub mod engine_backend;
@@ -238,10 +239,11 @@ pub fn run() {
                         .app_data_dir()
                         .unwrap_or_else(|_| paths::home_dir().join(".yadacall"))
                 });
-                let engine = tauri::async_runtime::block_on(EngineBackend::open(
-                    BackendConfig::new(data_dir, sink),
-                ))
-                .map_err(|e| format!("could not start the YadaCall engine: {e}"))?;
+                let mut backend_config = BackendConfig::new(data_dir, sink);
+                backend_config.library_dir =
+                    std::env::var_os("YADACALL_LIBRARY_DIR").map(PathBuf::from);
+                let engine = tauri::async_runtime::block_on(EngineBackend::open(backend_config))
+                    .map_err(|e| format!("could not start the YadaCall engine: {e}"))?;
                 // The player loads audio through the asset protocol, limited to the library and the mix cache.
                 for dir in engine.asset_roots() {
                     let _ = std::fs::create_dir_all(&dir);

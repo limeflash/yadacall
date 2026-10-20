@@ -1,7 +1,8 @@
 //! Where YadaCall keeps things: app data (index, models, runtimes, calibration) and the meeting library.
 //!
 //! App data comes from Tauri's path resolver (`app_data_dir`), overridable with `YADACALL_DATA_DIR` for
-//! development and tests. The library defaults to `~/Созвоны` when the UI language is Russian and
+//! development and tests. `YADACALL_LIBRARY_DIR` can isolate a development library. The library
+//! defaults to `~/Созвоны` when the UI language is Russian and
 //! `~/YadaCall` otherwise; the user can move it in the settings.
 
 use std::path::{Path, PathBuf};

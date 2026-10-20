@@ -246,6 +246,16 @@ impl Engine {
         self.store.library_root().to_path_buf()
     }
 
+    /// Identifier of the currently active recording, if any.
+    pub fn active_meeting_id(&self) -> Result<MeetingId> {
+        self.active
+            .lock()
+            .map_err(|_| Error::Storage("active recording lock poisoned".into()))?
+            .as_ref()
+            .map(|session| session.id)
+            .ok_or_else(|| Error::Invalid("no recording is active".into()))
+    }
+
     /// Runs `f` with the shared text embedder (loaded on first use); `None` when not installed.
     pub(crate) fn with_text_embedder<T>(
         &self,

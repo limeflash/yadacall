@@ -35,7 +35,20 @@ async fn call_to_transcript_summary_and_tasks() {
     assert!(!segment.text.is_empty());
     assert!(engine.recording().is_some());
 
-    engine.bookmark(Some("важное".into())).expect("bookmark");
+    let bookmark = engine.bookmark(Some("важное".into())).expect("bookmark");
+    let attached = engine
+        .attach_bookmark_screenshot(id, bookmark.id.clone(), b"fake jpeg data".to_vec())
+        .await
+        .expect("attach screenshot");
+    let update = wait_event(&mut rx, 2, |event| {
+        matches!(event, EngineEvent::BookmarkUpdated { .. })
+    })
+    .await;
+    assert!(matches!(update, EngineEvent::BookmarkUpdated { meeting, .. } if meeting == id));
+    assert_eq!(
+        attached.screenshot.as_deref(),
+        Some(format!("shots/{}.jpg", bookmark.at_ms).as_str())
+    );
     let t = std::time::Instant::now();
     let stopped = engine.stop_recording().await.expect("stop");
     assert!(
@@ -50,6 +63,8 @@ async fn call_to_transcript_summary_and_tasks() {
     let detail = engine.get_meeting(id).await.expect("meeting");
     let folder = folder_of(&env, &detail.folder);
     assert!(folder.join("meeting.json").is_file());
+    let screenshot = folder.join("shots").join(format!("{}.jpg", bookmark.at_ms));
+    assert_eq!(std::fs::read(&screenshot).unwrap(), b"fake jpeg data");
     assert!(folder.join("transcript.json").is_file());
     let md = std::fs::read_to_string(folder.join("transcript.md")).expect("md");
     assert!(md.contains(TEXT_A) && md.contains(TEXT_C));
@@ -74,6 +89,10 @@ async fn call_to_transcript_summary_and_tasks() {
     assert_eq!(detail.segments[0].track, TrackKind::System);
     assert!(detail.segments[1].start_ms > detail.segments[0].end_ms);
     assert_eq!(detail.meeting.bookmarks.len(), 1);
+    assert_eq!(
+        detail.meeting.bookmarks[0].screenshot.as_deref(),
+        attached.screenshot.as_deref()
+    );
     assert_eq!(detail.meeting.asr_model.as_deref(), Some("fake-asr"));
     assert!(
         detail.meeting.duration_ms >= 12_700,
@@ -92,6 +111,14 @@ async fn call_to_transcript_summary_and_tasks() {
     assert_eq!(speakers, vec!["s1", "s1", "me", "s2", "s2"]);
     assert_eq!(detail.meeting.participants.len(), 2);
     assert_eq!(detail.meeting.participants[0].name, "Спикер 1");
+    engine
+        .remove_bookmark(id, bookmark.id)
+        .await
+        .expect("remove screenshot bookmark");
+    assert!(
+        !screenshot.exists(),
+        "bookmark deletion removes its screenshot"
+    );
     let summary = detail.summary.expect("summary");
     assert_eq!(summary.tasks.len(), 1);
     assert!(summary.tasks[0].text.contains("созвониться"));

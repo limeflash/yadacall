@@ -14,6 +14,7 @@
 
   let draft = $state("");
   let shotFailed = $state(false);
+  let previewOpen = $state(false);
   let input: HTMLInputElement | undefined = $state();
   let wasEditing = false;
   $effect(() => {
@@ -57,9 +58,18 @@
       {/if}
     </div>
     {#if showShot && !editing}
-      <button type="button" class="thumb" tabindex="-1" aria-hidden="true" onclick={() => onjump(bm.atMs)}><img src={shot} alt="" loading="lazy" onerror={() => (shotFailed = true)} /></button>
+      <button type="button" class="thumb" aria-label={t("Открыть снимок к закладке") } onclick={() => (previewOpen = true)}><img src={shot} alt={t("Снимок экрана к закладке {time}", { time: clock(bm.atMs) })} loading="lazy" onerror={() => (shotFailed = true)} /></button>
     {/if}
     {#if !editing}{@render actions()}{/if}
+  </div>
+{/if}
+
+{#if previewOpen && shot}
+  <div class="preview" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) previewOpen = false; }}>
+    <div class="previewBox" role="dialog" aria-modal="true" aria-label={t("Снимок экрана к закладке {time}", { time: clock(bm.atMs) })}>
+      <button type="button" class="previewClose" aria-label={t("Закрыть")} onclick={() => (previewOpen = false)}><Icon name="x" size={18} /></button>
+      <img src={shot} alt={t("Снимок экрана к закладке {time}", { time: clock(bm.atMs) })} />
+    </div>
   </div>
 {/if}
 
@@ -75,6 +85,10 @@
   .row:hover, .row:focus-within { background: var(--surface-2); }
   .thumb { flex: none; width: 72px; height: 45px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); overflow: hidden; cursor: pointer; }
   .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .preview { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 28px; background: #000b; }
+  .previewBox { position: relative; max-width: min(1200px, 96vw); max-height: 90vh; padding: 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 24px 80px #0008; }
+  .previewBox img { display: block; max-width: 100%; max-height: calc(90vh - 16px); object-fit: contain; border-radius: 8px; }
+  .previewClose { position: absolute; z-index: 1; top: 14px; right: 14px; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text); cursor: pointer; }
   .rt { flex: none; padding: 2px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--accent-text); font-size: 11px; font-weight: 700; }
   .row:hover .rt { background: var(--surface); }
   .mid { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
