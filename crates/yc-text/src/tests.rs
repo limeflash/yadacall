@@ -131,7 +131,61 @@ fn removes_stoplist_and_low_confidence_and_cuts_loops() {
     ];
     let result = filter_hallucinations(&segments, HallucinationConfig::default());
     assert_eq!(result.dropped.len(), 2);
-    assert_eq!(result.kept[0].text, "проверяем экран готово");
+    assert_eq!(result.kept[0].text, "Проверяем экран готово");
+}
+
+#[test]
+fn cleans_asr_repetitions_and_standalone_hesitations_without_mangling_words() {
+    let cases = [
+        ("Да-да, тоже можно.", "Да-да, тоже можно."),
+        ("А-а, выше я уже сказал.", "Выше я уже сказал."),
+        ("А-а-а, выше я уже сказал.", "Выше я уже сказал."),
+        ("Э-э, да.", "Да."),
+        ("эээ, да.", "Да."),
+        ("ммм, да.", "Да."),
+        ("м-м, да.", "Да."),
+        ("хм, да.", "Да."),
+        ("мы а-а пойдём", "мы пойдём"),
+        ("которые а- планируются эээ", "которые планируются"),
+        ("Как же? Как же без них?", "Как же? Как же без них?"),
+        ("и и и и и", "И"),
+        ("спасибо спасибо спасибо спасибо", "Спасибо"),
+        (
+            "проверяем экран проверяем экран проверяем экран готово.",
+            "Проверяем экран готово.",
+        ),
+        (
+            "ну-ну, ха-ха-ха, так-так, кое-как, что-то, по-моему",
+            "ну-ну, ха-ха-ха, так-так, кое-как, что-то, по-моему",
+        ),
+    ];
+    for (input, expected) in cases {
+        let result = filter_hallucinations(
+            &[segment(0, 1_000, TrackKind::Mic, SPEAKER_ME, input)],
+            HallucinationConfig::default(),
+        );
+        assert_eq!(result.kept[0].text, expected, "{input}");
+    }
+}
+
+#[test]
+fn hesitation_and_loop_cleanup_also_removes_dropped_word_timings() {
+    let text = "А-а, спасибо спасибо спасибо спасибо.";
+    let mut transcript_segment = segment(0, 1_000, TrackKind::Mic, SPEAKER_ME, text);
+    transcript_segment.words = ["А-а,", "спасибо", "спасибо", "спасибо", "спасибо."]
+        .iter()
+        .enumerate()
+        .map(|(index, text)| Word {
+            start_ms: index as u64 * 100,
+            end_ms: index as u64 * 100 + 80,
+            text: (*text).to_owned(),
+        })
+        .collect();
+    let result = filter_hallucinations(&[transcript_segment], HallucinationConfig::default());
+    assert_eq!(result.kept[0].text, "Спасибо.");
+    assert_eq!(result.kept[0].words.len(), 1);
+    assert_eq!(result.kept[0].words[0].text, "спасибо.");
+    assert_eq!(result.kept[0].words[0].start_ms, 400);
 }
 
 #[test]

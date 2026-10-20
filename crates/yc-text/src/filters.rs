@@ -162,7 +162,8 @@ pub struct FilteredTranscript {
     pub dropped: Vec<HallucinationDrop>,
 }
 
-/// Remove common ASR fabrications and low-confidence stretches, then cut repeated n-gram loops.
+/// Remove common ASR fabrications, hesitations, and low-confidence stretches, then cut ASR loops.
+/// Word timing entries for removed hesitation and loop tokens are dropped with their text.
 pub fn filter_hallucinations(
     segments: &[Segment],
     config: HallucinationConfig,
@@ -203,7 +204,32 @@ pub fn filter_hallucinations(
         }
 
         let mut segment = original.clone();
-        segment.text = cut_ngram_loops(&segment.text, config.max_ngram_words.max(1));
+        let (text, retained) = clean_transcript_text(&segment.text, config.max_ngram_words.max(1));
+        segment.text = text;
+        if !segment.words.is_empty() {
+            let spans = word_spans(&original.text);
+            let mut span_index = 0usize;
+            segment.words.retain(|word| {
+                let word_spans = word_spans(&word.text);
+                let word_token = word_spans
+                    .first()
+                    .map(|span| span.token.clone())
+                    .unwrap_or_default();
+                if is_hesitation(&word_token) {
+                    span_index = span_index.saturating_add(1);
+                    return false;
+                }
+                while span_index < spans.len() && spans[span_index].token != word_token {
+                    span_index += 1;
+                }
+                if span_index == spans.len() {
+                    return false;
+                }
+                let keep = retained[span_index];
+                span_index = span_index.saturating_add(1);
+                keep
+            });
+        }
         if normalize_tokens(&segment.text).is_empty() {
             dropped.push(HallucinationDrop {
                 segment_index: index,
@@ -271,17 +297,21 @@ struct WordSpan {
 fn word_spans(text: &str) -> Vec<WordSpan> {
     let mut words = Vec::new();
     let mut start = None;
-    for (index, character) in text.char_indices() {
-        if character.is_alphanumeric() {
+    let chars = text.char_indices().collect::<Vec<_>>();
+    for (position, &(index, character)) in chars.iter().enumerate() {
+        let internal_hyphen = matches!(character, '-' | '‐' | '‑')
+            && position > 0
+            && chars[position - 1].1.is_alphanumeric()
+            && (position + 1 < chars.len() && chars[position + 1].1.is_alphanumeric()
+                || start.is_some_and(|word_start| &text[word_start..index] == "а")
+                    && (position + 1 == chars.len() || !chars[position + 1].1.is_alphanumeric()));
+        if character.is_alphanumeric() || internal_hyphen {
             start.get_or_insert(index);
         } else if let Some(word_start) = start.take() {
             words.push(WordSpan {
                 start: word_start,
                 end: index,
-                token: normalize_tokens(&text[word_start..index])
-                    .into_iter()
-                    .next()
-                    .unwrap_or_default(),
+                token: normalized_span(&text[word_start..index]),
             });
         }
     }
@@ -289,58 +319,101 @@ fn word_spans(text: &str) -> Vec<WordSpan> {
         words.push(WordSpan {
             start: word_start,
             end: text.len(),
-            token: normalize_tokens(&text[word_start..])
-                .into_iter()
-                .next()
-                .unwrap_or_default(),
+            token: normalized_span(&text[word_start..]),
         });
     }
     words
 }
 
-fn cut_ngram_loops(text: &str, max_words: usize) -> String {
+fn normalized_span(text: &str) -> String {
+    text.chars()
+        .flat_map(char::to_lowercase)
+        .map(|c| if c == 'ё' { 'е' } else { c })
+        .collect()
+}
+
+/// Removes standalone hesitation tokens and ASR loops while keeping word timings aligned.
+/// A one- or two-token unit is considered a loop at three repetitions; wider units need two.
+fn clean_transcript_text(text: &str, max_words: usize) -> (String, Vec<bool>) {
     let words = word_spans(text);
-    if words.len() < 4 {
-        return text.to_owned();
+    let mut retained = vec![true; words.len()];
+    for (index, word) in words.iter().enumerate() {
+        if is_hesitation(&word.token) {
+            retained[index] = false;
+        }
     }
-    let mut remove = Vec::<(usize, usize)>::new();
     let mut cursor = 0;
     while cursor < words.len() {
-        let remaining = words.len() - cursor;
-        let max = max_words.min(remaining / 2);
+        if !retained[cursor] {
+            cursor += 1;
+            continue;
+        }
+        let active = (cursor..words.len())
+            .take_while(|&index| retained[index])
+            .collect::<Vec<_>>();
+        let max = max_words.min(active.len() / 2);
         let mut selected = None;
         for width in (1..=max).rev() {
             let mut repeats = 1;
             while cursor + (repeats + 1) * width <= words.len()
                 && (0..width).all(|offset| {
-                    words[cursor + offset].token == words[cursor + repeats * width + offset].token
+                    let left = cursor + offset;
+                    let right = cursor + repeats * width + offset;
+                    retained[left] && retained[right] && words[left].token == words[right].token
                 })
             {
                 repeats += 1;
             }
-            if repeats >= 2 {
+            let minimum = if width <= 2 { 3 } else { 2 };
+            if repeats >= minimum {
                 selected = Some((width, repeats));
                 break;
             }
         }
         if let Some((width, repeats)) = selected {
-            let from = words[cursor + width].start;
-            let to = words[cursor + width * repeats - 1].end;
-            remove.push((from, to));
+            // Keep the final full copy so its following words and punctuation survive.
+            for keep in retained.iter_mut().skip(cursor).take(width * (repeats - 1)) {
+                *keep = false;
+            }
             cursor += width * repeats;
         } else {
             cursor += 1;
         }
     }
-    if remove.is_empty() {
-        return text.to_owned();
-    }
     let mut output = String::with_capacity(text.len());
     let mut last = 0;
-    for (from, to) in remove {
-        output.push_str(&text[last..from]);
-        last = to;
+    for (index, word) in words.iter().enumerate() {
+        if retained[index] {
+            continue;
+        }
+        let mut end = word.end;
+        while end < text.len() {
+            let c = text[end..].chars().next().unwrap_or_default();
+            if c.is_whitespace() || matches!(c, ',' | '?' | '!' | '.' | ':' | ';') {
+                end += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+        output.push_str(&text[last..word.start]);
+        last = end;
     }
     output.push_str(&text[last..]);
-    output.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut cleaned = output.split_whitespace().collect::<Vec<_>>().join(" ");
+    cleaned = cleaned
+        .trim_matches(|c: char| c.is_whitespace() || matches!(c, ',' | ';'))
+        .to_owned();
+    let removed_leading_tokens = retained.iter().take_while(|&&keep| !keep).count() > 0;
+    if removed_leading_tokens && let Some(first) = cleaned.chars().next() {
+        let upper = first.to_uppercase().collect::<String>();
+        cleaned.replace_range(0..first.len_utf8(), &upper);
+    }
+    (cleaned, retained)
+}
+
+fn is_hesitation(token: &str) -> bool {
+    matches!(
+        token,
+        "а-" | "а-а" | "а-а-а" | "э-э" | "эээ" | "ммм" | "м-м" | "хм"
+    )
 }
