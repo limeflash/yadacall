@@ -506,7 +506,13 @@ impl Engine {
             .and_then(|h| h.as_ref().map(|h| h.elapsed().as_millis() as u64))
             .unwrap_or(0);
         let label = label.map(|l| l.trim().to_owned()).filter(|l| !l.is_empty());
-        let bookmark = Bookmark { at_ms, label };
+        let bookmark = Bookmark {
+            id: uuid::Uuid::now_v7().to_string(),
+            at_ms,
+            label,
+            created_after: Some(false),
+            screenshot: None,
+        };
         s.meta.bookmarks.push(bookmark.clone());
         s.meta.write(&s.dir)?;
         Ok(bookmark)

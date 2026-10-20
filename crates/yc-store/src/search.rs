@@ -38,6 +38,7 @@ pub(crate) fn search(
                AND (:speaker IS NULL OR s.speaker=:speaker)
                AND (:started_after IS NULL OR m.started_at>=:started_after)
                AND (:started_before IS NULL OR m.started_at<=:started_before)
+               AND (:folder_id IS NULL OR m.folder_id=:folder_id)
              ORDER BY bm25(segments_fts) ASC LIMIT :limit",
         ).map_err(storage_error)?;
         let rows = statement
@@ -49,6 +50,7 @@ pub(crate) fn search(
                     ":speaker": filters.speaker.as_deref(),
                     ":started_after": filters.started_after.as_deref(),
                     ":started_before": filters.started_before.as_deref(),
+                    ":folder_id": filters.folder_id.as_deref(),
                     ":limit": limit.saturating_mul(4) as i64,
                 },
                 |row| {
@@ -107,6 +109,7 @@ pub(crate) fn search(
                ))
                AND (?6 IS NULL OR m.started_at>=?6)
                AND (?7 IS NULL OR m.started_at<=?7)
+               AND (?8 IS NULL OR m.folder_id=?8)
              ORDER BY v.distance ASC",
         ).map_err(storage_error)?;
         let rows = statement
@@ -119,6 +122,7 @@ pub(crate) fn search(
                     filters.speaker.as_deref(),
                     filters.started_after.as_deref(),
                     filters.started_before.as_deref(),
+                    filters.folder_id.as_deref(),
                 ],
                 |row| {
                     let meeting_id = parse_meeting_id_sql(row.get::<_, String>(1)?, 1)?;

@@ -264,12 +264,34 @@ impl Engine {
         if changed {
             self.store
                 .save_meeting(&rec.meeting, &rec.transcript, rec.summary.as_ref())?;
-            if rec.meeting.status != before {
-                self.emit(EngineEvent::Status {
-                    meeting: id,
-                    status: rec.meeting.status.clone(),
-                });
-            }
+            // Status is the existing meeting-changed signal consumed by library views.
+            let _status_changed = rec.meeting.status != before;
+            self.emit(EngineEvent::Status {
+                meeting: id,
+                status: rec.meeting.status.clone(),
+            });
+        }
+        Ok(value)
+    }
+
+    /// Edit and atomically persist meeting metadata without disturbing transcript search indexes.
+    pub(crate) fn mutate_meeting_metadata<T>(
+        &self,
+        id: MeetingId,
+        f: impl FnOnce(&mut MeetingRecord) -> Result<(T, bool)>,
+    ) -> Result<T> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| Error::Storage("write lock poisoned".into()))?;
+        let mut rec = self.store.get_meeting(id)?;
+        let (value, changed) = f(&mut rec)?;
+        if changed {
+            self.store.save_meeting_metadata(&rec.meeting)?;
+            self.emit(EngineEvent::Status {
+                meeting: id,
+                status: rec.meeting.status.clone(),
+            });
         }
         Ok(value)
     }

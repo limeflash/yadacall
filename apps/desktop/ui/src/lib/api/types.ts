@@ -14,7 +14,8 @@ export type MeetingStatus =
   | { state: "ready" }
   | { state: "failed"; stage: Stage; message: string; retryable: boolean };
 
-export interface Bookmark { atMs: Ms; label?: string }
+export interface Bookmark { id: string; atMs: Ms; label?: string; createdAfter?: boolean; screenshot?: string }
+export interface Folder { id: string; name: string; color?: string; order: number }
 export interface RenameOutcome { mergedInto?: { key: string; name: string } }
 export interface ParticipantHint { name: string; email?: string }
 export interface Participant { key: string; name: string; voiceId?: string; /** Invite names ranked as likely identities of this speaker. */ suggestions?: string[] }
@@ -30,6 +31,8 @@ export interface Meeting {
   expectedSpeakers?: number;
   tracks: TrackInfo[];
   bookmarks: Bookmark[];
+  favorite: boolean;
+  folderId?: string;
   participants: Participant[];
   /** People invited to the calendar event behind the recording. */
   participantHints?: ParticipantHint[];
@@ -82,6 +85,8 @@ export interface MeetingListItem {
   snippet?: string;
   /** e.g. "audio deleted after 7 days, text and summary kept". */
   audioNote?: string;
+  favorite: boolean;
+  folderId?: string;
 }
 
 export interface MeetingDetail {
@@ -124,7 +129,7 @@ export type AskEvent =
 // ---- tasks / import ------------------------------------------------------------------------------
 export interface TaskItem {
   meetingId: string; meetingTitle: string; startedAt: string; index: number;
-  text: string; owner?: string; due?: string; atMs?: Ms; done: boolean;
+  text: string; owner?: string; due?: string; atMs?: Ms; done: boolean; meetingFolderId?: string; meetingFavorite: boolean;
 }
 export type ImportState = "queued" | "running" | "done" | "failed";
 export interface ImportJob { id: string; fileName: string; state: ImportState; progress: number; meetingId?: string; error?: string }
@@ -255,7 +260,16 @@ export type PermissionKind = "microphone" | "systemAudio";
 /** Everything the UI can ask of the engine. Implemented by Tauri `invoke` and by the browser mock. */
 export interface Api {
   // meetings
-  listMeetings(): Promise<MeetingListItem[]>;
+  listMeetings(folderId?: string | null, favoritesOnly?: boolean): Promise<MeetingListItem[]>;
+  listFolders(): Promise<Folder[]>;
+  createFolder(name: string, color?: string): Promise<Folder>;
+  updateFolder(id: string, patch: { name?: string; color?: string | null; order?: number }): Promise<Folder>;
+  deleteFolder(id: string): Promise<void>;
+  setMeetingFolder(meetingId: string, folderId: string | null): Promise<void>;
+  setMeetingFavorite(meetingId: string, favorite: boolean): Promise<void>;
+  addBookmark(meetingId: string, atMs: Ms, label?: string): Promise<Bookmark>;
+  updateBookmark(meetingId: string, bookmarkId: string, label: string | null): Promise<Bookmark>;
+  removeBookmark(meetingId: string, bookmarkId: string): Promise<void>;
   getMeeting(id: string): Promise<MeetingDetail>;
   renameMeeting(id: string, title: string): Promise<void>;
   deleteMeeting(id: string): Promise<void>;
@@ -275,11 +289,11 @@ export interface Api {
   recorderResume(): Promise<void>;
   recorderStop(): Promise<string>;
   recorderCancel(): Promise<void>;
-  recorderBookmark(label?: string): Promise<void>;
+  recorderBookmark(label?: string): Promise<Bookmark>;
   listInputDevices(): Promise<InputDevice[]>;
   // search / ask / tasks / import
-  search(query: string): Promise<SearchHit[]>;
-  ask(question: string, onEvent: (e: AskEvent) => void): Promise<void>;
+  search(query: string, folderId?: string | null): Promise<SearchHit[]>;
+  ask(question: string, onEvent: (e: AskEvent) => void, folderId?: string | null): Promise<void>;
   listTasks(includeDone: boolean): Promise<TaskItem[]>;
   importAudio(paths: string[]): Promise<ImportJob[]>;
   listImports(): Promise<ImportJob[]>;

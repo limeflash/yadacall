@@ -342,8 +342,11 @@ async fn structured_summary_retries_once_after_schema_violation() {
             text: "Давайте запускаем пилот".into(),
         }],
         bookmarks: vec![Bookmark {
+            id: "bookmark-1".into(),
             at_ms: 15_000,
             label: Some("план".into()),
+            created_after: Some(false),
+            screenshot: None,
         }],
         language: None,
         template: SummaryTemplate::Standard,

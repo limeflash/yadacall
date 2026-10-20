@@ -60,6 +60,9 @@ impl Engine {
             }
             offset += page.len();
             for item in page {
+                if item.favorite {
+                    continue;
+                }
                 if matches!(
                     item.status,
                     MeetingStatus::Recording

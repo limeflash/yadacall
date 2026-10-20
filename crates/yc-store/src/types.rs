@@ -38,6 +38,10 @@ pub struct MeetingListItem {
     pub asr_model: Option<String>,
     /// Last index update timestamp.
     pub updated_at: String,
+    /// Favourite flag copied from meeting metadata.
+    pub favorite: bool,
+    /// User-managed folder id, if assigned.
+    pub folder_id: Option<String>,
 }
 
 /// Optional search filters. Date bounds are RFC 3339 timestamp strings.
@@ -53,6 +57,8 @@ pub struct SearchFilters {
     pub started_after: Option<String>,
     /// Inclusive upper bound for meeting start time as RFC 3339.
     pub started_before: Option<String>,
+    /// Restrict results to one library folder.
+    pub folder_id: Option<String>,
 }
 
 /// Search result fused from a segment BM25 match or a semantic chunk match.
@@ -151,6 +157,10 @@ pub struct TaskRecord {
     pub at_ms: Option<u64>,
     /// Whether the user marked the task complete.
     pub done: bool,
+    /// Folder of the meeting that owns this task.
+    pub meeting_folder_id: Option<String>,
+    /// Whether the owning meeting is a favourite.
+    pub meeting_favorite: bool,
 }
 
 /// Stored known-voice profile. `centroid` contains the model's packed float bytes.

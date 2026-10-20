@@ -10,7 +10,7 @@ use chrono::Utc;
 use rusqlite::Transaction;
 use yc_core::{
     Error, Result,
-    meeting::{Meeting, MeetingId},
+    meeting::{Folder, Meeting, MeetingId},
     summary::Summary,
     transcript::Transcript,
 };
@@ -65,6 +65,31 @@ pub(crate) fn save_meeting(
     let transaction = connection.unchecked_transaction().map_err(storage_error)?;
     index_meeting(&transaction, meeting, transcript, summary, &desired)?;
     transaction.commit().map_err(storage_error)
+}
+
+pub(crate) fn save_meeting_metadata(store: &Store, meeting: &Meeting) -> Result<()> {
+    let folder = store
+        .indexed_folder(meeting.id)?
+        .or_else(|| find_folder_by_id(store.root(), meeting.id).ok().flatten())
+        .ok_or_else(|| Error::NotFound(format!("meeting {}", meeting.id)))?;
+    let path = store.root().join(folder).join("meeting.json");
+    atomic_write_json(&path, meeting)?;
+    let connection = store.lock()?;
+    let updated = connection
+        .execute(
+            "UPDATE meetings SET favorite=?2,folder_id=?3,updated_at=?4 WHERE id=?1",
+            rusqlite::params![
+                meeting.id.to_string(),
+                i64::from(meeting.favorite),
+                meeting.folder_id,
+                Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(storage_error)?;
+    if updated == 0 {
+        return Err(Error::NotFound(format!("meeting {}", meeting.id)));
+    }
+    Ok(())
 }
 
 pub(crate) fn scan(store: &Store) -> Result<usize> {
@@ -212,6 +237,56 @@ pub(crate) fn delete_meeting(store: &Store, meeting_id: MeetingId) -> Result<()>
     transaction.commit().map_err(storage_error)
 }
 
+pub(crate) fn list_folders(store: &Store) -> Result<Vec<Folder>> {
+    let path = store.root().join("folders.json");
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    read_json(&path)
+}
+
+pub(crate) fn save_folders(store: &Store, folders: &[Folder]) -> Result<()> {
+    atomic_write_json(&store.root().join("folders.json"), folders)
+}
+
+pub(crate) fn delete_folder(store: &Store, id: &str) -> Result<()> {
+    let mut folders = list_folders(store)?;
+    let before = folders.len();
+    folders.retain(|f| f.id != id);
+    if folders.len() == before {
+        return Err(Error::NotFound(format!("folder {id}")));
+    }
+    save_folders(store, &folders)?;
+    for entry in fs::read_dir(store.root())? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let metadata = entry.path().join("meeting.json");
+        if !metadata.is_file() {
+            continue;
+        }
+        let mut meeting: Meeting = read_json(&metadata)?;
+        if meeting.folder_id.as_deref() == Some(id) {
+            meeting.folder_id = None;
+            let transcript_path = entry.path().join("transcript.json");
+            let transcript = if transcript_path.is_file() {
+                read_json(&transcript_path)?
+            } else {
+                Transcript::default()
+            };
+            let summary_path = entry.path().join("summary.json");
+            let summary = if summary_path.is_file() {
+                Some(read_json(&summary_path)?)
+            } else {
+                None
+            };
+            save_meeting(store, &meeting, &transcript, summary.as_ref())?;
+        }
+    }
+    Ok(())
+}
+
 fn index_meeting(
     transaction: &Transaction<'_>,
     meeting: &Meeting,
@@ -224,13 +299,14 @@ fn index_meeting(
     let status = serde_json::to_string(&meeting.status).map_err(json_error)?;
     let now = Utc::now().to_rfc3339();
     transaction.execute(
-        "INSERT INTO meetings(id,title,started_at,duration_ms,language,folder,status_json,asr_model,updated_at)
-         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)
+        "INSERT INTO meetings(id,title,started_at,duration_ms,language,folder,status_json,asr_model,favorite,folder_id,updated_at)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
          ON CONFLICT(id) DO UPDATE SET title=excluded.title, started_at=excluded.started_at,
          duration_ms=excluded.duration_ms, language=excluded.language, folder=excluded.folder,
-         status_json=excluded.status_json, asr_model=excluded.asr_model, updated_at=excluded.updated_at",
+         status_json=excluded.status_json, asr_model=excluded.asr_model, favorite=excluded.favorite,
+         folder_id=excluded.folder_id, updated_at=excluded.updated_at",
         rusqlite::params![id, meeting.title, started_at, meeting.duration_ms.min(i64::MAX as u64) as i64,
-            meeting.language, folder, status, meeting.asr_model, now],
+            meeting.language, folder, status, meeting.asr_model, i64::from(meeting.favorite), meeting.folder_id, now],
     ).map_err(storage_error)?;
     transaction
         .execute(
@@ -379,7 +455,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
         .map_err(|error| Error::Storage(format!("{}: {error}", path.display())))
 }
 
-fn atomic_write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
+fn atomic_write_json<T: serde::Serialize + ?Sized>(path: &Path, value: &T) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(value).map_err(json_error)?;
     atomic_write(path, &bytes)
 }

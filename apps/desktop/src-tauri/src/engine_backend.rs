@@ -376,8 +376,15 @@ impl EngineBackend {
 impl Backend for EngineBackend {
     // ---- meetings -------------------------------------------------------------------------------
 
-    async fn list_meetings(&self) -> Result<Vec<MeetingListItem>> {
-        let rows = self.engine.list_meetings(10_000, 0).await?;
+    async fn list_meetings(
+        &self,
+        folder_id: Option<&str>,
+        favorites_only: bool,
+    ) -> Result<Vec<MeetingListItem>> {
+        let rows = self
+            .engine
+            .list_meetings_filtered(10_000, 0, folder_id.map(str::to_owned), favorites_only)
+            .await?;
         let root = self.engine.library_root();
         let mut out = Vec::with_capacity(rows.len());
         for row in rows {
@@ -403,16 +410,81 @@ impl Backend for EngineBackend {
                 title: row.title,
                 started_at,
                 duration_ms: row.duration_ms,
-                audio_note: if ready {
+                audio_note: if row.favorite {
+                    Some(
+                        if self.engine.settings().russian() {
+                            "звук хранится всегда"
+                        } else {
+                            "audio kept forever"
+                        }
+                        .to_owned(),
+                    )
+                } else if ready {
                     self.audio_note(started_at, has_audio)
                 } else {
                     None
                 },
                 snippet,
                 status: crate::commands::friendly_status(row.status),
+                favorite: row.favorite,
+                folder_id: row.folder_id,
             });
         }
         Ok(out)
+    }
+
+    async fn list_folders(&self) -> Result<Vec<yc_core::meeting::Folder>> {
+        self.engine.list_folders().await
+    }
+    async fn create_folder(
+        &self,
+        name: &str,
+        color: Option<String>,
+    ) -> Result<yc_core::meeting::Folder> {
+        self.engine.create_folder(name.to_owned(), color).await
+    }
+    async fn update_folder(
+        &self,
+        id: &str,
+        name: Option<String>,
+        color: Option<Option<String>>,
+        order: Option<u32>,
+    ) -> Result<yc_core::meeting::Folder> {
+        self.engine
+            .update_folder(id.to_owned(), name, color, order)
+            .await
+    }
+    async fn delete_folder(&self, id: &str) -> Result<()> {
+        self.engine.delete_folder(id.to_owned()).await
+    }
+    async fn set_meeting_folder(&self, id: &str, folder_id: Option<String>) -> Result<()> {
+        self.engine.set_meeting_folder(mid(id)?, folder_id).await
+    }
+    async fn set_meeting_favorite(&self, id: &str, favorite: bool) -> Result<()> {
+        self.engine.set_meeting_favorite(mid(id)?, favorite).await
+    }
+    async fn add_bookmark(
+        &self,
+        id: &str,
+        at_ms: u64,
+        label: Option<String>,
+    ) -> Result<yc_core::meeting::Bookmark> {
+        self.engine.add_bookmark(mid(id)?, at_ms, label).await
+    }
+    async fn update_bookmark(
+        &self,
+        id: &str,
+        bookmark_id: &str,
+        label: Option<String>,
+    ) -> Result<yc_core::meeting::Bookmark> {
+        self.engine
+            .update_bookmark(mid(id)?, bookmark_id.to_owned(), label)
+            .await
+    }
+    async fn remove_bookmark(&self, id: &str, bookmark_id: &str) -> Result<()> {
+        self.engine
+            .remove_bookmark(mid(id)?, bookmark_id.to_owned())
+            .await
     }
 
     async fn get_meeting(&self, id: &str) -> Result<MeetingDetail> {
@@ -552,12 +624,12 @@ impl Backend for EngineBackend {
         Ok(())
     }
 
-    async fn recorder_bookmark(&self, label: Option<String>) -> Result<()> {
+    async fn recorder_bookmark(&self, label: Option<String>) -> Result<yc_core::meeting::Bookmark> {
         let b = self.engine.bookmark(label)?;
         if let Some(r) = self.lock().rec.as_mut() {
             r.bookmarks.push(b.at_ms);
         }
-        Ok(())
+        Ok(b)
     }
 
     async fn list_input_devices(&self) -> Result<Vec<InputDevice>> {
@@ -576,14 +648,21 @@ impl Backend for EngineBackend {
 
     // ---- search / ask / tasks / import ----------------------------------------------------------
 
-    async fn search(&self, query: &str) -> Result<Vec<SearchHit>> {
+    async fn search(&self, query: &str, folder_id: Option<&str>) -> Result<Vec<SearchHit>> {
         let q = query.trim();
         if q.is_empty() {
             return Ok(Vec::new());
         }
         let hits = self
             .engine
-            .search(q.to_owned(), SearchFilters::default(), 30)
+            .search(
+                q.to_owned(),
+                SearchFilters {
+                    folder_id: folder_id.map(str::to_owned),
+                    ..SearchFilters::default()
+                },
+                30,
+            )
             .await?;
         Ok(hits
             .into_iter()
@@ -599,8 +678,12 @@ impl Backend for EngineBackend {
             .collect())
     }
 
-    async fn ask(&self, question: &str, sink: AskSink) -> Result<()> {
-        let (excerpts, mut rx) = match self.engine.ask_with_excerpts(question.to_owned()).await {
+    async fn ask(&self, question: &str, folder_id: Option<&str>, sink: AskSink) -> Result<()> {
+        let (excerpts, mut rx) = match self
+            .engine
+            .ask_with_excerpts(question.to_owned(), folder_id.map(str::to_owned))
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!("ask failed: {e}");
@@ -682,6 +765,8 @@ impl Backend for EngineBackend {
                 due: t.due,
                 at_ms: t.at_ms,
                 done: t.done,
+                meeting_folder_id: t.meeting_folder_id,
+                meeting_favorite: t.meeting_favorite,
             })
             .collect())
     }

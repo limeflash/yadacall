@@ -347,7 +347,40 @@ async fn retention_sweep_removes_old_audio_only() {
         .unwrap();
     let id = record_call(&env, &engine, "Старый").await;
     ready(&engine, id).await;
-    let folder = folder_of(&env, &engine.get_meeting(id).await.unwrap().folder);
+    let detail = engine.get_meeting(id).await.unwrap();
+    let folder = folder_of(&env, &detail.folder);
+    let bookmark = engine
+        .add_bookmark(
+            id,
+            detail.meeting.duration_ms + 100,
+            Some("  важное  ".into()),
+        )
+        .await
+        .expect("post-call bookmark");
+    assert_eq!(bookmark.at_ms, detail.meeting.duration_ms);
+    assert_eq!(bookmark.label.as_deref(), Some("важное"));
+    assert_eq!(
+        engine.get_meeting(id).await.unwrap().meeting.bookmarks[0],
+        bookmark
+    );
+    let updated = engine
+        .update_bookmark(id, bookmark.id.clone(), Some("решение".into()))
+        .await
+        .expect("edit bookmark");
+    assert_eq!(updated.label.as_deref(), Some("решение"));
+    engine
+        .remove_bookmark(id, bookmark.id)
+        .await
+        .expect("remove bookmark");
+    assert!(
+        engine
+            .get_meeting(id)
+            .await
+            .unwrap()
+            .meeting
+            .bookmarks
+            .is_empty()
+    );
     assert!(folder.join("audio/them.flac").is_file());
     assert_eq!(
         engine.sweep_retention().await.unwrap(),
@@ -355,6 +388,20 @@ async fn retention_sweep_removes_old_audio_only() {
         "fresh meeting stays"
     );
     let later = chrono::Utc::now() + chrono::Duration::days(8);
+    engine
+        .set_meeting_favorite(id, true)
+        .await
+        .expect("favourite meeting");
+    assert_eq!(
+        engine.sweep_retention_at(later).await.unwrap(),
+        0,
+        "favourites keep audio forever"
+    );
+    assert!(folder.join("audio/them.flac").is_file());
+    engine
+        .set_meeting_favorite(id, false)
+        .await
+        .expect("unfavourite meeting");
     assert_eq!(engine.sweep_retention_at(later).await.unwrap(), 1);
     assert!(!folder.join("audio").exists());
     assert!(folder.join("transcript.md").is_file(), "text is forever");

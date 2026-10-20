@@ -4,6 +4,15 @@ use tauri_build::{AppManifest, Attributes};
 // capability files grant per window (main: everything; tray/mini: the recorder subset).
 const COMMANDS: &[&str] = &[
     "list_meetings",
+    "list_folders",
+    "create_folder",
+    "update_folder",
+    "delete_folder",
+    "set_meeting_folder",
+    "set_meeting_favorite",
+    "add_bookmark",
+    "update_bookmark",
+    "remove_bookmark",
     "get_meeting",
     "rename_meeting",
     "delete_meeting",

@@ -32,6 +32,15 @@ struct EngineHandle(Arc<EngineBackend>);
 /// Every command exposed to the webviews (also the ACL allow-list generated in `build.rs`).
 pub const COMMANDS: &[&str] = &[
     "list_meetings",
+    "list_folders",
+    "create_folder",
+    "update_folder",
+    "delete_folder",
+    "set_meeting_folder",
+    "set_meeting_favorite",
+    "add_bookmark",
+    "update_bookmark",
+    "remove_bookmark",
     "get_meeting",
     "rename_meeting",
     "delete_meeting",
@@ -131,6 +140,15 @@ pub fn run() {
         .manage::<shell::Shared>(Arc::new(Mutex::new(shell::ShellState::default())))
         .invoke_handler(tauri::generate_handler![
             commands::list_meetings,
+            commands::list_folders,
+            commands::create_folder,
+            commands::update_folder,
+            commands::delete_folder,
+            commands::set_meeting_folder,
+            commands::set_meeting_favorite,
+            commands::add_bookmark,
+            commands::update_bookmark,
+            commands::remove_bookmark,
             commands::get_meeting,
             commands::rename_meeting,
             commands::delete_meeting,
