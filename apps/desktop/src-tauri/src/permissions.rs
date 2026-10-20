@@ -30,6 +30,39 @@ pub fn microphone_state() -> PermissionState {
     }
 }
 
+/// Current macOS Screen Recording permission used by bookmark screenshots.
+pub fn screen_recording_state() -> PermissionState {
+    #[cfg(target_os = "macos")]
+    {
+        if mac::screen_recording_granted() {
+            PermissionState::Granted
+        } else {
+            PermissionState::Denied
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        PermissionState::Granted
+    }
+}
+
+/// Requests or opens the Screen Recording privacy pane. macOS requires the user to enable access there.
+pub fn request_screen_recording() -> PermissionState {
+    #[cfg(target_os = "macos")]
+    {
+        if mac::request_screen_recording() {
+            PermissionState::Granted
+        } else {
+            open_system_settings(PermissionKind::ScreenRecording);
+            PermissionState::Denied
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        PermissionState::Granted
+    }
+}
+
 /// Asks for the microphone permission (macOS shows its prompt once) and returns the outcome.
 pub async fn request_microphone() -> PermissionState {
     #[cfg(target_os = "macos")]
@@ -122,6 +155,7 @@ pub fn open_system_settings(kind: PermissionKind) {
         let pane = match kind {
             PermissionKind::Microphone => "Privacy_Microphone",
             PermissionKind::SystemAudio => "Privacy_AudioCapture",
+            PermissionKind::ScreenRecording => "Privacy_ScreenCapture",
         };
         let _ = std::process::Command::new("open")
             .arg(format!(
@@ -134,6 +168,7 @@ pub fn open_system_settings(kind: PermissionKind) {
         let page = match kind {
             PermissionKind::Microphone => "ms-settings:privacy-microphone",
             PermissionKind::SystemAudio => "ms-settings:sound",
+            PermissionKind::ScreenRecording => "ms-settings:privacy-screen-capture",
         };
         let _ = std::process::Command::new("cmd")
             .args(["/C", "start", "", page])
@@ -145,6 +180,22 @@ pub fn open_system_settings(kind: PermissionKind) {
 
 #[cfg(target_os = "macos")]
 mod mac {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGPreflightScreenCaptureAccess() -> bool;
+        fn CGRequestScreenCaptureAccess() -> bool;
+    }
+
+    pub(super) fn screen_recording_granted() -> bool {
+        // These CoreGraphics APIs are provided by macOS and have no pointers or ownership concerns.
+        unsafe { CGPreflightScreenCaptureAccess() }
+    }
+
+    pub(super) fn request_screen_recording() -> bool {
+        // The request may show Apple's system prompt; the user can also use the Settings action.
+        unsafe { CGRequestScreenCaptureAccess() }
+    }
+
     use block2::RcBlock;
     use objc2::msg_send;
     use objc2::runtime::{AnyClass, Bool};

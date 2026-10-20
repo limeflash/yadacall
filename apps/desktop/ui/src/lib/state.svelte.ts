@@ -135,6 +135,15 @@ function onEvent(e: EngineEvent) {
     case "liveSegment":
       app.live = [...app.live, e.segment].slice(-40); app.silentTrack = null;
       meetingWords.add(e.segment.text, (e.segment.corrections ?? []).map((c) => c.replacement)); break;
+    case "bookmarkUpdated":
+      app.rev++;
+      break;
+    case "screenshotPermissionRequired":
+      toast(t("Чтобы сохранять снимки, разреши запись экрана"), {
+        actionLabel: t("Открыть настройки"),
+        onAction: () => { void api.openSystemSettings("screenRecording").catch((error) => toast.error(error)); },
+      });
+      break;
     case "trackSilent":
       app.silentTrack = e.track; break;
     case "status":

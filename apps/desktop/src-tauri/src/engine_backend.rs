@@ -29,6 +29,7 @@ use crate::adapters::llm::Llm;
 use crate::adapters::runtime_keeper::RuntimeKeeper;
 use crate::adapters::{Prefs, SharedPrefs, ml, parse_summary_mode, read_prefs};
 use crate::api::*;
+use crate::bookmark_screenshot::{BookmarkScreenshot, XcapCapture, capture_with};
 use crate::{paths, permissions};
 use models::ActiveDownload;
 use settings::{AppPrefs, SystemAudioKnown};
@@ -77,6 +78,7 @@ pub(crate) struct State {
     downloads: HashMap<String, ActiveDownload>,
     progress: HashMap<String, ModelDownload>,
     app: AppPrefs,
+    screenshot_hint_sent: bool,
 }
 
 /// The engine behind the Tauri commands.
@@ -111,6 +113,17 @@ fn parse_time(s: &str) -> DateTime<Utc> {
 }
 
 impl EngineBackend {
+    #[cfg(target_os = "macos")]
+    fn hint_screenshot_permission(&self) {
+        if permissions::screen_recording_state() != PermissionState::Granted
+            && let Ok(mut state) = self.state.lock()
+            && !state.screenshot_hint_sent
+        {
+            state.screenshot_hint_sent = true;
+            (self.events)(EngineEvent::ScreenshotPermissionRequired);
+        }
+    }
+
     /// Opens the engine on `cfg.data_dir` with the real adapters and starts forwarding its events.
     pub async fn open(cfg: BackendConfig) -> Result<Arc<Self>> {
         std::fs::create_dir_all(&cfg.data_dir)?;
@@ -490,6 +503,12 @@ impl Backend for EngineBackend {
     async fn get_meeting(&self, id: &str) -> Result<MeetingDetail> {
         let detail = self.engine.get_meeting(mid(id)?).await?;
         let audio_url = self.audio_url(&detail).await;
+        let dir_path = self
+            .engine
+            .library_root()
+            .join(&detail.folder)
+            .to_string_lossy()
+            .into_owned();
         let mut meeting = detail.meeting;
         meeting.status = crate::commands::friendly_status(meeting.status);
         Ok(MeetingDetail {
@@ -498,6 +517,7 @@ impl Backend for EngineBackend {
             meeting,
             turns: detail.turns,
             summary: detail.summary,
+            dir_path,
         })
     }
 
@@ -626,8 +646,51 @@ impl Backend for EngineBackend {
 
     async fn recorder_bookmark(&self, label: Option<String>) -> Result<yc_core::meeting::Bookmark> {
         let b = self.engine.bookmark(label)?;
+        let mode = self.lock().app.bookmark_screenshot;
+        let meeting_id = self.engine.active_meeting_id()?;
         if let Some(r) = self.lock().rec.as_mut() {
             r.bookmarks.push(b.at_ms);
+        }
+        if mode != BookmarkScreenshot::Off {
+            let engine = Arc::clone(&self.engine);
+            #[cfg(target_os = "macos")]
+            let backend = self.me.upgrade();
+            let id = b.id.clone();
+            tokio::spawn(async move {
+                let captured = tokio::task::spawn_blocking(move || {
+                    capture_with(&XcapCapture, mode, std::process::id())
+                })
+                .await;
+                match captured {
+                    Ok(Ok(Some(bytes))) => {
+                        if let Err(error) = engine
+                            .attach_bookmark_screenshot(meeting_id, id, bytes)
+                            .await
+                        {
+                            tracing::warn!(%error, "could not attach bookmark screenshot");
+                        }
+                    }
+                    Ok(Ok(None)) => {
+                        tracing::debug!(
+                            "bookmark screenshot capture found no eligible display window"
+                        );
+                        #[cfg(target_os = "macos")]
+                        if let Some(backend) = backend.as_ref() {
+                            backend.hint_screenshot_permission();
+                        }
+                    }
+                    Ok(Err(error)) => {
+                        tracing::debug!(%error, "bookmark screenshot capture unavailable");
+                        #[cfg(target_os = "macos")]
+                        {
+                            if let Some(backend) = backend {
+                                backend.hint_screenshot_permission();
+                            }
+                        }
+                    }
+                    Err(error) => tracing::warn!(%error, "bookmark screenshot worker failed"),
+                }
+            });
         }
         Ok(b)
     }
@@ -913,6 +976,7 @@ impl Backend for EngineBackend {
         Ok(Permissions {
             microphone: permissions::microphone_state(),
             system_audio: self.system_audio_state(),
+            screen_recording: permissions::screen_recording_state(),
         })
     }
 
@@ -940,6 +1004,9 @@ impl Backend for EngineBackend {
                     drop(g);
                     self.save_app_prefs(&app);
                 }
+            }
+            PermissionKind::ScreenRecording => {
+                let _ = permissions::request_screen_recording();
             }
         }
         self.permissions().await

@@ -160,6 +160,40 @@ pub(crate) struct Session {
     paused_since: Option<Instant>,
 }
 
+impl Session {
+    /// Saves an image for one live bookmark and updates the crash-recovery metadata atomically.
+    pub(crate) fn attach_bookmark_screenshot(
+        &mut self,
+        bookmark_id: &str,
+        bytes: &[u8],
+    ) -> Result<Bookmark> {
+        let bookmark = self
+            .meta
+            .bookmarks
+            .iter()
+            .find(|b| b.id == bookmark_id)
+            .cloned()
+            .ok_or_else(|| Error::NotFound(format!("bookmark {bookmark_id}")))?;
+        let relative = format!("shots/{}.jpg", bookmark.at_ms);
+        let path = self.dir.join(&relative);
+        std::fs::create_dir_all(
+            path.parent()
+                .ok_or_else(|| Error::Storage("invalid screenshot path".into()))?,
+        )?;
+        crate::meta::write_atomic(&path, bytes)?;
+        let updated = self
+            .meta
+            .bookmarks
+            .iter_mut()
+            .find(|b| b.id == bookmark_id)
+            .ok_or_else(|| Error::NotFound(format!("bookmark {bookmark_id}")))?;
+        updated.screenshot = Some(relative);
+        let updated = updated.clone();
+        self.meta.write(&self.dir)?;
+        Ok(updated)
+    }
+}
+
 impl Drop for Session {
     /// Dropping a session that was not stopped behaves like a crash: threads end, files stay.
     fn drop(&mut self) {

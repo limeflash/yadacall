@@ -42,6 +42,14 @@ const ASK_TOP_K: usize = 8;
 /// Transcript context added on each side of a hit.
 const CONTEXT_MS: u64 = 15_000;
 
+fn safe_meeting_relative(path: &str) -> bool {
+    let path = std::path::Path::new(path);
+    !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
 fn clean_bookmark_label(label: Option<String>) -> Result<Option<String>> {
     let label = label
         .map(|label| label.trim().to_owned())
@@ -236,19 +244,88 @@ impl Engine {
         id: MeetingId,
         bookmark_id: String,
     ) -> Result<()> {
-        self.blocking(move |e| {
-            e.mutate_meeting_metadata(id, |r| {
-                ensure_finished(&r.meeting.status)?;
-                let n = r.meeting.bookmarks.len();
-                r.meeting.bookmarks.retain(|b| b.id != bookmark_id);
-                if n == r.meeting.bookmarks.len() {
-                    return Err(Error::NotFound(format!("bookmark {bookmark_id}")));
-                }
-                Ok(((), true))
+        let screenshot = self
+            .blocking(move |e| {
+                let mut removed = None;
+                let mut folder = None;
+                e.mutate_meeting_metadata(id, |r| {
+                    ensure_finished(&r.meeting.status)?;
+                    folder = Some(r.folder.clone());
+                    let n = r.meeting.bookmarks.len();
+                    removed = r
+                        .meeting
+                        .bookmarks
+                        .iter()
+                        .find(|b| b.id == bookmark_id)
+                        .and_then(|b| b.screenshot.clone());
+                    r.meeting.bookmarks.retain(|b| b.id != bookmark_id);
+                    if n == r.meeting.bookmarks.len() {
+                        return Err(Error::NotFound(format!("bookmark {bookmark_id}")));
+                    }
+                    Ok(((), true))
+                })?;
+                Ok((folder, removed))
             })
-        })
-        .await?;
+            .await?;
+        if let (Some(folder), Some(path)) = screenshot
+            && safe_meeting_relative(&path)
+        {
+            match std::fs::remove_file(self.library_root().join(folder).join(path)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         Ok(())
+    }
+
+    /// Attaches a screenshot to a live bookmark, whether recording is still active or just finalized.
+    pub async fn attach_bookmark_screenshot(
+        self: &Arc<Self>,
+        id: MeetingId,
+        bookmark_id: String,
+        bytes: Vec<u8>,
+    ) -> Result<yc_core::meeting::Bookmark> {
+        let live = {
+            let mut active = self
+                .active
+                .lock()
+                .map_err(|_| Error::Storage("active recording lock poisoned".into()))?;
+            match active.as_mut().filter(|s| s.id == id) {
+                Some(session) => Some(session.attach_bookmark_screenshot(&bookmark_id, &bytes)?),
+                None => None,
+            }
+        };
+        let bookmark = if let Some(bookmark) = live {
+            bookmark
+        } else {
+            self.blocking(move |e| {
+                e.mutate_meeting_metadata(id, |record| {
+                    let folder = record.folder.clone();
+                    let bookmark = record
+                        .meeting
+                        .bookmarks
+                        .iter_mut()
+                        .find(|b| b.id == bookmark_id)
+                        .ok_or_else(|| Error::NotFound(format!("bookmark {bookmark_id}")))?;
+                    let relative = format!("shots/{}.jpg", bookmark.at_ms);
+                    let path = e.library_root().join(folder).join(&relative);
+                    std::fs::create_dir_all(
+                        path.parent()
+                            .ok_or_else(|| Error::Storage("invalid screenshot path".into()))?,
+                    )?;
+                    crate::meta::write_atomic(&path, &bytes)?;
+                    bookmark.screenshot = Some(relative);
+                    Ok((bookmark.clone(), true))
+                })
+            })
+            .await?
+        };
+        self.emit(yc_core::events::EngineEvent::BookmarkUpdated {
+            meeting: id,
+            bookmark: bookmark.clone(),
+        });
+        Ok(bookmark)
     }
 
     pub async fn get_meeting(self: &Arc<Self>, id: MeetingId) -> Result<MeetingDetail> {

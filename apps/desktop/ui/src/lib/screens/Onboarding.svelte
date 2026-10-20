@@ -60,7 +60,7 @@
   let llmId = $state<string | null>(saved.llmId);
   function persist() { try { localStorage.setItem(KEY, JSON.stringify({ step, lang, asrId, mode, llmId })); } catch { /* storage may be blocked */ } }
 
-  let perms = $state<Permissions>({ microphone: "notDetermined", systemAudio: "notDetermined" });
+  let perms = $state<Permissions>({ microphone: "notDetermined", systemAudio: "notDetermined", screenRecording: "notDetermined" });
   let ollama = $state<OllamaStatus | null>(null);
   let accounts = $state<CalendarAccount[]>([]);
   let connecting = $state(false);
