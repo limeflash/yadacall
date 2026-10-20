@@ -1,13 +1,16 @@
 //! Fast, best-effort capture for live bookmarks. Work is always run off the recorder thread.
 
+//! macOS and Windows only: on Linux the capture adapter reports "no screenshot" and the bookmark is
+//! kept without one.
+
 use std::io::Cursor;
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use device_query::DeviceQuery;
+use image::{DynamicImage, ImageEncoder, imageops::FilterType};
 use serde::{Deserialize, Serialize};
-use xcap::{
-    Monitor, Window,
-    image::{self, DynamicImage, ImageEncoder, imageops::FilterType},
-};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use xcap::{Monitor, Window};
 
 /// Which visual to attach to a live bookmark.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +41,7 @@ pub fn capture_with(
 #[derive(Debug, Default)]
 pub struct XcapCapture;
 
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct WindowInfo {
     pid: u32,
@@ -45,6 +49,7 @@ struct WindowInfo {
     visible: bool,
 }
 
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 fn choose_window(windows: &[WindowInfo], own_pid: u32) -> Option<usize> {
     windows
         .iter()
@@ -54,6 +59,7 @@ fn choose_window(windows: &[WindowInfo], own_pid: u32) -> Option<usize> {
         .map(|(index, _)| index)
 }
 
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 fn encode_jpeg(mut image: image::RgbaImage) -> Result<Vec<u8>, String> {
     let (width, height) = image.dimensions();
     let longest = width.max(height);
@@ -75,6 +81,14 @@ fn encode_jpeg(mut image: image::RgbaImage) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+impl ScreenshotCapture for XcapCapture {
+    fn capture(&self, _mode: BookmarkScreenshot, _own_pid: u32) -> Result<Option<Vec<u8>>, String> {
+        Ok(None)
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 impl ScreenshotCapture for XcapCapture {
     fn capture(&self, mode: BookmarkScreenshot, own_pid: u32) -> Result<Option<Vec<u8>>, String> {
         if mode == BookmarkScreenshot::Off {
@@ -118,7 +132,7 @@ impl ScreenshotCapture for XcapCapture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xcap::image::GenericImageView;
+    use image::GenericImageView;
 
     #[test]
     fn frontmost_non_yadacall_window_is_selected() {

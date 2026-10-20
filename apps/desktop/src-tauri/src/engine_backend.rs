@@ -78,6 +78,8 @@ pub(crate) struct State {
     downloads: HashMap<String, ActiveDownload>,
     progress: HashMap<String, ModelDownload>,
     app: AppPrefs,
+    /// The Screen Recording permission hint is shown once per run (macOS only).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     screenshot_hint_sent: bool,
 }
 
