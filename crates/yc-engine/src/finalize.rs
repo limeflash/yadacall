@@ -104,6 +104,8 @@ impl Engine {
             expected_speakers_explicit: meta.expected_speakers_explicit,
             tracks: tracks.clone(),
             bookmarks: meta.bookmarks.clone(),
+            favorite: false,
+            folder_id: None,
             participants: Vec::new(),
             participant_hints: meta.participant_hints.clone(),
             asr_model: read_asr_model(dir),

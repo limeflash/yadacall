@@ -42,6 +42,34 @@ const ASK_TOP_K: usize = 8;
 /// Transcript context added on each side of a hit.
 const CONTEXT_MS: u64 = 15_000;
 
+fn clean_bookmark_label(label: Option<String>) -> Result<Option<String>> {
+    let label = label
+        .map(|label| label.trim().to_owned())
+        .filter(|label| !label.is_empty());
+    if label
+        .as_ref()
+        .is_some_and(|label| label.chars().count() > 120)
+    {
+        return Err(Error::Invalid(
+            "bookmark labels must be 120 characters or fewer".into(),
+        ));
+    }
+    Ok(label)
+}
+
+fn ensure_finished(status: &yc_core::meeting::MeetingStatus) -> Result<()> {
+    if matches!(
+        status,
+        yc_core::meeting::MeetingStatus::Recording
+            | yc_core::meeting::MeetingStatus::Processing { .. }
+    ) {
+        return Err(Error::Invalid(
+            "bookmarks can only be edited after recording finishes".into(),
+        ));
+    }
+    Ok(())
+}
+
 impl Engine {
     /// Newest first.
     pub async fn list_meetings(
@@ -51,6 +79,176 @@ impl Engine {
     ) -> Result<Vec<MeetingListItem>> {
         self.blocking(move |e| e.store.list_meetings(limit, offset))
             .await
+    }
+
+    /// List meetings with optional folder and favourites-only filters.
+    pub async fn list_meetings_filtered(
+        self: &Arc<Self>,
+        limit: usize,
+        offset: usize,
+        folder_id: Option<String>,
+        favorites_only: bool,
+    ) -> Result<Vec<MeetingListItem>> {
+        self.blocking(move |e| {
+            e.store
+                .list_meetings_filtered(limit, offset, folder_id.as_deref(), favorites_only)
+        })
+        .await
+    }
+
+    /// Folder CRUD stored in the library root's `folders.json`.
+    pub async fn list_folders(self: &Arc<Self>) -> Result<Vec<yc_core::meeting::Folder>> {
+        self.blocking(|e| e.store.list_folders()).await
+    }
+    /// Create a library folder.
+    pub async fn create_folder(
+        self: &Arc<Self>,
+        name: String,
+        color: Option<String>,
+    ) -> Result<yc_core::meeting::Folder> {
+        self.blocking(move |e| e.store.create_folder(name, color))
+            .await
+    }
+    /// Update selected folder fields.
+    pub async fn update_folder(
+        self: &Arc<Self>,
+        id: String,
+        name: Option<String>,
+        color: Option<Option<String>>,
+        order: Option<u32>,
+    ) -> Result<yc_core::meeting::Folder> {
+        self.blocking(move |e| e.store.update_folder(&id, name, color, order))
+            .await
+    }
+    /// Delete a folder and unassign its meetings.
+    pub async fn delete_folder(self: &Arc<Self>, id: String) -> Result<()> {
+        self.blocking(move |e| {
+            let meetings = e
+                .store
+                .list_meetings_filtered(100_000, 0, Some(&id), false)?;
+            for item in meetings {
+                e.mutate_meeting_metadata(item.id, |record| {
+                    record.meeting.folder_id = None;
+                    Ok(((), true))
+                })?;
+            }
+            e.store.delete_folder(&id)
+        })
+        .await
+    }
+
+    /// Assign a meeting to a folder, or clear its assignment.
+    pub async fn set_meeting_folder(
+        self: &Arc<Self>,
+        id: MeetingId,
+        folder_id: Option<String>,
+    ) -> Result<()> {
+        self.blocking(move |e| {
+            if let Some(folder_id) = &folder_id
+                && !e.store.list_folders()?.iter().any(|f| f.id == *folder_id)
+            {
+                return Err(Error::NotFound(format!("folder {folder_id}")));
+            }
+            e.mutate_meeting_metadata(id, |r| {
+                r.meeting.folder_id = folder_id;
+                Ok(((), true))
+            })?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Toggle whether a meeting is exempt from audio retention.
+    pub async fn set_meeting_favorite(
+        self: &Arc<Self>,
+        id: MeetingId,
+        favorite: bool,
+    ) -> Result<()> {
+        self.blocking(move |e| {
+            e.mutate_meeting_metadata(id, |r| {
+                r.meeting.favorite = favorite;
+                Ok(((), true))
+            })?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Add a post-recording bookmark, clamped to the meeting duration.
+    pub async fn add_bookmark(
+        self: &Arc<Self>,
+        id: MeetingId,
+        at_ms: u64,
+        label: Option<String>,
+    ) -> Result<yc_core::meeting::Bookmark> {
+        let bookmark = self
+            .blocking(move |e| {
+                e.mutate_meeting_metadata(id, |r| {
+                    ensure_finished(&r.meeting.status)?;
+                    let label = clean_bookmark_label(label)?;
+                    let bookmark = yc_core::meeting::Bookmark {
+                        id: uuid::Uuid::now_v7().to_string(),
+                        at_ms: at_ms.min(r.meeting.duration_ms),
+                        label,
+                        created_after: Some(true),
+                        screenshot: None,
+                    };
+                    r.meeting.bookmarks.push(bookmark.clone());
+                    r.meeting.bookmarks.sort_by_key(|b| b.at_ms);
+                    Ok((bookmark, true))
+                })
+            })
+            .await?;
+        Ok(bookmark)
+    }
+
+    /// Update or clear a bookmark label.
+    pub async fn update_bookmark(
+        self: &Arc<Self>,
+        id: MeetingId,
+        bookmark_id: String,
+        label: Option<String>,
+    ) -> Result<yc_core::meeting::Bookmark> {
+        let bookmark = self
+            .blocking(move |e| {
+                e.mutate_meeting_metadata(id, |r| {
+                    ensure_finished(&r.meeting.status)?;
+                    let label = clean_bookmark_label(label)?;
+                    let bookmark = r
+                        .meeting
+                        .bookmarks
+                        .iter_mut()
+                        .find(|b| b.id == bookmark_id)
+                        .ok_or_else(|| Error::NotFound(format!("bookmark {bookmark_id}")))?;
+                    bookmark.label = label;
+                    Ok((bookmark.clone(), true))
+                })
+            })
+            .await?;
+        Ok(bookmark)
+    }
+
+    /// Remove a bookmark from a meeting.
+    pub async fn remove_bookmark(
+        self: &Arc<Self>,
+        id: MeetingId,
+        bookmark_id: String,
+    ) -> Result<()> {
+        self.blocking(move |e| {
+            e.mutate_meeting_metadata(id, |r| {
+                ensure_finished(&r.meeting.status)?;
+                let n = r.meeting.bookmarks.len();
+                r.meeting.bookmarks.retain(|b| b.id != bookmark_id);
+                if n == r.meeting.bookmarks.len() {
+                    return Err(Error::NotFound(format!("bookmark {bookmark_id}")));
+                }
+                Ok(((), true))
+            })
+        })
+        .await?;
+        Ok(())
     }
 
     pub async fn get_meeting(self: &Arc<Self>, id: MeetingId) -> Result<MeetingDetail> {
@@ -175,7 +373,7 @@ impl Engine {
     /// Answers a question over the library: retrieves the best passages and streams the
     /// [`Answerer`](crate::ports::Answerer)'s reply, including its egress note and citations.
     pub async fn ask(self: &Arc<Self>, question: String) -> Result<mpsc::Receiver<AnswerEvent>> {
-        Ok(self.ask_with_excerpts(question).await?.1)
+        Ok(self.ask_with_excerpts(question, None).await?.1)
     }
 
     /// Like [`Engine::ask`], and also returns the excerpts handed to the answerer, so a caller can
@@ -183,6 +381,7 @@ impl Engine {
     pub async fn ask_with_excerpts(
         self: &Arc<Self>,
         question: String,
+        folder_id: Option<String>,
     ) -> Result<(Vec<Excerpt>, mpsc::Receiver<AnswerEvent>)> {
         let answerer = self
             .ports
@@ -193,7 +392,14 @@ impl Engine {
         let q = question.clone();
         let excerpts = self
             .blocking(move |e| {
-                let hits = e.search_blocking(&q, &SearchFilters::default(), ASK_TOP_K)?;
+                let hits = e.search_blocking(
+                    &q,
+                    &SearchFilters {
+                        folder_id,
+                        ..SearchFilters::default()
+                    },
+                    ASK_TOP_K,
+                )?;
                 Ok(e.excerpts_for(&hits))
             })
             .await?;

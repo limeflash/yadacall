@@ -244,7 +244,7 @@ async fn import_transcribe_search_summarise_ask() {
     assert!(text.contains("пятниц"), "transcript lacks 'пятниц': {text}");
 
     // Search (hybrid: FTS + semantic).
-    let hits = backend.search("релизные заметки").await.unwrap();
+    let hits = backend.search("релизные заметки", None).await.unwrap();
     assert!(!hits.is_empty(), "no search hits");
     assert_eq!(hits[0].meeting_id, meeting_id);
 
@@ -256,7 +256,7 @@ async fn import_transcribe_search_summarise_ask() {
     assert!(!tasks.is_empty());
 
     // Listing, tasks, export, copy-for-Claude.
-    let list = backend.list_meetings().await.unwrap();
+    let list = backend.list_meetings(None, false).await.unwrap();
     assert_eq!(list.len(), 1);
     assert!(list[0].snippet.is_some());
     let path = backend
@@ -280,6 +280,7 @@ async fn import_transcribe_search_summarise_ask() {
     backend
         .ask(
             "Кто подготовит релизные заметки?",
+            None,
             Arc::new(move |e| match e {
                 AskEvent::Token { text } => tk.lock().unwrap().push_str(&text),
                 AskEvent::Done { sent, .. } => *fin.lock().unwrap() = Some(sent),

@@ -40,6 +40,10 @@ pub struct MeetingListItem {
     /// e.g. "audio deleted after 7 days, text and summary kept".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_note: Option<String>,
+    #[serde(default)]
+    pub favorite: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,6 +186,10 @@ pub struct TaskItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at_ms: Option<Ms>,
     pub done: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meeting_folder_id: Option<String>,
+    #[serde(default)]
+    pub meeting_favorite: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -691,10 +699,43 @@ pub use yc_core::error::PermissionKind;
 #[async_trait]
 pub trait Backend: Send + Sync + 'static {
     // meetings
-    async fn list_meetings(&self) -> Result<Vec<MeetingListItem>>;
+    async fn list_meetings(
+        &self,
+        folder_id: Option<&str>,
+        favorites_only: bool,
+    ) -> Result<Vec<MeetingListItem>>;
+    async fn list_folders(&self) -> Result<Vec<yc_core::meeting::Folder>>;
+    async fn create_folder(
+        &self,
+        name: &str,
+        color: Option<String>,
+    ) -> Result<yc_core::meeting::Folder>;
+    async fn update_folder(
+        &self,
+        id: &str,
+        name: Option<String>,
+        color: Option<Option<String>>,
+        order: Option<u32>,
+    ) -> Result<yc_core::meeting::Folder>;
+    async fn delete_folder(&self, id: &str) -> Result<()>;
     async fn get_meeting(&self, id: &str) -> Result<MeetingDetail>;
     async fn rename_meeting(&self, id: &str, title: &str) -> Result<()>;
     async fn delete_meeting(&self, id: &str) -> Result<()>;
+    async fn set_meeting_folder(&self, id: &str, folder_id: Option<String>) -> Result<()>;
+    async fn set_meeting_favorite(&self, id: &str, favorite: bool) -> Result<()>;
+    async fn add_bookmark(
+        &self,
+        id: &str,
+        at_ms: Ms,
+        label: Option<String>,
+    ) -> Result<yc_core::meeting::Bookmark>;
+    async fn update_bookmark(
+        &self,
+        id: &str,
+        bookmark_id: &str,
+        label: Option<String>,
+    ) -> Result<yc_core::meeting::Bookmark>;
+    async fn remove_bookmark(&self, id: &str, bookmark_id: &str) -> Result<()>;
     async fn rename_speaker(&self, id: &str, key: &str, name: &str) -> Result<RenameOutcome>;
     async fn set_task_done(&self, id: &str, index: usize, done: bool) -> Result<()>;
     async fn regenerate_summary(&self, id: &str) -> Result<Summary>;
@@ -715,12 +756,12 @@ pub trait Backend: Send + Sync + 'static {
     /// Stops and returns the meeting id; post-call jobs continue in the background (`Status` events).
     async fn recorder_stop(&self) -> Result<String>;
     async fn recorder_cancel(&self) -> Result<()>;
-    async fn recorder_bookmark(&self, label: Option<String>) -> Result<()>;
+    async fn recorder_bookmark(&self, label: Option<String>) -> Result<yc_core::meeting::Bookmark>;
     async fn list_input_devices(&self) -> Result<Vec<InputDevice>>;
 
     // search / ask / tasks / import
-    async fn search(&self, query: &str) -> Result<Vec<SearchHit>>;
-    async fn ask(&self, question: &str, sink: AskSink) -> Result<()>;
+    async fn search(&self, query: &str, folder_id: Option<&str>) -> Result<Vec<SearchHit>>;
+    async fn ask(&self, question: &str, folder_id: Option<&str>, sink: AskSink) -> Result<()>;
     async fn list_tasks(&self, include_done: bool) -> Result<Vec<TaskItem>>;
     async fn import_audio(&self, paths: Vec<String>) -> Result<Vec<ImportJob>>;
     async fn list_imports(&self) -> Result<Vec<ImportJob>>;

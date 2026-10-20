@@ -36,6 +36,8 @@ fn meeting() -> Meeting {
             },
         ],
         bookmarks: Vec::new(),
+        favorite: false,
+        folder_id: None,
         participants: Vec::new(),
         asr_model: Some("test-model".to_owned()),
         status: MeetingStatus::Ready,
@@ -231,8 +233,11 @@ fn renders_transcript_summary_and_claude_copy() {
         suggestions: Vec::new(),
     });
     meeting.bookmarks.push(Bookmark {
+        id: "bookmark-test".into(),
         at_ms: 12_400,
         label: Some("важное".to_owned()),
+        created_after: Some(false),
+        screenshot: None,
     });
     let transcript = render_transcript_markdown(
         &meeting,

@@ -73,6 +73,7 @@ retention policy only after the transcript stage succeeded.
 
 ```
 <library>/                           default ~/YadaCall (user-configurable)
+  folders.json        user-managed meeting folders (atomically replaced)
   2026-10-12 14-30 Синк по онбордингу/
     meeting.json        id, title, started_at, duration, track clock offsets, bookmarks, participants
     transcript.json     segments: start, end, speaker, track, text (+ words when available)

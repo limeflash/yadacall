@@ -21,6 +21,8 @@ pub(crate) fn migrate(connection: &mut Connection) -> Result<()> {
                 folder TEXT NOT NULL,
                 status_json TEXT NOT NULL,
                 asr_model TEXT,
+                favorite INTEGER NOT NULL DEFAULT 0,
+                folder_id TEXT,
                 updated_at TEXT NOT NULL
              );
              CREATE TABLE segments (
@@ -79,10 +81,12 @@ pub(crate) fn migrate(connection: &mut Connection) -> Result<()> {
              CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
              INSERT INTO meta(key, value) VALUES('embedding_model_id', 'unconfigured'), ('embedding_dims', '1');
              CREATE VIRTUAL TABLE chunk_vectors USING vec0(chunk_id INTEGER PRIMARY KEY, embedding float[1] distance_metric=cosine);
-             PRAGMA user_version=1;",
+             PRAGMA user_version=2;",
         ).map_err(storage_error)?;
         transaction.commit().map_err(storage_error)?;
-    } else if version != 1 {
+    } else if version == 1 {
+        connection.execute_batch("ALTER TABLE meetings ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0; ALTER TABLE meetings ADD COLUMN folder_id TEXT; PRAGMA user_version=2;").map_err(storage_error)?;
+    } else if version != 2 {
         return Err(Error::Storage(format!(
             "unsupported index schema version {version}"
         )));

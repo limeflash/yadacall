@@ -219,12 +219,22 @@ fn parse_json(
         .flatten()
         .filter_map(|bookmark| {
             Some(Bookmark {
+                id: bookmark
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| "legacy-bookmark".to_owned()),
                 at_ms: bookmark
                     .get("atMs")
                     .or_else(|| bookmark.get("at_ms"))?
                     .as_u64()?,
                 label: bookmark
                     .get("label")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                created_after: bookmark.get("createdAfter").and_then(Value::as_bool),
+                screenshot: bookmark
+                    .get("screenshot")
                     .and_then(Value::as_str)
                     .map(str::to_owned),
             })
@@ -312,8 +322,11 @@ fn parse_markdown(
             && let Some(at_ms) = parse_clock(time)
         {
             bookmarks.push(Bookmark {
+                id: format!("legacy-{at_ms}"),
                 at_ms,
                 label: Some(label.to_owned()),
+                created_after: Some(false),
+                screenshot: None,
             });
         }
     }

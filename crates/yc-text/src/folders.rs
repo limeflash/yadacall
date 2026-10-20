@@ -84,6 +84,8 @@ mod tests {
             expected_speakers_explicit: false,
             tracks: Vec::new(),
             bookmarks: Vec::new(),
+            favorite: false,
+            folder_id: None,
             participants: Vec::new(),
             participant_hints: Vec::new(),
             asr_model: None,

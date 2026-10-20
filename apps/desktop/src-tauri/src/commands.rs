@@ -116,8 +116,71 @@ type R<T> = Result<T, CmdError>;
 // ---- meetings -----------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn list_meetings(b: B<'_>) -> R<Vec<MeetingListItem>> {
-    Ok(b.list_meetings().await?)
+pub async fn list_meetings(
+    b: B<'_>,
+    folder_id: Option<String>,
+    favorites_only: Option<bool>,
+) -> R<Vec<MeetingListItem>> {
+    Ok(
+        b.list_meetings(folder_id.as_deref(), favorites_only.unwrap_or(false))
+            .await?,
+    )
+}
+#[tauri::command]
+pub async fn list_folders(b: B<'_>) -> R<Vec<yc_core::meeting::Folder>> {
+    Ok(b.list_folders().await?)
+}
+#[tauri::command]
+pub async fn create_folder(
+    b: B<'_>,
+    name: String,
+    color: Option<String>,
+) -> R<yc_core::meeting::Folder> {
+    Ok(b.create_folder(&name, color).await?)
+}
+#[tauri::command]
+pub async fn update_folder(
+    b: B<'_>,
+    id: String,
+    name: Option<String>,
+    color: Option<Option<String>>,
+    order: Option<u32>,
+) -> R<yc_core::meeting::Folder> {
+    Ok(b.update_folder(&id, name, color, order).await?)
+}
+#[tauri::command]
+pub async fn delete_folder(b: B<'_>, id: String) -> R<()> {
+    Ok(b.delete_folder(&id).await?)
+}
+#[tauri::command]
+pub async fn set_meeting_folder(b: B<'_>, meeting_id: String, folder_id: Option<String>) -> R<()> {
+    Ok(b.set_meeting_folder(&meeting_id, folder_id).await?)
+}
+#[tauri::command]
+pub async fn set_meeting_favorite(b: B<'_>, meeting_id: String, favorite: bool) -> R<()> {
+    Ok(b.set_meeting_favorite(&meeting_id, favorite).await?)
+}
+#[tauri::command]
+pub async fn add_bookmark(
+    b: B<'_>,
+    meeting_id: String,
+    at_ms: yc_core::Ms,
+    label: Option<String>,
+) -> R<yc_core::meeting::Bookmark> {
+    Ok(b.add_bookmark(&meeting_id, at_ms, label).await?)
+}
+#[tauri::command]
+pub async fn update_bookmark(
+    b: B<'_>,
+    meeting_id: String,
+    bookmark_id: String,
+    label: Option<String>,
+) -> R<yc_core::meeting::Bookmark> {
+    Ok(b.update_bookmark(&meeting_id, &bookmark_id, label).await?)
+}
+#[tauri::command]
+pub async fn remove_bookmark(b: B<'_>, meeting_id: String, bookmark_id: String) -> R<()> {
+    Ok(b.remove_bookmark(&meeting_id, &bookmark_id).await?)
 }
 #[tauri::command]
 pub async fn get_meeting(b: B<'_>, id: String) -> R<MeetingDetail> {
@@ -191,7 +254,7 @@ pub async fn recorder_cancel(b: B<'_>) -> R<()> {
     Ok(b.recorder_cancel().await?)
 }
 #[tauri::command]
-pub async fn recorder_bookmark(b: B<'_>, label: Option<String>) -> R<()> {
+pub async fn recorder_bookmark(b: B<'_>, label: Option<String>) -> R<yc_core::meeting::Bookmark> {
     Ok(b.recorder_bookmark(label).await?)
 }
 #[tauri::command]
@@ -202,15 +265,20 @@ pub async fn list_input_devices(b: B<'_>) -> R<Vec<InputDevice>> {
 // ---- search / ask / tasks / import --------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn search(b: B<'_>, query: String) -> R<Vec<SearchHit>> {
-    Ok(b.search(&query).await?)
+pub async fn search(b: B<'_>, query: String, folder_id: Option<String>) -> R<Vec<SearchHit>> {
+    Ok(b.search(&query, folder_id.as_deref()).await?)
 }
 #[tauri::command]
-pub async fn ask(b: B<'_>, question: String, on_event: Channel<AskEvent>) -> R<()> {
+pub async fn ask(
+    b: B<'_>,
+    question: String,
+    folder_id: Option<String>,
+    on_event: Channel<AskEvent>,
+) -> R<()> {
     let sink: AskSink = Arc::new(move |e| {
         let _ = on_event.send(e);
     });
-    Ok(b.ask(&question, sink).await?)
+    Ok(b.ask(&question, folder_id.as_deref(), sink).await?)
 }
 #[tauri::command]
 pub async fn list_tasks(b: B<'_>, include_done: bool) -> R<Vec<TaskItem>> {

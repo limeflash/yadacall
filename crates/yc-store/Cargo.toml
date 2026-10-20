@@ -9,6 +9,7 @@ license.workspace = true
 yc-core.workspace = true
 yc-text.workspace = true
 chrono.workspace = true
+uuid.workspace = true
 rusqlite = { version = "0.40", features = ["bundled"] }
 sqlite-vec = "=0.1.6"
 serde.workspace = true

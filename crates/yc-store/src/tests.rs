@@ -54,6 +54,8 @@ fn meeting(title: &str) -> Meeting {
             },
         ],
         bookmarks: Vec::new(),
+        favorite: false,
+        folder_id: None,
         participants: Vec::new(),
         asr_model: Some("test-asr".to_owned()),
         status: MeetingStatus::Ready,
@@ -162,6 +164,129 @@ fn empty_database_migrates_and_meeting_round_trips_through_files_index_and_searc
             .folder
             .contains("Новый заголовок")
     );
+}
+
+#[test]
+fn folders_unassign_meetings_and_folder_scopes_filter_lists_and_search() {
+    let library = TestLibrary::new();
+    let store = Store::open_in_library(&library.0).expect("open store");
+    let folder = store
+        .create_folder("Работа".into(), Some("blue".into()))
+        .expect("create folder");
+    let folder = store
+        .update_folder(&folder.id, Some("Рабочее".into()), None, Some(3))
+        .expect("update folder");
+    assert_eq!(folder.name, "Рабочее");
+    assert_eq!(folder.order, 3);
+    let mut meeting = meeting("Рабочая встреча");
+    meeting.folder_id = Some(folder.id.clone());
+    meeting.favorite = true;
+    store
+        .save_meeting(&meeting, &transcript(), Some(&summary()))
+        .expect("save meeting");
+    let scoped = store
+        .list_meetings_filtered(10, 0, Some(&folder.id), false)
+        .expect("folder filter");
+    assert_eq!(scoped.len(), 1);
+    assert!(scoped[0].favorite);
+    assert_eq!(scoped[0].folder_id.as_deref(), Some(folder.id.as_str()));
+    assert_eq!(
+        store
+            .list_meetings_filtered(10, 0, None, true)
+            .expect("favourites")
+            .len(),
+        1
+    );
+    assert_eq!(
+        store.list_tasks(true).expect("tasks")[0]
+            .meeting_folder_id
+            .as_deref(),
+        Some(folder.id.as_str())
+    );
+    assert!(
+        store
+            .search(
+                "разрешений",
+                None,
+                &SearchFilters {
+                    folder_id: Some(folder.id.clone()),
+                    ..SearchFilters::default()
+                },
+                10
+            )
+            .expect("matching folder search")
+            .iter()
+            .any(|hit| hit.meeting_id == meeting.id)
+    );
+    assert!(
+        !store
+            .search(
+                "разрешений",
+                None,
+                &SearchFilters {
+                    folder_id: Some("missing".into()),
+                    ..SearchFilters::default()
+                },
+                10
+            )
+            .expect("scoped search")
+            .iter()
+            .any(|hit| hit.meeting_id == meeting.id)
+    );
+    store.delete_folder(&folder.id).expect("delete folder");
+    assert!(store.list_folders().expect("folders").is_empty());
+    let loaded = store.get_meeting(meeting.id).expect("meeting remains");
+    assert_eq!(loaded.meeting.folder_id, None);
+    assert_eq!(
+        store
+            .list_meetings_filtered(10, 0, None, true)
+            .expect("still favourite")
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn bookmark_add_update_remove_persists_with_meeting_metadata() {
+    let library = TestLibrary::new();
+    let store = Store::open_in_library(&library.0).expect("open store");
+    let mut meeting = meeting("Bookmarks");
+    meeting.bookmarks.push(yc_core::meeting::Bookmark {
+        id: "bookmark-1".into(),
+        at_ms: 500,
+        label: Some("first".into()),
+        created_after: Some(true),
+        screenshot: None,
+    });
+    store
+        .save_meeting(&meeting, &transcript(), None)
+        .expect("save");
+    let mut loaded = store.get_meeting(meeting.id).expect("read");
+    assert_eq!(loaded.meeting.bookmarks[0].id, "bookmark-1");
+    loaded.meeting.bookmarks[0].label = Some("updated".into());
+    store
+        .save_meeting(&loaded.meeting, &loaded.transcript, None)
+        .expect("persist label update");
+    loaded = store.get_meeting(meeting.id).expect("reload update");
+    assert_eq!(
+        loaded.meeting.bookmarks[0].label.as_deref(),
+        Some("updated")
+    );
+    loaded.meeting.bookmarks.push(yc_core::meeting::Bookmark {
+        id: "bookmark-2".into(),
+        at_ms: 1500,
+        label: None,
+        created_after: Some(true),
+        screenshot: None,
+    });
+    loaded.meeting.bookmarks.sort_by_key(|b| b.at_ms);
+    loaded.meeting.bookmarks.retain(|b| b.id != "bookmark-1");
+    store
+        .save_meeting(&loaded.meeting, &loaded.transcript, None)
+        .expect("persist edits");
+    let saved = store.get_meeting(meeting.id).expect("read saved edits");
+    assert_eq!(saved.meeting.bookmarks.len(), 1);
+    assert_eq!(saved.meeting.bookmarks[0].id, "bookmark-2");
 }
 
 #[test]

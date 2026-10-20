@@ -84,8 +84,14 @@ async fn ollama_summarises_the_russian_fixture() {
         .expect("bookmarks")
         .iter()
         .map(|b| Bookmark {
+            id: b["id"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| "fixture-bookmark".to_owned()),
             at_ms: b["atMs"].as_u64().expect("at"),
             label: b["label"].as_str().map(str::to_owned),
+            created_after: b["createdAfter"].as_bool(),
+            screenshot: b["screenshot"].as_str().map(str::to_owned),
         })
         .collect();
     let input = SummaryInput {

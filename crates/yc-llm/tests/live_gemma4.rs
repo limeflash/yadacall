@@ -115,8 +115,14 @@ async fn local_gemma4_summarizes_two_minute_russian_meeting() {
         .expect("bookmarks")
         .iter()
         .map(|bookmark| Bookmark {
+            id: bookmark["id"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| "fixture-bookmark".to_owned()),
             at_ms: bookmark["atMs"].as_u64().expect("bookmark time"),
             label: bookmark["label"].as_str().map(str::to_owned),
+            created_after: bookmark["createdAfter"].as_bool(),
+            screenshot: bookmark["screenshot"].as_str().map(str::to_owned),
         })
         .collect();
     let input = SummaryInput {

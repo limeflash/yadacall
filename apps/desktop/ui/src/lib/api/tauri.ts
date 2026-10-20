@@ -13,7 +13,16 @@ export function createTauriApi(): Api {
   const fanOut = (e: EngineEvent) => local.forEach((l) => l(e));
 
   return {
-    listMeetings: () => invoke("list_meetings"),
+    listMeetings: (folderId, favoritesOnly) => invoke("list_meetings", { folderId: folderId ?? null, favoritesOnly: favoritesOnly ?? false }),
+    listFolders: () => invoke("list_folders"),
+    createFolder: (name, color) => invoke("create_folder", { name, color: color ?? null }),
+    updateFolder: (id, patch) => invoke("update_folder", { id, name: patch.name ?? null, color: patch.color, order: patch.order ?? null }),
+    deleteFolder: (id) => invoke("delete_folder", { id }),
+    setMeetingFolder: (meetingId, folderId) => invoke("set_meeting_folder", { meetingId, folderId }),
+    setMeetingFavorite: (meetingId, favorite) => invoke("set_meeting_favorite", { meetingId, favorite }),
+    addBookmark: (meetingId, atMs, label) => invoke("add_bookmark", { meetingId, atMs, label: label ?? null }),
+    updateBookmark: (meetingId, bookmarkId, label) => invoke("update_bookmark", { meetingId, bookmarkId, label }),
+    removeBookmark: (meetingId, bookmarkId) => invoke("remove_bookmark", { meetingId, bookmarkId }),
     getMeeting: (id) => invoke("get_meeting", { id }),
     renameMeeting: (id, title) => invoke("rename_meeting", { id, title }),
     deleteMeeting: (id) => invoke("delete_meeting", { id }),
@@ -34,11 +43,11 @@ export function createTauriApi(): Api {
     recorderBookmark: (label) => invoke("recorder_bookmark", { label }),
     listInputDevices: () => invoke("list_input_devices"),
 
-    search: (query) => invoke("search", { query }),
-    ask: (question, onEvent) => {
+    search: (query, folderId) => invoke("search", { query, folderId: folderId ?? null }),
+    ask: (question, onEvent, folderId) => {
       const ch = new Channel<AskEvent>();
       ch.onmessage = onEvent;
-      return invoke("ask", { question, onEvent: ch });
+      return invoke("ask", { question, folderId: folderId ?? null, onEvent: ch });
     },
     listTasks: (includeDone) => invoke("list_tasks", { includeDone }),
     importAudio: (paths) => invoke("import_audio", { paths }),

@@ -15,6 +15,7 @@ mod tests;
 pub use types::{
     Hit, Job, JobState, MeetingListItem, MeetingRecord, SearchFilters, StoreVoice, TaskRecord,
 };
+pub use yc_core::meeting::Folder;
 
 use std::{
     path::{Path, PathBuf},
@@ -80,6 +81,84 @@ impl Store {
         &self.library_root
     }
 
+    /// Read user-managed folders from `folders.json` in the library root.
+    pub fn list_folders(&self) -> Result<Vec<Folder>> {
+        files::list_folders(self)
+    }
+
+    /// Create a folder with a stable UUID v7 identifier.
+    pub fn create_folder(&self, name: String, color: Option<String>) -> Result<Folder> {
+        let name = name.trim().to_owned();
+        if name.is_empty() {
+            return Err(Error::Invalid("a folder name cannot be empty".into()));
+        }
+        let mut folders = self.list_folders()?;
+        if folders.iter().any(|f| f.name.eq_ignore_ascii_case(&name)) {
+            return Err(Error::Invalid(
+                "a folder with this name already exists".into(),
+            ));
+        }
+        let folder = Folder {
+            id: uuid::Uuid::now_v7().to_string(),
+            name,
+            color,
+            order: folders
+                .iter()
+                .map(|f| f.order)
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1),
+        };
+        folders.push(folder.clone());
+        files::save_folders(self, &folders)?;
+        Ok(folder)
+    }
+
+    /// Update folder fields, preserving omitted values.
+    pub fn update_folder(
+        &self,
+        id: &str,
+        name: Option<String>,
+        color: Option<Option<String>>,
+        order: Option<u32>,
+    ) -> Result<Folder> {
+        let mut folders = self.list_folders()?;
+        if let Some(candidate) = name.as_ref().map(|n| n.trim()).filter(|n| !n.is_empty())
+            && folders
+                .iter()
+                .any(|f| f.id != id && f.name.eq_ignore_ascii_case(candidate))
+        {
+            return Err(Error::Invalid(
+                "a folder with this name already exists".into(),
+            ));
+        }
+        let folder = folders
+            .iter_mut()
+            .find(|f| f.id == id)
+            .ok_or_else(|| Error::NotFound(format!("folder {id}")))?;
+        if let Some(name) = name {
+            let name = name.trim().to_owned();
+            if name.is_empty() {
+                return Err(Error::Invalid("a folder name cannot be empty".into()));
+            }
+            folder.name = name;
+        }
+        if let Some(color) = color {
+            folder.color = color;
+        }
+        if let Some(order) = order {
+            folder.order = order;
+        }
+        let result = folder.clone();
+        files::save_folders(self, &folders)?;
+        Ok(result)
+    }
+
+    /// Delete a folder and move its meetings to the unassigned group.
+    pub fn delete_folder(&self, id: &str) -> Result<()> {
+        files::delete_folder(self, id)
+    }
+
     /// Write meeting files atomically and synchronize the corresponding database rows.
     pub fn save_meeting(
         &self,
@@ -88,6 +167,11 @@ impl Store {
         summary: Option<&Summary>,
     ) -> Result<()> {
         files::save_meeting(self, meeting, transcript, summary)
+    }
+
+    /// Atomically save metadata-only changes without rebuilding transcript chunks or vectors.
+    pub fn save_meeting_metadata(&self, meeting: &Meeting) -> Result<()> {
+        files::save_meeting_metadata(self, meeting)
     }
 
     /// Rebuild all indexed records from meeting folders in the library.
@@ -107,27 +191,50 @@ impl Store {
 
     /// List meetings newest first for day-grouped library views.
     pub fn list_meetings(&self, limit: usize, offset: usize) -> Result<Vec<MeetingListItem>> {
+        self.list_meetings_filtered(limit, offset, None, false)
+    }
+
+    /// List meetings with optional folder and favourite-only filters.
+    pub fn list_meetings_filtered(
+        &self,
+        limit: usize,
+        offset: usize,
+        folder_id: Option<&str>,
+        favorites_only: bool,
+    ) -> Result<Vec<MeetingListItem>> {
         let connection = self.lock()?;
         let mut statement = connection.prepare(
-            "SELECT id, title, started_at, duration_ms, language, folder, status_json, asr_model, updated_at
-             FROM meetings ORDER BY started_at DESC, id DESC LIMIT ?1 OFFSET ?2",
+            "SELECT id, title, started_at, duration_ms, language, folder, status_json, asr_model, updated_at, favorite, folder_id
+             FROM meetings WHERE (?1 IS NULL OR folder_id=?1) AND (?2=0 OR favorite=1)
+             ORDER BY started_at DESC, id DESC LIMIT ?3 OFFSET ?4",
         ).map_err(storage_error)?;
         let rows = statement
-            .query_map(params![limit as i64, offset as i64], |row| {
-                let status_json: String = row.get(6)?;
-                let status = serde_json::from_str(&status_json).map_err(to_sql_conversion_error)?;
-                Ok(MeetingListItem {
-                    id: parse_meeting_id_sql(row.get(0)?, 0)?,
-                    title: row.get(1)?,
-                    started_at: row.get(2)?,
-                    duration_ms: row.get::<_, i64>(3)?.max(0) as u64,
-                    language: row.get(4)?,
-                    folder: row.get(5)?,
-                    status,
-                    asr_model: row.get(7)?,
-                    updated_at: row.get(8)?,
-                })
-            })
+            .query_map(
+                params![
+                    folder_id,
+                    i64::from(favorites_only),
+                    limit as i64,
+                    offset as i64
+                ],
+                |row| {
+                    let status_json: String = row.get(6)?;
+                    let status =
+                        serde_json::from_str(&status_json).map_err(to_sql_conversion_error)?;
+                    Ok(MeetingListItem {
+                        id: parse_meeting_id_sql(row.get(0)?, 0)?,
+                        title: row.get(1)?,
+                        started_at: row.get(2)?,
+                        duration_ms: row.get::<_, i64>(3)?.max(0) as u64,
+                        language: row.get(4)?,
+                        folder: row.get(5)?,
+                        status,
+                        asr_model: row.get(7)?,
+                        updated_at: row.get(8)?,
+                        favorite: row.get::<_, i64>(9)? != 0,
+                        folder_id: row.get(10)?,
+                    })
+                },
+            )
             .map_err(storage_error)?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(storage_error)
@@ -138,7 +245,7 @@ impl Store {
         let connection = self.lock()?;
         let mut statement = connection
             .prepare(
-                "SELECT t.meeting_id, m.title, t.idx, t.text, t.owner, t.due, t.at_ms, t.done
+                "SELECT t.meeting_id, m.title, t.idx, t.text, t.owner, t.due, t.at_ms, t.done, m.folder_id, m.favorite
              FROM tasks t JOIN meetings m ON m.id=t.meeting_id
              WHERE (?1 = 0 OR t.done=0) ORDER BY m.started_at DESC, t.idx ASC",
             )
@@ -156,6 +263,8 @@ impl Store {
                         .get::<_, Option<i64>>(6)?
                         .map(|value| value.max(0) as u64),
                     done: row.get::<_, i64>(7)? != 0,
+                    meeting_folder_id: row.get(8)?,
+                    meeting_favorite: row.get::<_, i64>(9)? != 0,
                 })
             })
             .map_err(storage_error)?;

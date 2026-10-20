@@ -16,7 +16,7 @@ use yc_core::Error;
 use yc_core::Ms;
 use yc_core::events::{DownloadState, EngineEvent, Level, RecorderState};
 use yc_core::meeting::{
-    Bookmark, Meeting, MeetingId, MeetingStatus, Participant, Stage, TrackInfo, TrackKind,
+    Bookmark, Folder, Meeting, MeetingId, MeetingStatus, Participant, Stage, TrackInfo, TrackKind,
 };
 use yc_core::summary::{Decision, Summary, Task};
 use yc_core::transcript::{Segment, Turn};
@@ -148,6 +148,7 @@ impl Rec {
 
 struct Inner {
     meetings: Vec<DemoMeeting>,
+    folders: Vec<Folder>,
     models: Vec<ModelEntry>,
     hardware: HardwareProfile,
     devices: Vec<InputDevice>,
@@ -211,6 +212,16 @@ fn ms(sec: u64) -> Ms {
     sec * 1000
 }
 
+fn bookmark_label(label: Option<String>) -> Result<Option<String>> {
+    let label = label.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
+    if label.as_ref().is_some_and(|s| s.chars().count() > 120) {
+        return Err(Error::Invalid(
+            "bookmark labels must be 120 characters or fewer".into(),
+        ));
+    }
+    Ok(label)
+}
+
 fn local_to_utc(naive: NaiveDateTime, shift: chrono::Duration) -> DateTime<Utc> {
     let shifted = naive + shift;
     Local
@@ -233,6 +244,7 @@ impl DemoBackend {
             .collect();
         let inner = Inner {
             meetings,
+            folders: Vec::new(),
             models: raw.models,
             hardware: raw.hardware,
             devices: raw.input_devices,
@@ -350,10 +362,15 @@ impl DemoBackend {
                 .bookmarks
                 .iter()
                 .map(|b| Bookmark {
+                    id: uuid::Uuid::now_v7().to_string(),
                     at_ms: ms(b.at_sec),
                     label: Some(b.label.clone()),
+                    created_after: Some(false),
+                    screenshot: None,
                 })
                 .collect(),
+            favorite: false,
+            folder_id: None,
             participants,
             asr_model: Some("gigaam-v3-rnnt".into()),
             status,
@@ -562,6 +579,8 @@ impl DemoBackend {
                         participant_hints: Vec::new(),
                         tracks: vec![],
                         bookmarks: vec![],
+                        favorite: false,
+                        folder_id: None,
                         participants: vec![Participant {
                             key: "them".into(),
                             name: "Собеседник".into(),
@@ -799,7 +818,11 @@ fn markdown_of(m: &DemoMeeting) -> String {
 
 #[async_trait]
 impl Backend for DemoBackend {
-    async fn list_meetings(&self) -> Result<Vec<MeetingListItem>> {
+    async fn list_meetings(
+        &self,
+        folder_id: Option<&str>,
+        favorites_only: bool,
+    ) -> Result<Vec<MeetingListItem>> {
         let g = self.lock();
         let mut list: Vec<MeetingListItem> = g
             .meetings
@@ -812,6 +835,12 @@ impl Backend for DemoBackend {
                 status: m.meeting.status.clone(),
                 snippet: m.snippet.clone(),
                 audio_note: m.audio_note.clone(),
+                favorite: m.meeting.favorite,
+                folder_id: m.meeting.folder_id.clone(),
+            })
+            .filter(|m| {
+                folder_id.is_none_or(|id| m.folder_id.as_deref() == Some(id))
+                    && (!favorites_only || m.favorite)
             })
             .collect();
         if let Some(r) = &g.rec {
@@ -827,10 +856,136 @@ impl Backend for DemoBackend {
                 status: MeetingStatus::Recording,
                 snippet: Some("Идёт запись — текст пишется на лету".into()),
                 audio_note: None,
+                favorite: false,
+                folder_id: None,
+            });
+        }
+        if folder_id.is_some() || favorites_only {
+            list.retain(|m| {
+                folder_id.is_none_or(|id| m.folder_id.as_deref() == Some(id))
+                    && (!favorites_only || m.favorite)
             });
         }
         list.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         Ok(list)
+    }
+
+    async fn list_folders(&self) -> Result<Vec<Folder>> {
+        Ok(self.lock().folders.clone())
+    }
+    async fn create_folder(&self, name: &str, color: Option<String>) -> Result<Folder> {
+        let mut g = self.lock();
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(Error::Invalid("a folder name cannot be empty".into()));
+        }
+        if g.folders.iter().any(|f| f.name.eq_ignore_ascii_case(name)) {
+            return Err(Error::Invalid(
+                "a folder with this name already exists".into(),
+            ));
+        }
+        let f = Folder {
+            id: uuid::Uuid::now_v7().to_string(),
+            name: name.into(),
+            color,
+            order: g.folders.len() as u32,
+        };
+        g.folders.push(f.clone());
+        Ok(f)
+    }
+    async fn update_folder(
+        &self,
+        id: &str,
+        name: Option<String>,
+        color: Option<Option<String>>,
+        order: Option<u32>,
+    ) -> Result<Folder> {
+        let mut g = self.lock();
+        let f = g
+            .folders
+            .iter_mut()
+            .find(|f| f.id == id)
+            .ok_or_else(|| Error::NotFound(format!("folder {id}")))?;
+        if let Some(name) = name {
+            f.name = name;
+        }
+        if let Some(color) = color {
+            f.color = color;
+        }
+        if let Some(order) = order {
+            f.order = order;
+        }
+        Ok(f.clone())
+    }
+    async fn delete_folder(&self, id: &str) -> Result<()> {
+        let mut g = self.lock();
+        let n = g.folders.len();
+        g.folders.retain(|f| f.id != id);
+        if n == g.folders.len() {
+            return Err(Error::NotFound(format!("folder {id}")));
+        }
+        for m in &mut g.meetings {
+            if m.meeting.folder_id.as_deref() == Some(id) {
+                m.meeting.folder_id = None;
+            }
+        }
+        Ok(())
+    }
+    async fn set_meeting_folder(&self, id: &str, folder_id: Option<String>) -> Result<()> {
+        let mut g = self.lock();
+        if let Some(fid) = &folder_id
+            && !g.folders.iter().any(|f| &f.id == fid)
+        {
+            return Err(Error::NotFound(format!("folder {fid}")));
+        }
+        g.find_mut(id)?.meeting.folder_id = folder_id;
+        Ok(())
+    }
+    async fn set_meeting_favorite(&self, id: &str, favorite: bool) -> Result<()> {
+        self.lock().find_mut(id)?.meeting.favorite = favorite;
+        Ok(())
+    }
+    async fn add_bookmark(&self, id: &str, at_ms: Ms, label: Option<String>) -> Result<Bookmark> {
+        let mut g = self.lock();
+        let m = &mut g.find_mut(id)?.meeting;
+        let label = bookmark_label(label)?;
+        let b = Bookmark {
+            id: uuid::Uuid::now_v7().to_string(),
+            at_ms: at_ms.min(m.duration_ms),
+            label,
+            created_after: Some(true),
+            screenshot: None,
+        };
+        m.bookmarks.push(b.clone());
+        m.bookmarks.sort_by_key(|b| b.at_ms);
+        Ok(b)
+    }
+    async fn update_bookmark(
+        &self,
+        id: &str,
+        bid: &str,
+        label: Option<String>,
+    ) -> Result<Bookmark> {
+        let mut g = self.lock();
+        let b = g
+            .find_mut(id)?
+            .meeting
+            .bookmarks
+            .iter_mut()
+            .find(|b| b.id == bid)
+            .ok_or_else(|| Error::NotFound(format!("bookmark {bid}")))?;
+        b.label = bookmark_label(label)?;
+        Ok(b.clone())
+    }
+    async fn remove_bookmark(&self, id: &str, bid: &str) -> Result<()> {
+        let mut g = self.lock();
+        let bs = &mut g.find_mut(id)?.meeting.bookmarks;
+        let n = bs.len();
+        bs.retain(|b| b.id != bid);
+        if n == bs.len() {
+            return Err(Error::NotFound(format!("bookmark {bid}")));
+        }
+        Ok(())
     }
 
     async fn get_meeting(&self, id: &str) -> Result<MeetingDetail> {
@@ -1046,8 +1201,16 @@ impl Backend for DemoBackend {
                 bookmarks: r
                     .marks
                     .iter()
-                    .map(|&at_ms| Bookmark { at_ms, label: None })
+                    .map(|&at_ms| Bookmark {
+                        id: uuid::Uuid::now_v7().to_string(),
+                        at_ms,
+                        label: None,
+                        created_after: Some(false),
+                        screenshot: None,
+                    })
                     .collect(),
+                favorite: false,
+                folder_id: None,
                 participants: vec![Participant {
                     key: "them".into(),
                     name: "Собеседник".into(),
@@ -1098,19 +1261,26 @@ impl Backend for DemoBackend {
         Ok(())
     }
 
-    async fn recorder_bookmark(&self, _label: Option<String>) -> Result<()> {
+    async fn recorder_bookmark(&self, label: Option<String>) -> Result<Bookmark> {
         if let Some(r) = self.lock().rec.as_mut() {
             let at = r.elapsed();
             r.marks.push(at);
+            return Ok(Bookmark {
+                id: uuid::Uuid::now_v7().to_string(),
+                at_ms: at,
+                label,
+                created_after: Some(false),
+                screenshot: None,
+            });
         }
-        Ok(())
+        Err(Error::Invalid("not recording".into()))
     }
 
     async fn list_input_devices(&self) -> Result<Vec<InputDevice>> {
         Ok(self.lock().devices.clone())
     }
 
-    async fn search(&self, query: &str) -> Result<Vec<SearchHit>> {
+    async fn search(&self, query: &str, folder_id: Option<&str>) -> Result<Vec<SearchHit>> {
         let needle = query.trim().to_lowercase();
         if needle.is_empty() {
             return Ok(vec![]);
@@ -1118,6 +1288,7 @@ impl Backend for DemoBackend {
         let g = self.lock();
         Ok(g.meetings
             .iter()
+            .filter(|m| folder_id.is_none_or(|id| m.meeting.folder_id.as_deref() == Some(id)))
             .flat_map(|m| {
                 let needle = needle.clone();
                 m.turns
@@ -1136,7 +1307,7 @@ impl Backend for DemoBackend {
             .collect())
     }
 
-    async fn ask(&self, _question: &str, sink: AskSink) -> Result<()> {
+    async fn ask(&self, _question: &str, _folder_id: Option<&str>, sink: AskSink) -> Result<()> {
         let generated;
         let (answer, citations, excerpts, provider) = {
             let g = self.lock();
@@ -1222,6 +1393,8 @@ impl Backend for DemoBackend {
                         due: t.due.clone(),
                         at_ms: t.at_ms,
                         done: t.done,
+                        meeting_folder_id: m.meeting.folder_id.clone(),
+                        meeting_favorite: m.meeting.favorite,
                     })
                 })
             })
@@ -1481,6 +1654,7 @@ mod tests {
         let l2 = log.clone();
         b.ask(
             "q",
+            None,
             Arc::new(move |e| {
                 let tag = match e {
                     AskEvent::Token { .. } => "t",
@@ -1514,6 +1688,7 @@ mod tests {
         let l2 = log.clone();
         b.ask(
             "q",
+            None,
             Arc::new(move |e| {
                 let tag = match e {
                     AskEvent::Token { .. } => "t",
