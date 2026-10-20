@@ -3,7 +3,7 @@ export type Route =
   | { name: "meetings" }
   | { name: "meeting"; id: string; tab: "summary" | "transcript"; at?: number }
   | { name: "record" }
-  | { name: "ask"; q?: string }
+  | { name: "ask"; q?: string; folder?: string }
   | { name: "tasks" }
   | { name: "upload" }
   | { name: "settings" }
@@ -21,7 +21,7 @@ export function parse(hash: string): Route {
     case "meeting":
       return { name: "meeting", id: parts[1] ?? "", tab: parts[2] === "transcript" ? "transcript" : "summary", at: qs.has("at") ? Number(qs.get("at")) : undefined };
     case "record": return { name: "record" };
-    case "ask": return { name: "ask", q: qs.get("q") ?? undefined };
+    case "ask": return { name: "ask", q: qs.get("q") ?? undefined, folder: qs.get("folder") ?? undefined };
     case "tasks": return { name: "tasks" };
     case "upload": return { name: "upload" };
     case "settings": return { name: "settings" };
@@ -36,7 +36,12 @@ export function parse(hash: string): Route {
 export function href(r: Route): string {
   switch (r.name) {
     case "meeting": return `#/meeting/${r.id}/${r.tab}${r.at != null ? `?at=${Math.round(r.at)}` : ""}`;
-    case "ask": return r.q ? `#/ask?q=${encodeURIComponent(r.q)}` : "#/ask";
+    case "ask": {
+      const qs = new URLSearchParams();
+      if (r.q) qs.set("q", r.q);
+      if (r.folder) qs.set("folder", r.folder);
+      return qs.size ? `#/ask?${qs}` : "#/ask";
+    }
     case "meetings": return "#/";
     case "google": return "#/connections/google";
     default: return `#/${r.name}`;

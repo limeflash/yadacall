@@ -24,6 +24,15 @@ export function createTauriApi(): Api {
     exportMeeting: (id, format) => invoke("export_meeting", { id, format }),
     revealMeeting: (id) => invoke("reveal_meeting", { id }),
     copyForClaude: (id) => invoke("copy_for_claude", { id }),
+    listFolders: () => invoke("list_folders"),
+    createFolder: (name, color) => invoke("create_folder", { name, color }),
+    updateFolder: (id, patch) => invoke("update_folder", { id, patch }),
+    deleteFolder: (id) => invoke("delete_folder", { id }),
+    setMeetingFolder: (meetingId, folderId) => invoke("set_meeting_folder", { meetingId, folderId }),
+    setMeetingFavorite: (meetingId, favorite) => invoke("set_meeting_favorite", { meetingId, favorite }),
+    addBookmark: (meetingId, atMs, label) => invoke("add_bookmark", { meetingId, atMs, label }),
+    updateBookmark: (meetingId, bookmarkId, label) => invoke("update_bookmark", { meetingId, bookmarkId, label }),
+    removeBookmark: (meetingId, bookmarkId) => invoke("remove_bookmark", { meetingId, bookmarkId }),
 
     recorderState: () => invoke("recorder_state"),
     recorderStart: (opts) => invoke("recorder_start", { opts }),
@@ -34,11 +43,11 @@ export function createTauriApi(): Api {
     recorderBookmark: (label) => invoke("recorder_bookmark", { label }),
     listInputDevices: () => invoke("list_input_devices"),
 
-    search: (query) => invoke("search", { query }),
-    ask: (question, onEvent) => {
+    search: (query, folderId) => invoke("search", { query, folderId }),
+    ask: (question, onEvent, folderId) => {
       const ch = new Channel<AskEvent>();
       ch.onmessage = onEvent;
-      return invoke("ask", { question, onEvent: ch });
+      return invoke("ask", { question, onEvent: ch, folderId });
     },
     listTasks: (includeDone) => invoke("list_tasks", { includeDone }),
     importAudio: (paths) => invoke("import_audio", { paths }),

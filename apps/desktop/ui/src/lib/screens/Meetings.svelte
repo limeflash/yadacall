@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "../kit/Icon.svelte";
+  import FolderBar from "../components/FolderBar.svelte";
+  import FolderScope from "../components/FolderScope.svelte";
+  import MeetingMenu from "../components/MeetingMenu.svelte";
+  import { folders, filters, loadFolders, matchesFilter, setFavorite, moveToFolder, folderById, folderColor } from "../folders.svelte";
+  import { drag, startMeetingDrag, wasDragged } from "../dragMeeting.svelte";
   import { api, integrations } from "../api";
   import type { AgendaEvent, CalendarAccount, MeetingListItem, Stage } from "../api";
   import { app, elapsedMs, onIntegrationEvent } from "../state.svelte";
@@ -28,7 +33,7 @@
 
   async function load() { items = await api.listMeetings(); loaded = true; }
   onMount(() => {
-    load(); loadSoon();
+    load(); loadSoon(); loadFolders();
     const off = onIntegrationEvent((e) => { if (e.type === "agendaChanged") loadSoon(); });
     const iv = setInterval(loadSoon, 30000);
     return () => { off(); clearInterval(iv); };
@@ -39,9 +44,11 @@
 
   const stageLabel: Record<Stage, string> = { transcribe: "Распознаю локально", diarize: "Размечаю голоса", index: "Индексирую", summarize: "Собираю итоги" };
 
+  const filter = $derived(filters.meetings);
+  const shown = $derived(items.filter((m) => matchesFilter(filter, m)));
   const groups = $derived.by(() => {
     const out: { key: string; heading: string; items: MeetingListItem[] }[] = [];
-    for (const m of items) {
+    for (const m of shown) {
       const k = dayKey(m.startedAt);
       let g = out.find((x) => x.key === k);
       if (!g) { g = { key: k, heading: dayHeading(m.startedAt), items: [] }; out.push(g); }
@@ -50,10 +57,34 @@
     return out;
   });
 
+  // The ask bar searches the folder being browsed unless the user picks another scope (null = everything).
+  let scope = $state<string | null | undefined>(undefined);
+  const askFolder = $derived(scope === undefined ? (folderById(filter) ? filter : undefined) : (scope ?? undefined));
   function ask(e: SubmitEvent) {
     e.preventDefault();
-    go({ name: "ask", q: q.trim() || undefined });
+    go({ name: "ask", q: q.trim() || undefined, folder: askFolder });
   }
+
+  // ---- favourites / folders ---------------------------------------------------------------------
+  let menu = $state<{ m: MeetingListItem; x: number; y: number; above?: number; trigger?: HTMLElement } | null>(null);
+  function openMenu(m: MeetingListItem, e: MouseEvent) {
+    const btn = e.currentTarget as HTMLElement;
+    const r = btn.getBoundingClientRect();
+    menu = menu?.m.id === m.id ? null : { m, x: r.right - 236, y: r.bottom + 4, above: r.top - 0, trigger: btn };
+  }
+  function ctxMenu(m: MeetingListItem, e: MouseEvent) {
+    if (m.status.state === "recording") return;
+    e.preventDefault();
+    menu = { m, x: e.clientX, y: e.clientY };
+  }
+  function closeMenu(escaped?: boolean) { const tr = menu?.trigger; menu = null; if (escaped) tr?.focus(); }
+  function dropOn(m: MeetingListItem, target: string) {
+    if (target === "fav") setFavorite(m, true);
+    else moveToFolder(m, target === "none" ? null : target);
+  }
+  const emptyText = $derived(filter === "fav" ? "Здесь будут важные встречи: нажми ★ на карточке — звук такой встречи не удалится."
+    : filter === "none" ? "Все встречи разложены по папкам."
+    : "В этой папке пока пусто. Перетащи сюда встречу или выбери папку в меню ⋯ на карточке.");
 </script>
 
 <main>
@@ -64,8 +95,14 @@
       {#if loaded && items.length === 0}
         <p class="empty">{t("Пока пусто. Запиши первую встречу или загрузи готовую запись.")}</p>
       {/if}
+      {#if loaded && (items.length > 0 || folders.list.length > 0)}
+        <FolderBar value={filter} onchange={(v) => { filters.meetings = v; scope = undefined; }} />
+      {/if}
+      {#if loaded && items.length > 0 && shown.length === 0}
+        <p class="empty">{t(emptyText)}</p>
+      {/if}
 
-      {#if soon}
+      {#if soon && filter === "all"}
         <div class="soonh">
           <span class="day" style="padding: 0">{t("Скоро")}</span>
           <a class="yc-press cal" href={href({ name: "calendar" })}>{t("Календарь")} →</a>
@@ -88,27 +125,41 @@
         <div class="day">{g.heading}</div>
         {#each g.items as m (m.id)}
           {@const st = m.status}
-          <a class="yc-lift card" href={m.status.state === "recording" ? href({ name: "record" }) : href({ name: "meeting", id: m.id, tab: "summary" })}>
-            <span class="top">
-              <span class="yc-ellipsis title">{m.title}</span>
-              {#if st.state === "recording"}
-                <span class="rt"><span class="yc-rec dot"></span><span class="mg-mono yc-num">{clock(elapsedMs())}</span></span>
+          {@const folder = folderById(m.folderId)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="yc-lift cw" class:dragging={drag.active && drag.title === m.title} oncontextmenu={(e) => ctxMenu(m, e)} onpointerdown={(e) => { if (st.state !== "recording" && !(e.target as HTMLElement).closest(".acts")) startMeetingDrag(e, m.title, (tg) => dropOn(m, tg)); }}>
+            <a class="card" draggable="false" href={m.status.state === "recording" ? href({ name: "record" }) : href({ name: "meeting", id: m.id, tab: "summary" })} onclick={(e) => { if (wasDragged()) e.preventDefault(); }}>
+              <span class="top">
+                <span class="yc-ellipsis title">{m.title}</span>
+                {#if st.state === "recording"}
+                  <span class="rt"><span class="yc-rec dot"></span><span class="mg-mono yc-num">{clock(elapsedMs())}</span></span>
+                {:else}
+                  <span class="mg-mono range">{timeRange(m.startedAt, m.durationMs)}</span>
+                {/if}
+              </span>
+              {#if st.state === "processing"}
+                <span class="sub flex"><span style="flex: 1">{t(stageLabel[st.stage])}</span><span class="mg-mono yc-num pct">{Math.round(st.progress * 100)}%</span></span>
+                <span aria-hidden="true" class="bar"><span style="width: {Math.round(st.progress * 100)}%"></span></span>
+              {:else if st.state === "failed"}
+                <span class="sub warn">{t(st.message)}</span>
               {:else}
-                <span class="mg-mono range">{timeRange(m.startedAt, m.durationMs)}</span>
+                <span class="yc-ellipsis sub">{m.status.state === "recording" ? t("Идёт запись — текст пишется на лету") : m.snippet ?? ""}</span>
               {/if}
-            </span>
-            {#if st.state === "processing"}
-              <span class="sub flex"><span style="flex: 1">{t(stageLabel[st.stage])}</span><span class="mg-mono yc-num pct">{Math.round(st.progress * 100)}%</span></span>
-              <span aria-hidden="true" class="bar"><span style="width: {Math.round(st.progress * 100)}%"></span></span>
-            {:else if st.state === "failed"}
-              <span class="sub warn">{t(st.message)}</span>
-            {:else}
-              <span class="yc-ellipsis sub">{m.status.state === "recording" ? t("Идёт запись — текст пишется на лету") : m.snippet ?? ""}</span>
+              {#if (folder && filter !== folder.id) || m.favorite || m.audioNote}
+                <span class="meta">
+                  {#if folder && filter !== folder.id}<span class="ftag"><span aria-hidden="true" class="cd" style="background: {folderColor(folder)}"></span>{folder.name}</span>{/if}
+                  {#if m.favorite}<span class="note fav"><Icon name="star" size={12} style="fill: currentColor" />{t("звук хранится всегда")}</span>
+                  {:else if m.audioNote}<span class="note"><Icon name="clock" size={12} />{m.audioNote}</span>{/if}
+                </span>
+              {/if}
+            </a>
+            {#if st.state !== "recording"}
+              <span class="acts">
+                <button type="button" class="act" class:on={m.favorite} aria-pressed={m.favorite} aria-label={m.favorite ? t("Убрать из избранного") : t("В избранное")} title={m.favorite ? t("Убрать из избранного") : t("В избранное — звук хранится всегда")} onclick={() => setFavorite(m, !m.favorite)}><Icon name="star" size={15} style={m.favorite ? "fill: currentColor" : undefined} /></button>
+                <button type="button" class="act more" data-menu-trigger aria-haspopup="menu" aria-expanded={menu?.m.id === m.id} aria-label={t("Избранное и папка")} title={t("Избранное и папка")} onclick={(e) => openMenu(m, e)}><Icon name="dots" size={15} style="stroke-width: 3.4" /></button>
+              </span>
             {/if}
-            {#if m.audioNote}
-              <span class="note"><Icon name="clock" size={12} />{m.audioNote}</span>
-            {/if}
-          </a>
+          </div>
         {/each}
       {/each}
     </div>
@@ -116,6 +167,7 @@
 
   <div aria-hidden="true" class="fade"></div>
   <form class="askbar" onsubmit={ask}>
+    <FolderScope value={askFolder} onchange={(id) => (scope = id ?? null)} />
     <label style="flex: 1; min-width: 0; display: flex">
       <span class="mg-sr">{t("Вопрос ко всем встречам")}</span>
       <input type="text" bind:value={q} placeholder={t("Какие задачи на мне на этой неделе?")} />
@@ -123,6 +175,13 @@
     <button type="submit" aria-label={t("Спросить по всем встречам")} class="yc-press send"><Icon name="arrowUp" size={16} /></button>
   </form>
 </main>
+
+{#if menu}
+  <MeetingMenu x={menu.x} y={menu.y} above={menu.above} favorite={menu.m.favorite} folderId={menu.m.folderId} onfavorite={(v) => setFavorite(menu!.m, v)} onmove={(id) => moveToFolder(menu!.m, id)} onclose={closeMenu} />
+{/if}
+{#if drag.active}
+  <div class="ghost" aria-hidden="true" style="left: {drag.x + 14}px; top: {drag.y + 10}px"><Icon name="folder" size={13} /><span class="yc-ellipsis">{drag.title}</span></div>
+{/if}
 
 <style>
   main { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; min-height: 0; position: relative; }
@@ -137,10 +196,23 @@
   .day { padding: 14px 4px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
   .day:first-of-type { padding-top: 4px; }
   .empty { margin: 24px 4px; color: var(--muted); }
-  .card { display: flex; flex-direction: column; gap: 3px; padding: 13px 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); text-decoration: none; }
+  .cw { position: relative; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+  .cw.dragging { opacity: 0.55; }
+  .card { display: flex; flex-direction: column; gap: 3px; padding: 13px 16px; border-radius: 15px; color: var(--text); text-decoration: none; }
+  .card:focus-visible { outline-offset: -2px; }
+  .acts { position: absolute; top: 8px; right: 9px; display: flex; gap: 2px; }
+  .act { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity 0.15s, background-color 0.15s, color 0.15s; }
+  .cw:hover .act, .cw:focus-within .act, .act[aria-expanded="true"] { opacity: 1; }
+  .act.on { opacity: 1; color: var(--accent-text); }
+  .act:hover, .act[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+  .act.on:hover { color: var(--accent-text); }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 4px; }
+  .ftag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .cd { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .ghost { position: fixed; z-index: 70; pointer-events: none; display: flex; align-items: center; gap: 7px; max-width: 240px; height: 30px; padding: 0 12px; border: 1px solid var(--accent-line); border-radius: 15px; background: var(--surface); color: var(--text); font-size: 12px; font-weight: 700; box-shadow: var(--shadow-pop); }
   .top { display: flex; align-items: baseline; gap: 12px; }
   .title { flex: 1; font-size: 15px; font-weight: 700; }
-  .range { flex: none; font-size: 12px; color: var(--muted); }
+  .range { flex: none; margin-right: 56px; font-size: 12px; color: var(--muted); }
   .rt { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
   .sub { font-size: 13px; color: var(--muted); }
@@ -149,7 +221,8 @@
   .pct { font-size: 12px; font-weight: 700; color: var(--accent-text); }
   .bar { position: relative; display: block; height: 12px; margin-top: 4px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
   .bar span { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent), var(--accent-soft), var(--accent)); background-size: 200% 100%; animation: ycShimmer 1.6s linear infinite; transition: width 0.2s; }
-  .note { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .note.fav { color: var(--accent-text); }
   .fade { position: absolute; left: 0; right: 10px; bottom: 0; height: 110px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--bg) 60%); }
   .askbar { position: absolute; left: 28px; right: 28px; bottom: 18px; max-width: 624px; margin: 0 auto; display: flex; align-items: center; gap: 10px; height: 48px; box-sizing: border-box; padding: 0 5px 0 18px; border: 1px solid var(--border); border-radius: 24px; background: var(--dock); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--shadow-dock); }
   input { flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px; outline-offset: 6px; }

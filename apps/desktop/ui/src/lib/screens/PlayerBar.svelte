@@ -1,12 +1,15 @@
 <script lang="ts">
   import Button from "../kit/Button.svelte";
+  import Icon from "../kit/Icon.svelte";
   import { t } from "../i18n/index.svelte";
   import { clock } from "../format";
   import { speakerColors, speakerIndex } from "../speakers";
   import type { Turn } from "../api";
   import type { Player } from "../player.svelte";
 
-  let { player, turns }: { player: Player; turns: Turn[] } = $props();
+  let { player, turns, marks = [], onbookmark }: { player: Player; turns: Turn[]; /** Bookmark positions (ms), drawn as ticks on the wave. */ marks?: number[]; onbookmark?: () => void } = $props();
+  let flash = $state(false);
+  function mark() { onbookmark?.(); flash = true; setTimeout(() => (flash = false), 650); }
   const N = 90;
   const speakerAt = (ms: number) => { let k = "me"; for (const tr of turns) { if (ms >= tr.startMs) k = tr.speaker; else break; } return k; };
   // A deterministic pseudo-waveform coloured by who speaks (the real peaks come with the audio index later).
@@ -37,8 +40,12 @@
     {#each bars as b, i (i)}
       <span style="height: {b.h}px; background: {b.c}; opacity: {b.ms <= player.pos ? 1 : 0.28}"></span>
     {/each}
+    {#each marks as ms, i (i)}<span aria-hidden="true" class="mk" style="left: {Math.min(100, (ms / Math.max(1, player.duration)) * 100)}%"></span>{/each}
     <span aria-hidden="true" class="head" style="left: {head}%"></span>
   </button>
+  {#if onbookmark}
+    <button type="button" class="yc-press bm" class:flash aria-label={t("Закладка здесь")} title="{t('Закладка здесь')} · B" onclick={mark}><Icon name="bookmark" size={15} style={flash ? "fill: currentColor" : undefined} /></button>
+  {/if}
   <Button size="sm" variant="ghost" onclick={() => player.cycleSpeed()} aria-label={t("Скорость")}>{player.speedLabel}</Button>
 </div>
 
@@ -47,6 +54,10 @@
   .play { flex: none; width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--accent); color: var(--ink-on-accent); display: grid; place-items: center; }
   .time { flex: none; font-size: 12px; color: var(--muted); }
   .wave { flex: 1; min-width: 80px; height: 28px; position: relative; display: flex; align-items: center; gap: 2px; padding: 0; border: 0; background: none; cursor: pointer; }
-  .wave span:not(.head) { display: block; flex: 1; min-width: 1px; border-radius: 2px; }
+  .wave span:not(.head):not(.mk) { display: block; flex: 1; min-width: 1px; border-radius: 2px; }
+  .mk { position: absolute; top: -3px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 2px; transform: rotate(45deg); background: var(--tone-sand); box-shadow: 0 0 0 2px var(--dock); pointer-events: none; }
+  .bm { flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.2s, background-color 0.2s; }
+  .bm:hover { background: var(--surface-2); color: var(--text); }
+  .bm.flash { color: var(--tone-sand); background: var(--tone-sand-bg); }
   .head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); }
 </style>

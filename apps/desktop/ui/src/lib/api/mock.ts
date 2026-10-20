@@ -3,7 +3,7 @@
  * same demo library, a simulated recorder (levels, live phrases), processing progress and model downloads.
  */
 import type {
-  Api, AskEvent, BenchmarkResult, EngineEvent, ImportJob, InputDevice, MeetingDetail, MeetingListItem, ModelEntry, ModelsOverview,
+  Api, AskEvent, BenchmarkResult, Bookmark, Folder, EngineEvent, ImportJob, InputDevice, MeetingDetail, MeetingListItem, ModelEntry, ModelsOverview,
   OllamaBase, OllamaStatus, Permissions, ProviderTest, SummaryMode, RecorderSnapshot, RecorderStartOptions, SearchHit, Settings, SettingsPatch, Summary, TaskItem, Turn, Meeting,
 } from "./types";
 import { mergeSummaries, noKeys } from "./summaries";
@@ -32,6 +32,35 @@ export function createMockApi(): Api {
   if (typeof location !== "undefined" && /onboarding/.test(location.hash)) settings = { ...settings, onboarded: false };
 
   const meetings: DemoMeeting[] = demoMeetings();
+
+  // ---- favourites / folders / bookmarks demo state -------------------------------------------------
+  const folders: Folder[] = [
+    { id: "fld-work", name: "Работа", color: "mint", order: 0 },
+    { id: "fld-personal", name: "Личная", color: "rose", order: 1 },
+    { id: "fld-projects", name: "Проекты", color: "lavender", order: 2 },
+  ];
+  /** A small generated "screenshot" so the bookmark thumbnail can be seen without the capture package. */
+  const shot = (a: string, b: string) => "data:image/svg+xml;utf8," + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100" viewBox="0 0 160 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="160" height="100" fill="url(#g)"/><rect x="14" y="14" width="78" height="9" rx="4" fill="#fff" fill-opacity=".55"/><rect x="14" y="31" width="132" height="6" rx="3" fill="#fff" fill-opacity=".32"/><rect x="14" y="43" width="112" height="6" rx="3" fill="#fff" fill-opacity=".32"/><rect x="14" y="62" width="54" height="24" rx="7" fill="#fff" fill-opacity=".4"/></svg>`);
+  const seed = (id: string, patch: { favorite?: boolean; folderId?: string }) => {
+    const m = meetings.find((x) => x.meeting.id.endsWith(id)); if (!m) return;
+    Object.assign(m.meeting, patch); Object.assign(m.list, patch);
+  };
+  seed("000002", { favorite: true, folderId: "fld-projects" }); seed("000003", { folderId: "fld-work" }); seed("000004", { folderId: "fld-personal" });
+  seed("000005", { folderId: "fld-projects" }); seed("000006", { favorite: true, folderId: "fld-work" }); seed("000007", { folderId: "fld-projects" });
+  const sync = meetings.find((x) => x.meeting.id.endsWith("000002"));
+  if (sync) sync.meeting.bookmarks.push(
+    { id: "bm-demo-1", atMs: 1_520_000, label: "Договорились про сроки", createdAfter: true, screenshot: shot("#6e50c0", "#2a2a4a") },
+    { id: "bm-demo-2", atMs: 2_105_000, createdAfter: true },
+  );
+  const daysLeft = (iso: string) => 30 - Math.floor((Date.now() - Date.parse(iso)) / 86400000);
+  /** What the engine would put in `audioNote` for a meeting that is not starred. */
+  const audioNoteOf = (m: DemoMeeting) => {
+    if (m.meeting.favorite) return undefined;
+    if (!m.hasAudio) return m.list.audioNote;
+    const d = daysLeft(m.meeting.startedAt);
+    return d > 0 && settings.keepAudio === "30d" ? `аудио удалится через ${d} дн., текст и итоги останутся` : undefined;
+  };
   const { hardware, devices } = demoModels();
   const freshInstall = typeof location !== "undefined" && /onboarding/.test(location.hash);
   const models: ModelEntry[] = mockCatalog(freshInstall);
@@ -103,17 +132,18 @@ export function createMockApi(): Api {
   const toTasks = (all: boolean): TaskItem[] => meetings.flatMap((m) => (m.summary?.tasks ?? []).map((t, index) => ({
     meetingId: m.meeting.id, meetingTitle: m.meeting.title, startedAt: m.meeting.startedAt, index, text: t.text,
     owner: t.owner && t.owner !== "me" ? m.meeting.participants.find((p) => p.key === t.owner)?.name ?? t.owner : t.owner, due: t.due, atMs: t.atMs, done: t.done,
+    meetingFolderId: m.meeting.folderId, meetingFavorite: m.meeting.favorite,
   }))).filter((t) => all || !t.done);
 
   const api: Api = {
     async listMeetings() {
-      const list = meetings.map((m) => ({ ...m.list, status: m.meeting.status }));
-      if (rec) list.unshift({ id: rec.id, title: rec.title || "Без названия", startedAt: new Date(rec.startedAt).toISOString(), durationMs: elapsed(), status: { state: "recording" }, snippet: "Идёт запись — текст пишется на лету" });
+      const list: MeetingListItem[] = meetings.map((m) => ({ ...m.list, status: m.meeting.status, audioNote: audioNoteOf(m) }));
+      if (rec) list.unshift({ id: rec.id, title: rec.title || "Без названия", startedAt: new Date(rec.startedAt).toISOString(), durationMs: elapsed(), status: { state: "recording" }, snippet: "Идёт запись — текст пишется на лету", favorite: false });
       return list.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
     },
     async getMeeting(id): Promise<MeetingDetail> {
       const m = find(id);
-      return { meeting: m.meeting, turns: m.turns, summary: m.summary, hasAudio: m.hasAudio };
+      return { meeting: structuredClone(m.meeting), turns: m.turns, summary: m.summary, hasAudio: m.hasAudio };
     },
     async renameMeeting(id, title) { const m = find(id); m.meeting.title = title; m.list.title = title; },
     async deleteMeeting(id) { const i = meetings.findIndex((m) => m.meeting.id === id); if (i >= 0) meetings.splice(i, 1); },
@@ -136,6 +166,34 @@ export function createMockApi(): Api {
       return `# ${m.meeting.title}\n\n` + m.turns.map((t) => `[${fmt(t.startMs)}] ${name(t.speaker)}: ${t.text}`).join("\n");
     },
 
+    async listFolders() { return folders.map((f) => ({ ...f })).sort((a, b) => a.order - b.order); },
+    async createFolder(name, color) {
+      const f: Folder = { id: uid(), name: name.trim(), color, order: Math.max(-1, ...folders.map((x) => x.order)) + 1 };
+      folders.push(f); return { ...f };
+    },
+    async updateFolder(id, patch) {
+      const f = folders.find((x) => x.id === id); if (!f) throw new Error("not found");
+      if (patch.name !== undefined) f.name = patch.name.trim() || f.name;
+      if (patch.color !== undefined) f.color = patch.color;
+      if (patch.order !== undefined) f.order = patch.order;
+      return { ...f };
+    },
+    async deleteFolder(id) {
+      const i = folders.findIndex((x) => x.id === id); if (i >= 0) folders.splice(i, 1);
+      for (const m of meetings) if (m.meeting.folderId === id) { m.meeting.folderId = undefined; m.list.folderId = undefined; }
+    },
+    async setMeetingFolder(meetingId, folderId) { const m = find(meetingId); m.meeting.folderId = m.list.folderId = folderId ?? undefined; },
+    async setMeetingFavorite(meetingId, favorite) { const m = find(meetingId); m.meeting.favorite = m.list.favorite = favorite; },
+    async addBookmark(meetingId, atMs, label) {
+      const b: Bookmark = { id: uid(), atMs: Math.round(atMs), label: label?.trim() || undefined, createdAfter: true };
+      find(meetingId).meeting.bookmarks.push(b); return { ...b };
+    },
+    async updateBookmark(meetingId, bookmarkId, label) {
+      const b = find(meetingId).meeting.bookmarks.find((x) => x.id === bookmarkId); if (!b) throw new Error("not found");
+      b.label = label?.trim() || undefined; return { ...b };
+    },
+    async removeBookmark(meetingId, bookmarkId) { const m = find(meetingId).meeting; m.bookmarks = m.bookmarks.filter((x) => x.id !== bookmarkId); },
+
     async recorderState() { return snapshot(); },
     async recorderStart(opts: RecorderStartOptions) {
       if (rec) return snapshot();
@@ -150,8 +208,8 @@ export function createMockApi(): Api {
       if (!rec) return "";
       const r = rec; rec = null;
       const dur = Date.now() - r.startedAt - r.pausedTotal;
-      const meeting: Meeting = { id: r.id, title: r.title || "Без названия", startedAt: new Date(r.startedAt).toISOString(), durationMs: dur, language: "ru", tracks: [], bookmarks: r.marks.map((atMs) => ({ atMs })), participants: [], status: { state: "processing", stage: "transcribe", progress: 0 } };
-      const dm: DemoMeeting = { list: { id: r.id, title: meeting.title, startedAt: meeting.startedAt, durationMs: dur, status: meeting.status, snippet: "Собираю итоги…" }, meeting, turns: r.turns, hasAudio: true };
+      const meeting: Meeting = { id: r.id, title: r.title || "Без названия", startedAt: new Date(r.startedAt).toISOString(), durationMs: dur, language: "ru", tracks: [], bookmarks: r.marks.map((atMs) => ({ id: uid(), atMs })), favorite: false, participants: [], status: { state: "processing", stage: "transcribe", progress: 0 } };
+      const dm: DemoMeeting = { list: { id: r.id, title: meeting.title, startedAt: meeting.startedAt, durationMs: dur, status: meeting.status, snippet: "Собираю итоги…", favorite: false }, meeting, turns: r.turns, hasAudio: true };
       meetings.unshift(dm);
       emit({ type: "recorder", meeting: r.id, state: "stopped", elapsedMs: dur });
       let p = 0;
@@ -172,18 +230,22 @@ export function createMockApi(): Api {
       return r.id;
     },
     async recorderCancel() { if (rec) { emit({ type: "recorder", meeting: rec.id, state: "cancelled", elapsedMs: elapsed() }); rec = null; } },
-    async recorderBookmark() { if (rec) rec.marks.push(elapsed()); },
+    async recorderBookmark(label) {
+      const atMs = elapsed(); if (rec) rec.marks.push(atMs);
+      return { id: uid(), atMs, label };
+    },
     async listInputDevices(): Promise<InputDevice[]> { return devices; },
 
-    async search(q): Promise<SearchHit[]> {
+    async search(q, folderId): Promise<SearchHit[]> {
       const needle = q.trim().toLowerCase();
       if (!needle) return [];
-      return meetings.flatMap((m) => m.turns.filter((t) => t.text.toLowerCase().includes(needle)).map((t) => ({
+      return meetings.filter((m) => !folderId || m.meeting.folderId === folderId).flatMap((m) => m.turns.filter((t) => t.text.toLowerCase().includes(needle)).map((t) => ({
         meetingId: m.meeting.id, title: m.meeting.title, startedAt: m.meeting.startedAt, atMs: t.startMs, speaker: t.speaker, text: t.text, score: 1,
       })));
     },
-    async ask(_q, onEvent: (e: AskEvent) => void) {
+    async ask(_q, onEvent: (e: AskEvent) => void, folderId?: string) {
       const a = demoAsk();
+      if (folderId) a.citations = a.citations.filter((c) => meetings.find((m) => m.meeting.id === c.meetingId)?.meeting.folderId === folderId);
       const m = settings.summaries;
       await sleep(500);
       if (m.mode !== "off") {

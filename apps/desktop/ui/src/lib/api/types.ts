@@ -14,7 +14,19 @@ export type MeetingStatus =
   | { state: "ready" }
   | { state: "failed"; stage: Stage; message: string; retryable: boolean };
 
-export interface Bookmark { atMs: Ms; label?: string }
+export interface Bookmark {
+  /** Stable id (uuid); bookmarks are renamed and removed by it. */
+  id: string;
+  atMs: Ms;
+  label?: string;
+  /** True when added after the recording (from the player or the transcript), absent/false when set live. */
+  createdAfter?: boolean;
+  /** File name inside the meeting folder, e.g. "shots/000123456.jpg" (filled by a later package). */
+  screenshot?: string;
+}
+/** A user folder for meetings. `color` is one of the accent palette keys (`mint`, `lavender`, `sky`, `sand`, `rose`, `sage`). */
+export interface Folder { id: string; name: string; color?: string; order: number }
+export interface FolderPatch { name?: string; color?: string; order?: number }
 export interface RenameOutcome { mergedInto?: { key: string; name: string } }
 export interface ParticipantHint { name: string; email?: string }
 export interface Participant { key: string; name: string; voiceId?: string; /** Invite names ranked as likely identities of this speaker. */ suggestions?: string[] }
@@ -30,6 +42,10 @@ export interface Meeting {
   expectedSpeakers?: number;
   tracks: TrackInfo[];
   bookmarks: Bookmark[];
+  /** Starred: the audio is never deleted by the retention policy. */
+  favorite: boolean;
+  /** Absent = «Без папки». */
+  folderId?: string;
   participants: Participant[];
   /** People invited to the calendar event behind the recording. */
   participantHints?: ParticipantHint[];
@@ -82,6 +98,8 @@ export interface MeetingListItem {
   snippet?: string;
   /** e.g. "audio deleted after 7 days, text and summary kept". */
   audioNote?: string;
+  favorite: boolean;
+  folderId?: string;
 }
 
 export interface MeetingDetail {
@@ -91,6 +109,8 @@ export interface MeetingDetail {
   /** `asset://` URL of the mixed audio when it is still on disk. */
   audioUrl?: string;
   hasAudio: boolean;
+  /** Absolute path of the meeting folder, when the backend exposes it: lets the UI turn `Bookmark.screenshot` into a file URL. */
+  dirPath?: string;
 }
 
 export type ExportFormat = "md" | "json";
@@ -125,6 +145,7 @@ export type AskEvent =
 export interface TaskItem {
   meetingId: string; meetingTitle: string; startedAt: string; index: number;
   text: string; owner?: string; due?: string; atMs?: Ms; done: boolean;
+  meetingFolderId?: string; meetingFavorite: boolean;
 }
 export type ImportState = "queued" | "running" | "done" | "failed";
 export interface ImportJob { id: string; fileName: string; state: ImportState; progress: number; meetingId?: string; error?: string }
@@ -268,6 +289,19 @@ export interface Api {
   exportMeeting(id: string, format: ExportFormat): Promise<string>;
   revealMeeting(id: string): Promise<void>;
   copyForClaude(id: string): Promise<string>;
+  // favourites, folders, bookmarks
+  listFolders(): Promise<Folder[]>;
+  createFolder(name: string, color?: string): Promise<Folder>;
+  updateFolder(id: string, patch: FolderPatch): Promise<Folder>;
+  /** The folder's meetings move to «Без папки»; no meeting is deleted. */
+  deleteFolder(id: string): Promise<void>;
+  setMeetingFolder(meetingId: string, folderId: string | null): Promise<void>;
+  setMeetingFavorite(meetingId: string, favorite: boolean): Promise<void>;
+  /** After the recording: `createdAfter` is true on the result. */
+  addBookmark(meetingId: string, atMs: Ms, label?: string): Promise<Bookmark>;
+  /** `null` clears the label. */
+  updateBookmark(meetingId: string, bookmarkId: string, label: string | null): Promise<Bookmark>;
+  removeBookmark(meetingId: string, bookmarkId: string): Promise<void>;
   // recorder
   recorderState(): Promise<RecorderSnapshot>;
   recorderStart(opts: RecorderStartOptions): Promise<RecorderSnapshot>;
@@ -275,11 +309,13 @@ export interface Api {
   recorderResume(): Promise<void>;
   recorderStop(): Promise<string>;
   recorderCancel(): Promise<void>;
-  recorderBookmark(label?: string): Promise<void>;
+  /** Returns the new bookmark so the UI can show it at once. */
+  recorderBookmark(label?: string): Promise<Bookmark>;
   listInputDevices(): Promise<InputDevice[]>;
   // search / ask / tasks / import
-  search(query: string): Promise<SearchHit[]>;
-  ask(question: string, onEvent: (e: AskEvent) => void): Promise<void>;
+  /** `folderId` scopes the search / answer to one folder. */
+  search(query: string, folderId?: string): Promise<SearchHit[]>;
+  ask(question: string, onEvent: (e: AskEvent) => void, folderId?: string): Promise<void>;
   listTasks(includeDone: boolean): Promise<TaskItem[]>;
   importAudio(paths: string[]): Promise<ImportJob[]>;
   listImports(): Promise<ImportJob[]>;

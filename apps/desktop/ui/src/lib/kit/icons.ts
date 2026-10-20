@@ -43,4 +43,8 @@ export const iconPaths: Record<string, string> = {
   monitor: "M3 5h18v11H3zM8 20h8M12 16v4",
   pause: "M8 5v14M16 5v14",
   bookmark: "M7 4h10v16l-5-4-5 4z",
+  star: "M12 3.6l2.6 5.3 5.8.9-4.2 4.1 1 5.8L12 17l-5.2 2.7 1-5.8-4.2-4.1 5.8-.9z",
+  folder: "M3.5 7.5a2 2 0 0 1 2-2H10l2 2.2h6.5a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z",
+  dots: "M5.5 12h.01M12 12h.01M18.5 12h.01",
+  pencil: "M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z M14.5 6.5l3 3",
 };
