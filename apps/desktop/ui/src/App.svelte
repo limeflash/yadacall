@@ -59,7 +59,7 @@
           {#if route.name === "meetings"}<Meetings />
           {:else if route.name === "meeting"}<MeetingDetail id={route.id} tab={route.tab} at={route.at} />
           {:else if route.name === "record"}<Record />
-          {:else if route.name === "ask"}<Ask q={route.q} />
+          {:else if route.name === "ask"}<Ask q={route.q} folder={route.folder} />
           {:else if route.name === "tasks"}<Tasks />
           {:else if route.name === "upload"}<Upload />
           {:else if route.name === "settings"}<Settings />

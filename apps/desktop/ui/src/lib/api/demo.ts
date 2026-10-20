@@ -38,7 +38,8 @@ export function demoMeetings(): DemoMeeting[] {
     const meeting: Meeting = {
       id: m.id, title: m.title, startedAt, durationMs: m.durationSec * 1000, language: "ru",
       tracks: [{ kind: "mic", device: "MacBook Pro", offsetMs: 0, samples: 0 }, { kind: "system", device: "Zoom", offsetMs: 0, samples: 0 }],
-      bookmarks: m.bookmarks.map((b) => ({ atMs: b.atSec * 1000, label: b.label })),
+      bookmarks: m.bookmarks.map((b) => ({ id: `bm-${m.id.slice(-6)}-${b.atSec}`, atMs: b.atSec * 1000, label: b.label })),
+      favorite: false,
       participants: m.participants.filter((p) => p.name).map((p) => ({ key: p.key, name: p.name })),
       asrModel: "gigaam-v3-rnnt", status,
     };
@@ -50,7 +51,7 @@ export function demoMeetings(): DemoMeeting[] {
       openQuestions: m.summary.openQuestions.map((q) => (typeof q === "string" ? q : q.text)),
       language: "ru", model: m.summary.model,
     } : undefined;
-    const list: MeetingListItem = { id: m.id, title: m.title, startedAt, durationMs: meeting.durationMs, status, snippet: m.snippet, audioNote: m.audioNote ?? undefined };
+    const list: MeetingListItem = { id: m.id, title: m.title, startedAt, durationMs: meeting.durationMs, status, snippet: m.snippet, audioNote: m.audioNote ?? undefined, favorite: false };
     return { list, meeting, turns, summary, hasAudio: m.hasAudio };
   });
 }

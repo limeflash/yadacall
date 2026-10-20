@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import Icon from "../kit/Icon.svelte";
   import CopyButton from "../kit/CopyButton.svelte";
   import { api } from "../api";
@@ -10,8 +10,12 @@
   import { speakerName } from "../speakers";
   import { errText } from "../api/error";
   import { onEngineEvent } from "../state.svelte";
+  import FolderScope from "../components/FolderScope.svelte";
+  import { loadFolders } from "../folders.svelte";
 
-  let { q }: { q?: string } = $props();
+  let { q, folder }: { q?: string; folder?: string } = $props();
+  /** The folder the questions are limited to (undefined = all meetings). Set from the meetings list or the chip. */
+  let scope = $state<string | undefined>(untrack(() => folder));
 
   type QA = { q: string; text: string; citations: Citation[]; sent?: SentNote; generated?: boolean; busy: boolean; error?: string; picked: number | null };
   let thread = $state<QA[]>([]);
@@ -28,11 +32,11 @@
         else if (e.kind === "citations") qa.citations = e.items;
         else if (e.kind === "done") { qa.sent = e.sent; qa.generated = e.generated !== false; qa.busy = false; }
         else if (e.kind === "error") { qa.error = t(e.message); qa.busy = false; }
-      });
+      }, scope);
     } catch (err) { qa.error = errText(err); }
     qa.busy = false;
   }
-  onMount(() => { if (q) ask(q); });
+  onMount(() => { loadFolders(); if (q) ask(q); });
 
   // The search model is fetched in the background after setup; until it is there, search matches words only.
   let embed = $state<ModelEntry | null>(null);
@@ -133,6 +137,7 @@
 
   <div aria-hidden="true" class="fade"></div>
   <form class="askbar" onsubmit={submit}>
+    <FolderScope value={scope} onchange={(id) => (scope = id)} />
     <label style="flex: 1; min-width: 0; display: flex"><span class="mg-sr">{t("Уточнить вопрос")}</span>
       <input type="text" bind:value={input} placeholder={thread.length ? t("Уточнить вопрос…") : t("Спросить про встречи…")} /></label>
     <button type="submit" aria-label={t("Спросить")} class="yc-press send"><Icon name="arrowUp" size={16} /></button>

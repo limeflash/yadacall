@@ -7,8 +7,12 @@
   import Segmented from "../kit/Segmented.svelte";
   import SectionLabel from "../kit/SectionLabel.svelte";
   import PlayerBar from "./PlayerBar.svelte";
+  import BookmarkItem from "../components/BookmarkItem.svelte";
+  import MeetingMenu from "../components/MeetingMenu.svelte";
   import { api } from "../api";
-  import type { MeetingDetail, Turn } from "../api";
+  import type { Bookmark, MeetingDetail, Turn } from "../api";
+  import { folderById, folderColor, loadFolders, setFavorite, moveToFolder } from "../folders.svelte";
+  import { meetingFileUrl } from "../files";
   import { t, plural } from "../i18n/index.svelte";
   import { app, refreshTasks } from "../state.svelte";
   import { clock, dueLabel, minutes, timeRange } from "../format";
@@ -47,7 +51,7 @@
       if (at != null) { player.seek(at, false); }
     }
   }
-  onMount(load);
+  onMount(() => { load(); loadFolders(); });
   onDestroy(() => player?.destroy());
   let lastRev = app.rev;
   $effect(() => { const r = app.rev; if (r !== lastRev) { lastRev = r; load(); } });
@@ -78,18 +82,61 @@
   });
 
   // ---- transcript ---------------------------------------------------------------------------------
-  type Item = { kind: "turn"; turn: Turn; i: number } | { kind: "mark"; at: number; label?: string };
+  type Item = { kind: "turn"; turn: Turn; i: number } | { kind: "mark"; bm: Bookmark };
+  const marks = $derived([...(m?.bookmarks ?? [])].sort((a, b) => a.atMs - b.atMs));
   const items = $derived.by(() => {
     const out: Item[] = [];
-    const marks = [...(m?.bookmarks ?? [])].sort((a, b) => a.atMs - b.atMs);
     let mi = 0;
     turns.forEach((tr, i) => {
-      while (mi < marks.length && marks[mi].atMs <= tr.startMs) { out.push({ kind: "mark", at: marks[mi].atMs, label: marks[mi].label }); mi++; }
+      while (mi < marks.length && marks[mi].atMs <= tr.startMs) { out.push({ kind: "mark", bm: marks[mi] }); mi++; }
       out.push({ kind: "turn", turn: tr, i });
     });
-    while (mi < marks.length) { out.push({ kind: "mark", at: marks[mi].atMs, label: marks[mi].label }); mi++; }
+    while (mi < marks.length) { out.push({ kind: "mark", bm: marks[mi] }); mi++; }
     return out;
   });
+
+  // ---- bookmarks: add at the playhead, rename inline, remove (with undo) -------------------------
+  let editingMark = $state<string | null>(null);
+  const shotOf = (b: Bookmark) => meetingFileUrl(detail, b.screenshot);
+  async function addMark(atMs: number) {
+    if (!detail) return;
+    try {
+      const b = await api.addBookmark(id, Math.round(atMs));
+      detail.meeting.bookmarks = [...detail.meeting.bookmarks, b];
+      toast(t("Закладка {time}", { time: clock(b.atMs) }), { actionLabel: t("Назвать"), onAction: () => nameMark(b.id) });
+    } catch (e) { toast.error(e); }
+  }
+  async function nameMark(bid: string) {
+    editingMark = bid;
+    await tick();
+    scroller?.querySelector(`[data-bm="${bid}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  async function renameMark(b: Bookmark, label: string | null) {
+    editingMark = null;
+    if ((b.label ?? null) === label) return;
+    const prev = b.label;
+    b.label = label ?? undefined;
+    try { await api.updateBookmark(id, b.id, label); } catch (e) { b.label = prev; toast.error(e); }
+  }
+  async function removeMark(b: Bookmark) {
+    if (!detail) return;
+    const gone = { ...b };
+    detail.meeting.bookmarks = detail.meeting.bookmarks.filter((x) => x.id !== b.id);
+    try {
+      await api.removeBookmark(id, b.id);
+      toast(t("Закладка удалена"), { actionLabel: t("Вернуть"), onAction: async () => {
+        try { const nb = await api.addBookmark(id, gone.atMs, gone.label); detail?.meeting.bookmarks.push(nb); } catch (e) { toast.error(e); }
+      } });
+    } catch (e) { toast.error(e); await load(); }
+  }
+
+  // ---- favourite / folder (header) ----------------------------------------------------------------
+  let folderMenu = $state<{ x: number; y: number; above: number; trigger: HTMLElement } | null>(null);
+  const folder = $derived(folderById(m?.folderId));
+  function openFolderMenu(e: MouseEvent) {
+    const b = e.currentTarget as HTMLElement; const r = b.getBoundingClientRect();
+    folderMenu = folderMenu ? null : { x: r.left, y: r.bottom + 4, above: r.top, trigger: b };
+  }
   const activeTurn = $derived(player && player.touched ? turns.findIndex((x) => player!.pos >= x.startMs && player!.pos < x.endMs) : -1);
 
   const needle = $derived(query.trim().toLowerCase());
@@ -207,8 +254,12 @@
   }
   function askAbout(e: SubmitEvent) { e.preventDefault(); go({ name: "ask", q: question.trim() || undefined }); }
 
+  const typing = (n: EventTarget | null) => { const el = n as HTMLElement | null; return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable); };
   function onKey(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") { e.preventDefault(); openSearch(); }
+    else if (e.code === "KeyB" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && player && !typing(e.target) && !folderMenu && !menuOpen && !namesOpen && (tab === "transcript" || player.touched)) {
+      e.preventDefault(); addMark(player.pos);
+    }
     else if (e.key === "Escape") { if (searchOpen) closeSearch(); else if (menuOpen) menuOpen = false; else if (namesOpen) namesOpen = false; }
   }
   function onDocClick(e: MouseEvent) {
@@ -293,8 +344,18 @@
               {:else}
                 <h1 class="yc-balance">{m.title}</h1>
               {/if}
-              <div class="mg-mono meta">{timeRange(m.startedAt, m.durationMs)} · {minutes(m.durationMs)}</div>
+              <div class="meta2">
+                <span class="mg-mono meta">{timeRange(m.startedAt, m.durationMs)} · {minutes(m.durationMs)}</span>
+                <button type="button" class="yc-press fchip" class:set={!!folder} data-menu-trigger aria-haspopup="menu" aria-expanded={!!folderMenu} title={t("Переместить в папку")} onclick={openFolderMenu}>
+                  {#if folder}<span aria-hidden="true" class="cd" style="background: {folderColor(folder)}"></span>{:else}<Icon name="folder" size={13} />{/if}
+                  <span class="yc-ellipsis">{folder ? folder.name : t("Без папки")}</span>
+                </button>
+                {#if m.favorite}<span class="favnote"><Icon name="star" size={12} style="fill: currentColor" />{t("звук хранится всегда")}</span>{/if}
+              </div>
             </div>
+            <IconButton variant="square" class="star {m.favorite ? 'on' : ''}" aria-pressed={m.favorite} aria-label={m.favorite ? t("Убрать из избранного") : t("В избранное")} title={m.favorite ? t("Убрать из избранного") : t("В избранное — звук хранится всегда")} onclick={() => setFavorite(m!, !m!.favorite)}>
+              <Icon name="star" size={16} style={m.favorite ? "fill: currentColor" : undefined} />
+            </IconButton>
             <IconButton variant="square" class="more" aria-label={t("Ещё")} onclick={() => (menuOpen = !menuOpen)}>
               <svg class="yc-icf" width="16" height="16" viewBox="0 0 24 24" style="stroke-width: 0"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>
             </IconButton>
@@ -376,6 +437,16 @@
                 <p class="note">{busy ? t("Собираю итоги…") : summariesOff ? t("Итоги выключены в настройках. Включи их там — и их можно будет собрать из меню ⋯.") : t("Итогов пока нет. Их можно собрать из меню ⋯ → «Пересобрать итоги».")}</p>
               {/if}
               {#if busy}<p class="note">{t("Собираю итоги…")}</p>{/if}
+              {#if marks.length}
+                <section class="sec" aria-label={t("Закладки")}>
+                  <SectionLabel as="h2">{t("Закладки")} · {marks.length}</SectionLabel>
+                  <div class="bms">
+                    {#each marks as b (b.id)}
+                      <BookmarkItem bm={b} variant="row" shot={shotOf(b)} editing={editingMark === b.id} onjump={jump} onedit={() => (editingMark = b.id)} onrename={(l) => renameMark(b, l)} onremove={() => removeMark(b)} />
+                    {/each}
+                  </div>
+                </section>
+              {/if}
             </div>
           {:else}
             <div class="yc-in stack" style="gap: 12px">
@@ -394,7 +465,8 @@
               {/if}
               {#each items as it, k (k)}
                 {#if it.kind === "mark"}
-                  <div style="display: flex; justify-content: center"><span class="mark"><svg class="yc-ic" width="12" height="12" viewBox="0 0 24 24"><path d="M7 4h10v16l-5-4-5 4z" /></svg>{clock(it.at)} · {t("твоя закладка")}{it.label ? ": " + it.label : ""}</span></div>
+                  {@const b = it.bm}
+                  <div style="display: flex; justify-content: center"><BookmarkItem bm={b} variant="pill" editing={editingMark === b.id} onjump={jump} onedit={() => (editingMark = b.id)} onrename={(l) => renameMark(b, l)} onremove={() => removeMark(b)} /></div>
                 {:else}
                   {@const tr = it.turn}
                   {@const mine = tr.speaker === "me"}
@@ -418,6 +490,7 @@
                       </p>
                       <span class="tc">
                         {#if on && player?.playing}<span aria-hidden="true" class="eq"><span></span><span style="animation-delay: 0.2s"></span><span style="animation-delay: 0.4s"></span></span>{/if}
+                        <button type="button" class="hb" aria-label={t("Закладка здесь")} onclick={() => addMark(tr.startMs)}><Icon name="bookmark" size={12} /><span>{t("Закладка здесь")}</span></button>
                         <button type="button" class="yc-tcx mg-mono tcb" onclick={() => player?.seek(tr.startMs, true)}>{clock(tr.startMs)}</button>
                       </span>
                     </div>
@@ -430,10 +503,14 @@
       {/if}
     </div>
 
+    {#if folderMenu && m}
+      <MeetingMenu x={folderMenu.x} y={folderMenu.y} above={folderMenu.above} favorite={m.favorite} folderId={m.folderId} onfavorite={(v) => setFavorite(m!, v)} onmove={(fid) => moveToFolder(m!, fid)} onclose={(esc) => { const tr = folderMenu?.trigger; folderMenu = null; if (esc) tr?.focus(); }} />
+    {/if}
+
     <div aria-hidden="true" class="fade"></div>
     <div class="dock">
       {#if player && (tab === "transcript" || player.touched)}
-        <PlayerBar {player} {turns} />
+        <PlayerBar {player} {turns} marks={marks.map((b) => b.atMs)} onbookmark={() => addMark(player!.pos)} />
       {/if}
       <form class="askbar" onsubmit={askAbout}>
         <label style="flex: 1; min-width: 0; display: flex"><span class="mg-sr">{t("Вопрос о встрече")}</span>
@@ -484,6 +561,18 @@
   h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 800; letter-spacing: -0.035em; }
   .title-edit { height: 40px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
   .meta { font-size: 12px; color: var(--muted); }
+  .meta2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .fchip { display: inline-flex; align-items: center; gap: 6px; max-width: 180px; height: 22px; padding: 0 9px; border: 1px solid var(--border); border-radius: 11px; background: transparent; color: var(--muted); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+  .fchip:hover, .fchip[aria-expanded="true"] { border-color: var(--accent-line); color: var(--text); }
+  .fchip.set { background: var(--surface-2); color: var(--text); }
+  .cd { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .favnote { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--accent-text); }
+  :global(.mg-ib.star.on) { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+  :global(.mg-ib.star:hover) { transform: none; }
+  .bms { display: flex; flex-direction: column; gap: 2px; margin: 0 -8px; }
+  .hb { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; cursor: pointer; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+  .bub:hover .hb, .bub:focus-within .hb, .hb:focus-visible { opacity: 1; }
+  .hb:hover { color: var(--tone-sand); }
   .note { margin: 0; font-size: 13px; color: var(--muted); }
   .stack { display: flex; flex-direction: column; gap: 24px; padding-top: 4px; }
   .people { border-radius: 16px; background: var(--surface-2); }
@@ -523,7 +612,6 @@
   .tcb { padding: 0; border: 0; background: none; font-size: 11px; color: var(--muted); cursor: pointer; }
   .eq { display: flex; align-items: flex-end; gap: 2px; height: 10px; }
   .eq span { display: block; width: 2px; height: 3px; border-radius: 1px; background: var(--accent-text); animation: ycEq 0.7s ease-in-out infinite; }
-  .mark { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: var(--tone-sand-bg); color: var(--tone-sand); font-size: 12px; }
   .fade { position: absolute; left: 0; right: 10px; bottom: 0; height: 150px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--surface) 58%); }
   .dock { position: absolute; left: 24px; right: 24px; bottom: 16px; max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
   .askbar { display: flex; align-items: center; gap: 10px; height: 48px; box-sizing: border-box; padding: 0 5px 0 18px; border: 1px solid var(--border); border-radius: 24px; background: var(--dock); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--shadow-dock); }
