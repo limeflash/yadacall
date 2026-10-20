@@ -8515,7 +8515,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "yadacall-cli"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8544,7 +8544,7 @@ dependencies = [
 
 [[package]]
 name = "yadacall-desktop"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "block2",
@@ -8591,7 +8591,7 @@ dependencies = [
 
 [[package]]
 name = "yc-audio"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "audioadapter-buffers",
  "cidre",
@@ -8615,7 +8615,7 @@ dependencies = [
 
 [[package]]
 name = "yc-connect"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -8643,7 +8643,7 @@ dependencies = [
 
 [[package]]
 name = "yc-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "serde",
@@ -8654,7 +8654,7 @@ dependencies = [
 
 [[package]]
 name = "yc-engine"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -8676,7 +8676,7 @@ dependencies = [
 
 [[package]]
 name = "yc-hub"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8705,7 +8705,7 @@ dependencies = [
 
 [[package]]
 name = "yc-llm"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -8726,7 +8726,7 @@ dependencies = [
 
 [[package]]
 name = "yc-mcp"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8745,7 +8745,7 @@ dependencies = [
 
 [[package]]
 name = "yc-ml"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "num_cpus",
  "ort",
@@ -8757,7 +8757,7 @@ dependencies = [
 
 [[package]]
 name = "yc-store"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -8771,7 +8771,7 @@ dependencies = [
 
 [[package]]
 name = "yc-text"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "rust-stemmers",
