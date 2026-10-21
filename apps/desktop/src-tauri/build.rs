@@ -23,6 +23,7 @@ const COMMANDS: &[&str] = &[
     "export_meeting",
     "reveal_meeting",
     "copy_for_claude",
+    "executable_path",
     "recorder_state",
     "recorder_start",
     "recorder_pause",

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-executable-path"
+description = "Enables the executable_path command without any pre-configured scope."
+commands.allow = ["executable_path"]
+
+[[permission]]
+identifier = "deny-executable-path"
+description = "Denies the executable_path command without any pre-configured scope."
+commands.deny = ["executable_path"]
