@@ -2718,11 +2718,15 @@ mod tests {
         let in_flight = state["inFlightChunks"]
             .as_array()
             .expect("in-flight chunks");
-        let offset = in_flight
+        // A chunk that had made progress when the pause was saved.
+        let (chunk_start, chunk_end, saved_offset) = in_flight
             .iter()
-            .map(|chunk| chunk["offset"].as_u64().expect("offset"))
-            .find(|offset| *offset > 0)
-            .expect("saved in-flight offset");
+            .map(|chunk| {
+                let field = |name: &str| chunk[name].as_u64().expect("chunk field");
+                (field("start"), field("end"), field("offset"))
+            })
+            .find(|(start, _, offset)| offset > start)
+            .expect("saved in-flight progress");
         control.resume();
 
         let path = download
@@ -2730,14 +2734,24 @@ mod tests {
             .expect("download task")
             .expect("resumed download");
         assert_eq!(tokio::fs::read(path).await.expect("installed bytes"), bytes);
+        // The resume must continue that chunk from where it was, not restart it. Bytes that landed
+        // after the state was saved may move the resume point a little further — still mid-chunk.
+        let range_starts: Vec<u64> = server
+            .state
+            .requests
+            .lock()
+            .expect("request list")
+            .iter()
+            .filter_map(|request| {
+                let rest = request.split("range: bytes=").nth(1)?;
+                rest.split('-').next()?.trim().parse().ok()
+            })
+            .collect();
         assert!(
-            server
-                .state
-                .requests
-                .lock()
-                .expect("request list")
+            range_starts
                 .iter()
-                .any(|request| request.contains(&format!("range: bytes={offset}-")))
+                .any(|start| (saved_offset..chunk_end).contains(start) && *start > chunk_start),
+            "no resume inside {chunk_start}..{chunk_end} from {saved_offset}: {range_starts:?}"
         );
 
         server.stop().await;
