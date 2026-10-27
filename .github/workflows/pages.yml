@@ -8,9 +8,9 @@ on:
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
-  # a new release changes the version and download links baked into the HTML
-  release:
-    types: [published]
+  # A new release changes the version and download links baked into the HTML. The release script
+  # dispatches this workflow on `main` after publishing: a `release` trigger runs on the tag ref, which
+  # the github-pages environment (main only) rejects.
   workflow_dispatch:
 
 permissions:
